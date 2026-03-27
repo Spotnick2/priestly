@@ -1,0 +1,11 @@
+## Interface: 20504
+## Title: |cff99ddffPriestly|r
+## Notes: Pally Power-style Priest buff manager. Auto-opens on group join. /priestly help
+## Author: Spotnick
+## Version: @project-version@
+## IconTexture: Interface\Icons\Spell_Holy_PrayerOfFortitude
+## SavedVariables: PriestlyDB
+## X-Curse-Project-ID: 1489106
+
+PriestlyConfig.lua
+Priestly.lua

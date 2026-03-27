@@ -1,0 +1,13 @@
+package-as: Priestly
+
+enable-nolib-creation: no
+
+ignore:
+  - .gitignore
+  - LICENSE
+  - .github
+  - docs
+  - screenshots
+
+move-folders:
+  Priestly: Priestly
