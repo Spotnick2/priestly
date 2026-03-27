@@ -6,6 +6,6 @@ ignore:
   - .github
   - docs
   - screenshots
-
-move-folders:
-  Priestly: Priestly
+  - README.md
+  - CHANGELOG.md
+  - LICENSE
