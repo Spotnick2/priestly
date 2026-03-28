@@ -1,4 +1,4 @@
-## Interface: 20504
+## Interface: 20505
 ## Title: |cff99ddffPriestly|r
 ## Notes: Pally Power-style Priest buff manager. Auto-opens on group join. /priestly help
 ## Author: Spotnick
