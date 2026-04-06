@@ -1,6 +1,10 @@
 # Priestly Changelog
 
-## v1.0.0
+## v1.0.1 - 2026-04-06
+
+- Fixed changelog packaging
+
+## v1.0.0 - 2026-04-06
 
 Priestly’s first stable release brings a full in-game configuration experience, more flexible buff tracking, and better support for solo play, pets, and Shadow Protection management.
 
