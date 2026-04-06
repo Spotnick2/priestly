@@ -14,7 +14,8 @@
 --   R [ClassIcon] Name            MISS  ← right-click = group Prayer
 -- ============================================================================
 
-local VERSION = GetAddOnMetadata(addonName, "Version") or "dev"
+local addonName = "Priestly"
+local VERSION = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(addonName, "Version") or "dev"
 
 -- ─── Layout constants ────────────────────────────────────────────────────────
 local ICON_W     = 16

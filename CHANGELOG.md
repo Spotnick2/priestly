@@ -1,5 +1,9 @@
 # Priestly Changelog
 
+## v1.0.2 - 2026-04-06
+
+- Fix a bug with GetAddOnMetadata
+
 ## v1.0.1 - 2026-04-06
 
 - Fixed changelog packaging
