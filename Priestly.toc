@@ -2,7 +2,7 @@
 ## Title: |cff99ddffPriestly|r
 ## Notes: Pally Power-style Priest buff manager. Auto-opens on group join. /priestly help
 ## Author: Spotnick
-## Version: v1.0.2
+## Version: @project-version@
 ## IconTexture: Interface\Icons\Spell_Holy_PrayerOfFortitude
 ## SavedVariables: PriestlyDB
 ## X-Curse-Project-ID: 1489106
