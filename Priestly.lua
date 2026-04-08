@@ -844,6 +844,7 @@ InitUI = function()
     -- Popover hover polling: hide when mouse isn't over popover or its anchor row
     -- This replaces fragile OnLeave handlers
     g_Pop._hoverTimer = 0
+    g_Pop._combatHidden = false   -- track if we visually hid during combat
     g_Pop:SetScript("OnUpdate", function(self, dt)
         if not self:IsShown() then return end
         self._hoverTimer = self._hoverTimer + dt
@@ -860,7 +861,16 @@ InitUI = function()
             end
         end
         if not overPop and not overAnchor and not overChild then
-            self:Hide()
+            if InCombatLockdown() then
+                -- Can't Hide() a frame parenting secure buttons during combat.
+                -- Move offscreen + zero alpha so it's invisible but not tainted.
+                self:SetAlpha(0)
+                self:ClearAllPoints()
+                self:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10000, -10000)
+                self._combatHidden = true
+            else
+                self:Hide()
+            end
         end
     end)
 
@@ -925,7 +935,17 @@ end
 
 CloseUI = function(manual)
     if g_Main then g_Main:Hide() end
-    if g_Pop  then g_Pop:Hide()  end
+    if g_Pop then
+        if InCombatLockdown() then
+            -- Can't Hide() the popover mid-combat (parents secure buttons).
+            g_Pop:SetAlpha(0)
+            g_Pop:ClearAllPoints()
+            g_Pop:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10000, -10000)
+            g_Pop._combatHidden = true
+        else
+            g_Pop:Hide()
+        end
+    end
     g_Vis = false
     -- Only save "closed" state if user manually closed (not from leaving group)
     if manual and PriestlyDB then PriestlyDB.visible = false end
@@ -935,6 +955,13 @@ end
 
 UpdatePopover = function(anchorRow, members, def)
     if InCombatLockdown() then return end
+
+    -- If popover was visually hidden during combat, properly restore it first
+    if g_Pop._combatHidden then
+        g_Pop:Hide()       -- properly hide it now that we're out of combat
+        g_Pop:SetAlpha(1)
+        g_Pop._combatHidden = false
+    end
 
     -- Header
     g_Pop.hdrIcon:SetTexture(SpellIcon(def.sngl, def.fallbackIcon))
@@ -1293,6 +1320,12 @@ evtFrame:SetScript("OnEvent", function(self, event)
         end
 
     elseif event == "PLAYER_REGEN_ENABLED" then
+        -- Combat ended: properly hide the popover if it was visually hidden mid-combat
+        if g_Pop and g_Pop._combatHidden then
+            g_Pop:Hide()
+            g_Pop:SetAlpha(1)
+            g_Pop._combatHidden = false
+        end
         -- Combat ended: full rebuild so SetAttribute calls actually work
         if g_Vis then After(0.2, UpdateUI) end
 

@@ -1,5 +1,20 @@
 # Priestly Changelog
 
+## v1.0.3
+
+### Fixed
+- Fixed the popover closing behavior during combat.
+- Prevented the popover from trying to fully hide while in combat, which could cause secure frame issues.
+- Popover now becomes visually hidden during combat and is properly restored or fully hidden once combat ends.
+- Fixed cases where manually closing Priestly during combat could leave the popover in a bad state.
+
+### Improved
+- Improved combat-safe handling for UI elements attached to secure buttons.
+- Added cleanup logic so the popover is properly reset after leaving combat.
+
+### Changed
+- Updated addon version metadata.
+
 ## v1.0.2 - 2026-04-06
 
 - Fix a bug with GetAddOnMetadata
