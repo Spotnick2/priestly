@@ -660,7 +660,7 @@ InitUI = function()
     -- Version: small, right of title
     local verTxt = g_Main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     verTxt:SetPoint("LEFT",  titTxt, "RIGHT", 2, 0)
-    verTxt:SetText("|cff555577v" .. VERSION .. "|r")
+    verTxt:SetText("|cff555577" .. VERSION .. "|r")
 
     -- Close button
     local xBtn = CreateFrame("Button", nil, g_Main, "UIPanelCloseButton")

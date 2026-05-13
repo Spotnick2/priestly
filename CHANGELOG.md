@@ -1,5 +1,10 @@
 # Priestly Changelog
 
+## v1.0.6 - 2026-05-13
+
+### Fixed
+- Fixed the main frame displaying an extra `v` before addon versions that already include the prefix.
+
 ## v1.0.3
 
 ### Fixed
