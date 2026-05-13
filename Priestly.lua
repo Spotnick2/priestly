@@ -417,7 +417,7 @@ local function ActiveDefs(groups, ord)
         elseif d.always then
             out[#out + 1] = d
         elseif d.needsKnown then
-            if KnowsSpell(d.grp) then out[#out + 1] = d end
+            if KnowsSpell(d.grp) or KnowsSpell(d.sngl) then out[#out + 1] = d end
         elseif d.optional then
             if showShadow then out[#out + 1] = d end
         end
@@ -965,7 +965,10 @@ UpdatePopover = function(anchorRow, members, def)
 
     -- Header
     g_Pop.hdrIcon:SetTexture(SpellIcon(def.sngl, def.fallbackIcon))
-    g_Pop.hdrTxt:SetText(def.grp)
+    local popGroupSpell  = (not def.needsKnown or KnowsSpell(def.grp)) and def.grp or nil
+    local popSingleSpell = (not def.needsKnown or KnowsSpell(def.sngl)) and def.sngl or nil
+
+    g_Pop.hdrTxt:SetText(popGroupSpell or def.sngl)
 
     -- Track which row we're anchored to (for hover polling)
     g_Pop._anchorRow = anchorRow
@@ -982,11 +985,11 @@ UpdatePopover = function(anchorRow, members, def)
 
         -- Left-click  → group Prayer targeting this person (covers their group)
         pr:SetAttribute("type1",  "spell")
-        pr:SetAttribute("spell1", def.grp)
+        pr:SetAttribute("spell1", popGroupSpell)
         pr:SetAttribute("unit1",  m.unit)
         -- Right-click → single buff on this specific person
         pr:SetAttribute("type2",  "spell")
-        pr:SetAttribute("spell2", def.sngl)
+        pr:SetAttribute("spell2", popSingleSpell)
         pr:SetAttribute("unit2",  m.unit)
 
         -- Class icon
@@ -1072,20 +1075,22 @@ UpdateUI = function()
 
             local r   = g_Rows[rowIdx]
             local st  = GroupStat(members, def)
+            local groupSpell  = (not def.needsKnown or KnowsSpell(def.grp)) and def.grp or nil
+            local singleSpell = (not def.needsKnown or KnowsSpell(def.sngl)) and def.sngl or nil
 
             -- Find valid targets (skip offline/dead)
             local validGrp = nil   -- any online member for group prayer
             local validSngl = nil  -- first online+unbuffed for single buff
             for _, m in ipairs(members) do
                 if IsValidTarget(m.unit) then
-                    if not validGrp then validGrp = m end
-                    if not validSngl and BuffRem(m.unit, def.names) <= 0 then
+                    if groupSpell and not validGrp then validGrp = m end
+                    if singleSpell and not validSngl and BuffRem(m.unit, def.names) <= 0 then
                         validSngl = m
                     end
                 end
             end
             -- Fallback: if all unbuffed are offline, target lowest-time online
-            if not validSngl and validGrp then validSngl = validGrp end
+            if singleSpell and not validSngl and validGrp then validSngl = validGrp end
 
             r:ClearAllPoints()
             r:SetPoint("TOPLEFT", g_Main, "TOPLEFT", ROW_X, y)
@@ -1097,16 +1102,18 @@ UpdateUI = function()
             r._active  = true
             r._members = members
             r._def     = def
+            r._groupSpell = groupSpell
+            r._singleSpell = singleSpell
 
             ApplyRowVisuals(r, st, def.duration)
 
             -- Left-click  → group Prayer targeting first valid member
             r:SetAttribute("type1",  "spell")
-            r:SetAttribute("spell1", validGrp and def.grp or nil)
+            r:SetAttribute("spell1", validGrp and groupSpell or nil)
             r:SetAttribute("unit1",  validGrp and validGrp.unit or "player")
             -- Right-click → single buff on first valid missing person
             r:SetAttribute("type2",  "spell")
-            r:SetAttribute("spell2", validSngl and def.sngl or nil)
+            r:SetAttribute("spell2", validSngl and singleSpell or nil)
             r:SetAttribute("unit2",  validSngl and validSngl.unit or "player")
 
             -- PreClick: refresh targets, skipping offline/dead
@@ -1117,6 +1124,10 @@ UpdateUI = function()
                 if not ms or not df then return end
 
                 if btn == "LeftButton" then
+                    if not self._groupSpell then
+                        self:SetAttribute("spell1", nil)
+                        return
+                    end
                     -- Group prayer: find any valid member to target
                     for _, m in ipairs(ms) do
                         if IsValidTarget(m.unit) then
@@ -1127,6 +1138,10 @@ UpdateUI = function()
                     -- Nobody valid — clear spell to prevent casting on self
                     self:SetAttribute("spell1", nil)
                 else
+                    if not self._singleSpell then
+                        self:SetAttribute("spell2", nil)
+                        return
+                    end
                     -- Right-click: priority 1) unbuffed+online, 2) lowest remaining+online
                     local bestUnit, bestRem = nil, math.huge
                     for _, m in ipairs(ms) do
@@ -1157,8 +1172,8 @@ UpdateUI = function()
                 local df = self._def
                 if not df then return end
                 -- Restore spells that PreClick may have nilled
-                self:SetAttribute("spell1", df.grp)
-                self:SetAttribute("spell2", df.sngl)
+                self:SetAttribute("spell1", self._groupSpell)
+                self:SetAttribute("spell2", self._singleSpell)
                 ScheduleRefresh()
             end)
 

@@ -3,6 +3,7 @@
 ## v1.0.3
 
 ### Fixed
+- Fixed Divine Spirit tracking not appearing for priests who know Divine Spirit but do not yet know Prayer of Spirit.
 - Fixed the popover closing behavior during combat.
 - Prevented the popover from trying to fully hide while in combat, which could cause secure frame issues.
 - Popover now becomes visually hidden during combat and is properly restored or fully hidden once combat ends.
