@@ -163,7 +163,10 @@ local function makeFrame(name)
     f.CreateAnimationGroup = function() return makeFrame() end
     f.GetThumbTexture  = function() return makeFrame() end
     f.GetPoint = function() return "CENTER", nil, "CENTER", 0, 0 end
-    f.GetStringHeight = function() return 12 end
+    -- Set WoW.zeroHeights to model a FontString that has not been laid out
+    -- yet, which is what the live client reports inside a scroll child during
+    -- OnShow.
+    f.GetStringHeight = function() return WoW.zeroHeights and 0 or 12 end
     f.GetWidth = function() return 100 end
     f.GetHeight = function() return 20 end
     f.GetChecked = function(self) return self._checked end
@@ -213,11 +216,33 @@ end
 -- Globals the addon expects at load
 ------------------------------------------------------------
 
+-- What each template actually brings with it. Without this the catch-all
+-- __index invents `rb.text` as a function, the options panel then calls
+-- :SetText on it, and the panel can never be built under test - which is how
+-- the whole options UI stayed outside the strict-global net.
+local TEMPLATE_REGIONS = {
+    UICheckButtonTemplate               = { "text" },
+    InterfaceOptionsCheckButtonTemplate = { "Text" },
+    UIRadioButtonTemplate               = { "text" },
+    OptionsSliderTemplate               = { "Low", "High", "Text" },
+    UISliderTemplateWithLabels          = { "Low", "High", "Text" },
+    MinimalSliderTemplate               = { "Low", "High" },
+    UIPanelButtonTemplate               = { "Text" },
+    UIPanelScrollFrameTemplate          = { "ScrollBar" },
+    ScrollFrameTemplate                 = { "ScrollBar" },
+}
+
 function CreateFrame(frameType, name, parent, template)
     local f = makeFrame(name)
     if name then _G[name] = f end
     f._type = frameType
     f._template = template
+    local regions = template and TEMPLATE_REGIONS[template]
+    if regions then
+        for _, key in ipairs(regions) do
+            f[key] = makeFrame(name and (name .. key) or nil)
+        end
+    end
     return f
 end
 

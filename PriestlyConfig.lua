@@ -282,15 +282,22 @@ local function MakeCheckButton(parent, name, label, labelWidth)
     return cb
 end
 
+-- GetStringHeight returns 0 for a FontString that has not been laid out yet,
+-- which is the normal state inside a scroll child built during OnShow. `0 or 16`
+-- is 0 in Lua, so every one of these needs a real check or the next control
+-- lands on top of the text.
+local function TextHeight(fs, fallback)
+    local h = fs and fs:GetStringHeight()
+    if not h or h <= 0 then return fallback or 16 end
+    return h
+end
+
 local function MakeHeader(parent, yRef, text, width)
     yRef.v = yRef.v - 14
     local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     fs:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, yRef.v)
     fs:SetText(text)
-    -- GetStringHeight is 0 for a FontString that has not been laid out yet,
-    -- and `0 or 16` is 0 in Lua - the section rule would land on its own title.
-    local textH = fs:GetStringHeight()
-    if not textH or textH <= 0 then textH = 16 end
+    local textH = TextHeight(fs)
     yRef.v = yRef.v - textH - 2
     local line = parent:CreateTexture(nil, "ARTWORK")
     line:SetColorTexture(0.40, 0.40, 0.65, 0.45)
@@ -322,7 +329,7 @@ local function MakeDesc(parent, yRef, text, indent)
     fs:SetWidth(440)
     fs:SetJustifyH("LEFT")
     fs:SetText("|cff999999"..text.."|r")
-    yRef.v = yRef.v - (fs:GetStringHeight() + 6)
+    yRef.v = yRef.v - (TextHeight(fs) + 6)
     return fs
 end
 
@@ -368,6 +375,15 @@ end
 
 -- ─── Instance tab builder (shared between TBC and Vanilla) ──────────────────
 
+-- Changing which instances count can add or remove the Shadow Protection row,
+-- so every control that touches the list has to ask for the same refresh - the
+-- bulk buttons used to update the detector and stop there, leaving the row
+-- stale until something unrelated rebuilt the UI.
+local function RefreshShadowRow()
+    if Priestly_ScheduleRefresh then Priestly_ScheduleRefresh() end
+    if Priestly_ForceRebuild then Priestly_ForceRebuild() end
+end
+
 local function BuildInstanceTab(parent, instanceDB, panelWidth)
     local scroll = SafeFrame("ScrollFrame", parent:GetName().."Scroll", parent,
         "UIPanelScrollFrameTemplate")
@@ -389,7 +405,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
         "it activates when you zone into a checked instance. " ..
         "Hover an instance name for encounter details. " ..
         "Pre-checked instances have bosses with significant shadow damage.|r")
-    iy.v = iy.v - (desc:GetStringHeight() + 10)
+    iy.v = iy.v - (TextHeight(desc, 32) + 10)
 
     -- Group by category
     local categories = {}
@@ -437,7 +453,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
             icb:SetScript("OnClick", function(self)
                 PriestlyDB.shadowInstances[self._instName] = self:GetChecked() and true or false
                 CheckCurrentInstance()
-                if Priestly_ScheduleRefresh then Priestly_ScheduleRefresh() end
+                RefreshShadowRow()
             end)
 
             -- Tooltip on hover showing encounter info
@@ -474,6 +490,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
         end
         for _, cb in ipairs(allCheckboxes) do cb:SetChecked(true) end
         CheckCurrentInstance()
+        RefreshShadowRow()
     end)
 
     local btnNone = SafeFrame("Button", parent:GetName().."None", child, "UIPanelButtonTemplate")
@@ -486,6 +503,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
         end
         for _, cb in ipairs(allCheckboxes) do cb:SetChecked(false) end
         CheckCurrentInstance()
+        RefreshShadowRow()
     end)
 
     local btnDefaults = SafeFrame("Button", parent:GetName().."Defaults", child, "UIPanelButtonTemplate")
@@ -507,6 +525,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
             end
         end
         CheckCurrentInstance()
+        RefreshShadowRow()
     end)
 
     iy.v = iy.v - 30
@@ -532,7 +551,7 @@ local function BuildPanel(panel)
     local verFs = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     verFs:SetPoint("LEFT", titleFs, "RIGHT", 6, 0)
     verFs:SetText("|cff555577" ..
-        ((C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "dev")
+        API.AddonVersion(ADDON_NAME)
         .. "|r")
 
     -- ── Tab bar ─────────────────────────────────────────────────────────────
@@ -632,7 +651,7 @@ local function BuildPanel(panel)
     shadowDesc:SetWidth(PANEL_W)
     shadowDesc:SetJustifyH("LEFT")
     shadowDesc:SetText("|cffccccccChoose when Shadow Protection appears in the buff tracker.|r")
-    y.v = y.v - (shadowDesc:GetStringHeight() + 8)
+    y.v = y.v - (TextHeight(shadowDesc) + 8)
 
     MakeRadioGroup(settingsChild, y, {
         { key = "always",   label = "Always show Shadow Protection" },
@@ -794,6 +813,7 @@ end
 -- ─── Test seam ───────────────────────────────────────────────────────────────
 
 Priestly._testConfig = {
+    TextHeight    = TextHeight,
     INSTANCE_DB   = INSTANCE_DB,
     DEFAULTS      = DEFAULTS,
     FLAVOR        = FLAVOR,

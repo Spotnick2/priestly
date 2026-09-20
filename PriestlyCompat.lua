@@ -346,6 +346,42 @@ function API.UnitDisplayName(unit, fallback)
     return fallback or "?"
 end
 
+-- ─── containers ──────────────────────────────────────────────────────────────
+-- GetContainerNumSlots / GetContainerItemInfo moved to C_Container, and the
+-- latter returns a struct rather than positional values.
+
+local C_Container = C_Container
+
+-- How many of `itemID` are in the player's bags.
+function API.CountItem(itemID)
+    if not itemID or not C_Container then return 0 end
+    local total = 0
+    for bag = 0, 4 do
+        local ok, slots = pcall(C_Container.GetContainerNumSlots, bag)
+        if ok and slots then
+            for slot = 1, slots do
+                local gotInfo, info = pcall(C_Container.GetContainerItemInfo, bag, slot)
+                if gotInfo and info and info.itemID == itemID then
+                    total = total + (info.stackCount or 0)
+                end
+            end
+        end
+    end
+    return total
+end
+
+-- ─── addon metadata ──────────────────────────────────────────────────────────
+-- GetAddOnMetadata moved to C_AddOns.
+
+function API.AddonVersion(addonName)
+    local get = C_AddOns and C_AddOns.GetAddOnMetadata
+    if get then
+        local ok, version = pcall(get, addonName, "Version")
+        if ok and version and version ~= "" then return version end
+    end
+    return "dev"
+end
+
 -- ─── client ──────────────────────────────────────────────────────────────────
 
 -- Build number, used to invalidate anything learned from a previous patch.

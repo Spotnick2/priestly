@@ -19,10 +19,11 @@
 -- ============================================================================
 
 local addonName = "Priestly"
-local VERSION = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(addonName, "Version") or "dev"
 
 -- ─── Compat layer (PriestlyCompat.lua, loaded first) ─────────────────────────
 local API = Priestly.API
+
+local VERSION = API.AddonVersion(addonName)
 
 -- ─── Layout constants ────────────────────────────────────────────────────────
 local ICON_W     = 16
@@ -265,19 +266,7 @@ end
 
 local SpellIcon = API.SpellIcon
 
-local function CountItem(itemID)
-    local total = 0
-    for bag = 0, 4 do
-        local slots = C_Container.GetContainerNumSlots(bag) or 0
-        for slot = 1, slots do
-            local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID == itemID then
-                total = total + (info.stackCount or 0)
-            end
-        end
-    end
-    return total
-end
+local CountItem = API.CountItem
 
 -- ─── Aura reads: GUID-keyed cache and combat secrecy ─────────────────────────
 --

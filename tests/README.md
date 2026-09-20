@@ -51,6 +51,7 @@ resolve):
 | `test_roster.lua` | `GatherGroups` for solo / party / raid / pets, subgroup ordering, pets last, and two raiders sharing a first name. |
 | `test_frames.lua` | Executes every script handler and event rather than asserting behaviour — the popover hover poll, row and popover clicks, the ticker, reagent tooltips, close in and out of combat, every registered event, every slash command. Strict globals only catch what runs. |
 | `test_visibility.lua` | When the window opens itself and when it must not: a deliberate close surviving a reload and roster churn, joining a group reopening it, and a show asked for during combat happening once combat ends. |
+| `test_options.lua` | Builds the options panel and clicks everything in it — checkboxes, radios, the opacity slider, tabs, instance boxes and the three bulk buttons — plus the zero-height layout case. The panel builds lazily on OnShow, so until this existed the whole options UI sat outside the strict-global net. |
 | `test_config.lua` | SavedVariables: fresh defaults, the one-time migration off the TBC line (drops TBC instances, keeps the user's own settings), the per-build duration store, and the three Shadow Protection modes. |
 
 ## The stub is an allowlist, and it must model absences
