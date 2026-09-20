@@ -118,6 +118,13 @@ Both `g_Main` and `g_Pop` parent secure buttons, so both use `CombatPark()` (mov
 alpha 0) instead of `Hide()` during combat, and are properly hidden again on
 `PLAYER_REGEN_ENABLED`. Unparking clears `g_Moved` so the saved position is re-applied.
 
+**Known limitation, do not try to "fix" it.** Row click targets are unit tokens, wired during
+`UpdateUI`. If the roster changes during combat, `party2`/`raid3` can be handed to a different
+player while the attribute still names that token, so a click can land on the wrong person. There is
+no way out: attributes cannot be rewritten under lockdown, and an insecure `PreClick` cannot cancel
+a secure action. Parking the affected rows would need the same forbidden writes. It corrects itself
+on `PLAYER_REGEN_ENABLED`.
+
 Secure *snippets* are broken on this client (`loadstring_untainted` is missing, so
 `SecureHandlerWrapScript`, `_onstate-*` and state drivers throw). Priestly uses none of them — plain
 `SecureActionButtonTemplate` + `SetAttribute` + insecure `PreClick`/`PostClick`. Do not introduce a
