@@ -20,6 +20,11 @@
 WoW = {}
 local WoW = WoW
 
+-- Event registrations are a load-time fact, not per-test state: the addon
+-- registers once when its files load, so WoW.reset() must not wipe them or
+-- WoW.dispatch would find nothing to fire at.
+WoW.events = {}              -- [frame] = { [event] = true }
+
 ------------------------------------------------------------
 -- State
 ------------------------------------------------------------
@@ -43,9 +48,9 @@ function WoW.reset()
     WoW.instanceType = nil       -- nil = derive from instanceName
     WoW.itemCounts  = {}         -- [itemID] = count in bags
     WoW.messages    = {}         -- everything printed to DEFAULT_CHAT_FRAME
-    WoW.events      = {}         -- [frame] = { [event] = true }
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
     WoW.timers      = {}
+    WoW.mouseOver   = {}         -- [frame] = true; drives frame:IsMouseOver()
     WoW.byNameBlind = false      -- simulate GetAuraDataBySpellName not resolving
     WoW.auraReadsThrow = false   -- combat secrecy: index reads throw
 
@@ -124,6 +129,12 @@ local function makeFrame(name)
     f.Show = function(self) self._shown = true return self end
     f.Hide = function(self) self._shown = false return self end
     f.IsShown = function(self) return self._shown end
+    -- Predicates must be explicit: the catch-all __index below returns a
+    -- function for any unknown method, and a function is truthy, so an
+    -- undefined frame:IsFoo() would silently answer "yes" forever.
+    f.IsMouseOver = function(self) return WoW.mouseOver[self] == true end
+    f.IsVisible = function(self) return self._shown end
+    f.IsMouseEnabled = function(self) return true end
     f.RegisterEvent = function(self, ev)
         if WoW.badEvents[ev] then error("unknown event " .. tostring(ev), 2) end
         local set = WoW.events[self]
@@ -151,16 +162,40 @@ local function makeFrame(name)
     f.SetValue = function(self, v) self._value = v return self end
     f.GetID = function() return 1 end
 
-    -- Anything else called as a method is a no-op returning the frame.
-    setmetatable(f, { __index = function() return chain end })
+    -- Anything else called as a method is a no-op returning the frame. But an
+    -- underscore-prefixed key is one of the ADDON's own private fields, and the
+    -- stub must not invent those: handing back a function makes every unset
+    -- flag (`_combatHidden`, `_active`, `_category`) read as true, which is how
+    -- a test can assert a state the addon is not actually in.
+    setmetatable(f, {
+        __index = function(_, k)
+            if type(k) == "string" and k:sub(1, 1) == "_" then return nil end
+            return chain
+        end,
+    })
     return f
 end
 WoW.makeFrame = makeFrame
 
--- Fire a registered event handler on a frame.
+-- Fire a registered event handler on one specific frame.
 function WoW.fire(frame, event, ...)
     local fn = frame and frame._scripts and frame._scripts.OnEvent
     if fn then fn(frame, event, ...) end
+end
+
+-- Fire an event the way the game does: to EVERY frame registered for it. The
+-- addon has three event frames (main, instance detector, options registration)
+-- and firing only one leaves the others in a state the game never produces -
+-- which looks like an addon bug when a test then trips over it.
+function WoW.dispatch(event, ...)
+    local targets = {}
+    for frame, events in pairs(WoW.events) do
+        if events[event] then targets[#targets + 1] = frame end
+    end
+    for _, frame in ipairs(targets) do
+        WoW.fire(frame, event, ...)
+    end
+    return #targets
 end
 
 ------------------------------------------------------------
@@ -190,7 +225,15 @@ DEFAULT_CHAT_FRAME = {
 GameTooltip = makeFrame("GameTooltip")
 SlashCmdList = {}
 
-Settings = nil            -- tests do not exercise the Settings framework
+-- Present on the live client, so the options panel's real registration and
+-- OpenToCategory paths are the ones the tests exercise.
+Settings = {
+    RegisterCanvasLayoutCategory = function(frame, name)
+        return { GetID = function() return 42 end, name = name }
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function(id) WoW.settingsOpenedTo = id end,
+}
 
 C_Timer = {
     After = function(_, fn) WoW.timers[#WoW.timers + 1] = fn end,
@@ -235,12 +278,20 @@ function UnitIsDeadOrGhost(unit)
     local u = unitInfo(unit)
     return u ~= nil and u.dead
 end
+-- Measured on build 69913: UnitName returns the joined name only for the
+-- player. For any other unit it returns the FIRST name, with the surname where
+-- the realm normally sits. GetUnitName is the one that joins them for both.
 function UnitName(unit)
     local u = unitInfo(unit)
-    return u and u.name or nil
+    if not u then return nil end
+    if unit == "player" then return u.name end
+    local first, surname = u.name:match("^(%S+)%s+(%S+)$")
+    if first then return first, surname end
+    return u.name
 end
 function GetUnitName(unit, showServer)
-    return UnitName(unit)
+    local u = unitInfo(unit)
+    return u and u.name or nil
 end
 UnitFullName = UnitName
 UnitNameUnmodified = UnitName
@@ -343,14 +394,21 @@ local function findSpell(spell)
 end
 
 C_Spell = {
+    -- Measured on build 69913: by ID this resolves any spell in the client's
+    -- database; by NAME it resolves only spells the player knows. Resolving a
+    -- name for an unlearned spell must therefore fail here too, or the tests
+    -- would bless a lookup direction the live client rejects.
     GetSpellInfo = function(spell)
-        local info = findSpell(spell)
+        local info, id = findSpell(spell)
         if not info then return nil end
+        if type(spell) ~= "number" and not WoW.knownSpells[id] then return nil end
         return { name = info.name, iconID = info.iconID, castTime = 0 }
     end,
     GetSpellTexture = function(spell)
-        local info = findSpell(spell)
-        return info and info.iconID or nil
+        local info, id = findSpell(spell)
+        if not info then return nil end
+        if type(spell) ~= "number" and not WoW.knownSpells[id] then return nil end
+        return info.iconID
     end,
     IsSpellInRange = function(spell, unit)
         -- The live API answers nil for a spell the player does not know, the
@@ -426,13 +484,13 @@ UIParent = makeFrame("UIParent")
 local KNOWN_ABSENT = {
     -- Gone on this client; the addon may probe for them but must not depend
     -- on them.
-    MouseIsOver = true, UnitBuff = true, UnitDebuff = true, AuraUtil = true,
+    MouseIsOver = true, UnitBuff = true, UnitDebuff = true,
     GetSpellInfo = true, GetSpellTexture = true, IsSpellInRange = true,
     GetItemIcon = true, GetItemInfo = true, GetItemCount = true,
     GetNumSpellTabs = true, GetSpellTabInfo = true, GetSpellBookItemName = true,
     GetNumTalentTabs = true, GetTalentTabInfo = true, IsSpellKnown = true,
     GetAddOnMetadata = true, InterfaceOptions_AddCategory = true,
-    InterfaceOptionsFrame_OpenToCategory = true, Settings = true,
+    InterfaceOptionsFrame_OpenToCategory = true,
     loadstring_untainted = true, SecureHandlerWrapScript = true,
     -- Addon-owned globals that legitimately start out nil.
     PriestlyDB = true, PriestlyProbeDB = true,

@@ -56,16 +56,33 @@ runScript(row, "OnEnter")                       -- opens the popover
 local pop = T.popFrame()
 H.check(pop and pop:IsShown(), "mousing over a row opens the popover")
 
--- The poll only does its work once the timer passes its threshold, so a big dt
--- is what actually exercises it.
+-- The poll only does its work once the timer passes its threshold, so a small
+-- dt must leave the popover alone.
+WoW.mouseOver[pop] = true
 runScript(pop, "OnUpdate", 0.01)
-runScript(pop, "OnUpdate", 5.0)
-runScript(pop, "OnUpdate", 5.0)
+H.check(pop:IsShown(), "below the poll threshold nothing happens")
 
--- ...and again in combat, which takes the offscreen-park branch instead of Hide.
-WoW.inCombat = true
-pop:Show()
+-- Mouse still on the popover: it stays open.
 runScript(pop, "OnUpdate", 5.0)
+H.check(pop:IsShown(), "the popover stays open while the mouse is over it")
+
+-- Mouse on the anchor row instead: also stays open.
+WoW.mouseOver[pop] = nil
+WoW.mouseOver[row] = true
+runScript(pop, "OnUpdate", 5.0)
+H.check(pop:IsShown(), "and while the mouse is over the row that opened it")
+
+-- Mouse somewhere else entirely: it closes.
+WoW.mouseOver[row] = nil
+runScript(pop, "OnUpdate", 5.0)
+H.check(not pop:IsShown(), "and closes once the mouse leaves both")
+
+-- ...and in combat it parks offscreen instead of hiding, because it parents
+-- secure buttons.
+runScript(row, "OnEnter")
+WoW.inCombat = true
+runScript(pop, "OnUpdate", 5.0)
+H.check(pop._combatHidden == true, "in combat it parks offscreen rather than hiding")
 WoW.inCombat = false
 
 ------------------------------------------------------------
@@ -144,13 +161,16 @@ local events = {
     { "BAG_UPDATE" },
 }
 for _, e in ipairs(events) do
-    local ok, err = pcall(WoW.fire, evt, e[1], e[2], e[3])
+    -- Dispatch to every frame registered for the event, as the game does: the
+    -- addon has three event frames and only exercising one leaves the others
+    -- in a state that never occurs in play.
+    local ok, err = pcall(WoW.dispatch, e[1], e[2], e[3])
     H.check(ok, e[1] .. " handler ran: " .. tostring(err))
 end
 
 -- Leaving the group while solo display is off closes the window.
 WoW.groupMembers = 0
-H.check(pcall(WoW.fire, evt, "GROUP_ROSTER_UPDATE"), "roster update with an empty group")
+H.check(pcall(WoW.dispatch, "GROUP_ROSTER_UPDATE"), "roster update with an empty group")
 WoW.groupMembers = 2
 
 -- And the config's own event frame.
@@ -177,7 +197,8 @@ H.check(pcall(Priestly_ForceRebuild), "Priestly_ForceRebuild runs")
 H.check(pcall(Priestly_OnSoloToggle, true), "Priestly_OnSoloToggle(true) runs")
 H.check(pcall(Priestly_OnSoloToggle, false), "Priestly_OnSoloToggle(false) runs")
 H.check(pcall(Priestly_ScheduleRefresh), "Priestly_ScheduleRefresh runs")
-H.check(pcall(Priestly_OpenConfig), "Priestly_OpenConfig runs without the Settings framework")
+H.check(pcall(Priestly_OpenConfig), "Priestly_OpenConfig runs")
+H.eq(WoW.settingsOpenedTo, 42, "and it opens the registered Settings category")
 
 -- Everything the deferred helpers queued must also run clean.
 H.check(pcall(WoW.flushTimers), "queued timers run")

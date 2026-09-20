@@ -159,6 +159,8 @@ local g_RefQ     = false
 local g_InitDone = false
 local g_Ticker   = 0
 local g_IsPriest = false
+local g_PendingShow  = false   -- a show request that arrived during combat
+local g_LastGroupSize = 0
 
 local g_GHdrs = {}   -- FontStrings [1..MAX_GROUPS]
 local g_Rows  = {}   -- Buttons     [1..MAX_ROWS]
@@ -225,7 +227,14 @@ end
 
 -- ─── Utilities ───────────────────────────────────────────────────────────────
 
+-- C_Timer exists on this client; the OnUpdate frame is the fallback for one
+-- that does not have it. Going through C_Timer also means deferred work is
+-- reachable from the tests instead of needing a real frame to tick.
 local function After(delay, fn)
+    if C_Timer and C_Timer.After then
+        C_Timer.After(delay, fn)
+        return
+    end
     local t = 0
     local f = CreateFrame("Frame")
     f:SetScript("OnUpdate", function(self, dt)
@@ -366,10 +375,13 @@ end
 --                    buff, else whoever has the least time left.
 -- Members whose auras we cannot read are never picked as "missing" - under
 -- combat secrecy that would send you casting at the first name in the list.
-local function PickTarget(members, def, anyValid)
+local function PickCandidate(members, def, anyValid, requireInRange)
+    local spell = def.hasSingle and def.sngl or def.grp
     local firstValid, bestUnit, bestRem = nil, nil, math.huge
     for _, m in ipairs(members) do
-        if IsValidTarget(m.unit) then
+        if IsValidTarget(m.unit)
+            and (not requireInRange or RangeStatus(m.unit, spell) == "IN_RANGE")
+        then
             if anyValid then return m.unit end
             firstValid = firstValid or m.unit
             local rem, _, state = BuffRem(m.unit, def)
@@ -381,6 +393,19 @@ local function PickTarget(members, def, anyValid)
         end
     end
     return bestUnit or firstValid
+end
+
+local function PickTarget(members, def, anyValid)
+    -- Prefer somebody we can actually reach. Casting at an out-of-range member
+    -- while an in-range one is missing the buff simply fails, and a group
+    -- Prayer covers the whole subgroup no matter which member it lands on - so
+    -- there is never a reason to aim it at someone too far away.
+    --
+    -- The range check falls back to ignoring range: it answers UNKNOWN for a
+    -- spell the player does not know and in a few other cases, and picking
+    -- nobody would be worse than picking someone out of range.
+    return PickCandidate(members, def, anyValid, true)
+        or PickCandidate(members, def, anyValid, false)
 end
 
 local function ClassColor(classFile)
@@ -560,9 +585,19 @@ end
 
 -- ─── Per-element visual updaters (used by both full rebuild and ticker) ───────
 
+-- Fraction of the buff's duration still to run, clamped. A permanent aura
+-- reports PERMANENT remaining, which would otherwise drive the gradient past
+-- 1.0 and hand TimerColor a negative red channel.
+local function Pct(rem, dur)
+    if not rem or not dur or dur <= 0 or rem <= 0 then return 0 end
+    local p = rem / dur
+    if p > 1 then return 1 end
+    return p
+end
+
 local function ApplyRowVisuals(r, st, dur)
     dur = st.minDur or dur or 3600
-    local pct = (st.minR > 0 and dur > 0) and (st.minR / dur) or 0
+    local pct = Pct(st.minR, dur)
 
     -- Background: flat colors matching PallyPower defaults
     -- cBuffGood     = (0, 0.7, 0)    everyone has the buff
@@ -616,7 +651,7 @@ local function ApplyPopRowVisuals(pr)
     local has   = (state == ST_HAS) and rem > 0
     local range = RangeStatus(unit, def.hasSingle and def.sngl or def.grp)
     local dur   = DurationFor(def, buffDur)
-    local pct   = has and (rem / dur) or 0
+    local pct   = has and Pct(rem, dur) or 0
 
     -- Row background: flat color by state (matching PallyPower)
     if not UnitIsConnected(unit) then
@@ -1161,7 +1196,14 @@ UpdateUI = function()
     -- SetAttribute silently fails during combat lockdown; defer until combat ends
     if InCombatLockdown() then
         -- Just refresh visuals; full rebuild will happen on combat end
-        if g_Vis then RefreshTimers() end
+        if g_Vis then
+            RefreshTimers()
+        else
+            -- Somebody asked for the window while it was closed - /priestly
+            -- show, or joining a group mid-fight. Remember it, or the request
+            -- is simply dropped.
+            g_PendingShow = true
+        end
         return
     end
     InitUI()
@@ -1438,8 +1480,13 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Apply configured opacity
         Priestly_ApplyAlpha()
 
-        -- Auto-open if Priest and in a group (or solo mode)
-        if g_IsPriest and (GetNumGroupMembers() > 0 or Priestly_ShowSolo()) then
+        -- Auto-open if Priest and in a group (or solo mode) - unless the
+        -- window was deliberately closed, which is a preference that should
+        -- survive a reload.
+        g_LastGroupSize = GetNumGroupMembers()
+        if g_IsPriest and PriestlyDB.visible ~= false
+            and (g_LastGroupSize > 0 or Priestly_ShowSolo())
+        then
             After(0.6, UpdateUI)
         end
 
@@ -1463,7 +1510,15 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "RAID_ROSTER_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
         PruneAuraCache()
         local n = GetNumGroupMembers()
-        if n > 0 and not g_Vis and g_IsPriest then
+        -- Joining a group is the one case that reopens a window the user
+        -- closed: that is the addon's advertised behaviour. Any other roster
+        -- churn leaves a deliberate close alone.
+        local joined = (g_LastGroupSize == 0 and n > 0)
+        g_LastGroupSize = n
+        if joined and PriestlyDB then PriestlyDB.visible = true end
+        if n > 0 and not g_Vis and g_IsPriest
+            and (joined or not PriestlyDB or PriestlyDB.visible ~= false)
+        then
             After(0.5, UpdateUI)
         elseif n == 0 and not Priestly_ShowSolo() then
             CloseUI()  -- auto-close, not manual (unless solo mode)
@@ -1502,8 +1557,12 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             -- saved position instead of leaving the frame unanchored.
             g_Moved = false
         end
-        -- Combat ended: full rebuild so SetAttribute calls actually work
-        if g_Vis then After(0.2, UpdateUI) end
+        -- Combat ended: full rebuild so SetAttribute calls actually work, and
+        -- honour any show that was asked for while we were locked down.
+        if g_Vis or g_PendingShow then
+            g_PendingShow = false
+            After(0.2, UpdateUI)
+        end
 
     elseif event == "BAG_UPDATE" then
         if g_Vis then RefreshFooter() end
@@ -1596,6 +1655,7 @@ Priestly._test = {
     PruneAuraCache   = PruneAuraCache,
     IsValidTarget    = IsValidTarget,
     TimerColor       = TimerColor,
+    Pct              = Pct,
     FmtTime          = FmtTime,
     GetPrayerRank    = GetPrayerRank,
     GetCandleInfo    = GetCandleInfo,

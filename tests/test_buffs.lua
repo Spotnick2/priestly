@@ -213,6 +213,54 @@ H.eq(T.PickTarget(members, fort, false), "party2",
 H.eq(T.PickTarget(members, fort, true), "party1",
     "a group Prayer just needs any valid member")
 
+-- Range matters: casting at somebody out of range just fails, and a group
+-- Prayer covers the subgroup whichever member it lands on.
+fort = setup()
+WoW.SetUnit("party1", { name = "A One", guid = "P1" })
+WoW.SetUnit("party2", { name = "B Two", guid = "P2" })
+WoW.SetUnit("party3", { name = "C Three", guid = "P3" })
+members = { member("party1"), member("party2"), member("party3") }
+
+WoW.range.party1 = false        -- missing the buff, but too far away
+WoW.range.party2 = true
+WoW.range.party3 = true
+H.eq(T.PickTarget(members, fort, false), "party2",
+    "an in-range member beats the first missing one when that one is out of range")
+H.eq(T.PickTarget(members, fort, true), "party2",
+    "a group Prayer is aimed at somebody reachable")
+
+-- With nobody reachable, picking someone still beats picking nobody.
+WoW.range.party2 = false
+WoW.range.party3 = false
+H.eq(T.PickTarget(members, fort, false), "party1",
+    "falls back to an out-of-range target rather than none at all")
+
+-- An UNKNOWN range answer (an unknown spell, say) must not exclude everyone.
+WoW.range.party1, WoW.range.party2, WoW.range.party3 = nil, nil, nil
+H.check(T.PickTarget(members, fort, false) ~= nil, "unknown range does not veto every target")
+
+------------------------------------------------------------
+-- Timer gradient
+------------------------------------------------------------
+
+H.eq(T.Pct(1800, 3600), 0.5, "half the duration left")
+H.eq(T.Pct(0, 3600), 0, "none left")
+H.eq(T.Pct(-5, 3600), 0, "a negative remaining is clamped, not negative")
+H.eq(T.Pct(9999, 3600), 1, "a permanent aura clamps at full instead of running past it")
+H.eq(T.Pct(100, 0), 0, "a zero duration cannot divide")
+local pr_, pg_, pb_ = T.TimerColor(T.Pct(9999, 3600))
+H.check(pr_ >= 0 and pg_ >= 0 and pb_ >= 0,
+    "so the colour channels never go negative on a permanent buff")
+
+fort = setup()
+WoW.SetUnit("party1", { name = "A One", guid = "P1" })
+WoW.SetUnit("party2", { name = "B Two", guid = "P2" })
+WoW.SetUnit("party3", { name = "C Three", guid = "P3" })
+members = { member("party1"), member("party2"), member("party3") }
+WoW.SetAura("party1", "Power Word: Fortitude", 3600, 3000)
+WoW.SetAura("party2", "Power Word: Fortitude", 3600, 500)
+WoW.SetAura("party3", "Power Word: Fortitude", 3600, 3000)
+
 -- Dead and offline members are never targets.
 WoW.units.party1.dead = true
 WoW.units.party2.connected = false
