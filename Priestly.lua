@@ -168,6 +168,48 @@ local g_PRows = {}   -- Buttons     [1..MAX_MEMBERS]
 
 local CloseUI, UpdateUI, UpdatePopover, InitUI, RefreshTimers, ScheduleRefresh
 
+-- ─── Deferral and combat parking ─────────────────────────────────────────────
+
+-- C_Timer exists on this client; the OnUpdate frame is the fallback for one
+-- that does not have it. Going through C_Timer also means deferred work is
+-- reachable from the tests instead of needing a real frame to tick.
+local function After(delay, fn)
+    if C_Timer and C_Timer.After then
+        C_Timer.After(delay, fn)
+        return
+    end
+    local t = 0
+    local f = CreateFrame("Frame")
+    f:SetScript("OnUpdate", function(self, dt)
+        t = t + dt
+        if t >= delay then self:SetScript("OnUpdate", nil); fn() end
+    end)
+end
+
+-- Hiding a frame that parents secure buttons is refused under combat lockdown,
+-- so it gets moved out of sight instead. Both our frames are clamped to the
+-- screen, which would drag them straight back to the edge - and an alpha-0
+-- frame still takes mouse clicks, so a "hidden" row would stay a live,
+-- invisible cast button for the rest of the fight. Drop the clamp first.
+local function CombatPark(f)
+    if not f then return end
+    f:SetClampedToScreen(false)
+    f:SetAlpha(0)
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10000, -10000)
+    f._combatHidden = true
+end
+
+-- Undo a park now that we are out of combat.
+local function CombatUnpark(f)
+    if not f or not f._combatHidden then return false end
+    f:Hide()
+    f:SetAlpha(1)
+    f:SetClampedToScreen(true)
+    f._combatHidden = false
+    return true
+end
+
 -- ─── Global hooks for PriestlyConfig.lua ────────────────────────────────────
 
 -- ScheduleRefresh is forward-declared above and assigned later; expose via wrapper
@@ -178,14 +220,8 @@ end
 -- Force a full UI rebuild (used when config changes affect layout)
 function Priestly_ForceRebuild()
     if InCombatLockdown() then return end
-    local t = 0
-    local f = CreateFrame("Frame")
-    f:SetScript("OnUpdate", function(self, dt)
-        t = t + dt
-        if t >= 0.1 then
-            self:SetScript("OnUpdate", nil)
-            if UpdateUI then UpdateUI() end
-        end
+    After(0.1, function()
+        if UpdateUI then UpdateUI() end
     end)
 end
 
@@ -195,15 +231,9 @@ function Priestly_OnSoloToggle(enabled)
     if enabled then
         -- Solo enabled: show the frame immediately
         if not g_Vis and g_IsPriest then
-            local t = 0
-            local f = CreateFrame("Frame")
-            f:SetScript("OnUpdate", function(self, dt)
-                t = t + dt
-                if t >= 0.1 then
-                    self:SetScript("OnUpdate", nil)
-                    if PriestlyDB then PriestlyDB.visible = true end
-                    if UpdateUI then UpdateUI() end
-                end
+            After(0.1, function()
+                if PriestlyDB then PriestlyDB.visible = true end
+                if UpdateUI then UpdateUI() end
             end)
         end
     else
@@ -226,22 +256,6 @@ function Priestly_ApplyAlpha()
 end
 
 -- ─── Utilities ───────────────────────────────────────────────────────────────
-
--- C_Timer exists on this client; the OnUpdate frame is the fallback for one
--- that does not have it. Going through C_Timer also means deferred work is
--- reachable from the tests instead of needing a real frame to tick.
-local function After(delay, fn)
-    if C_Timer and C_Timer.After then
-        C_Timer.After(delay, fn)
-        return
-    end
-    local t = 0
-    local f = CreateFrame("Frame")
-    f:SetScript("OnUpdate", function(self, dt)
-        t = t + dt
-        if t >= delay then self:SetScript("OnUpdate", nil); fn() end
-    end)
-end
 
 local function FmtTime(s)
     if not s or s <= 0 then return "" end
@@ -375,8 +389,16 @@ end
 --                    buff, else whoever has the least time left.
 -- Members whose auras we cannot read are never picked as "missing" - under
 -- combat secrecy that would send you casting at the first name in the list.
-local function PickCandidate(members, def, anyValid, requireInRange)
-    local spell = def.hasSingle and def.sngl or def.grp
+local function PickCandidate(members, def, anyValid, requireInRange, st)
+    -- Range-check whichever spell this click will actually cast. The Prayers
+    -- reach 40 yards where the single-target forms reach 30, so testing the
+    -- single spell would rule out members a Prayer could reach perfectly well.
+    local spell
+    if anyValid and def.hasGroup then
+        spell = def.grp
+    else
+        spell = def.hasSingle and def.sngl or def.grp
+    end
     local firstValid, bestUnit, bestRem = nil, nil, math.huge
     for _, m in ipairs(members) do
         if IsValidTarget(m.unit)
@@ -384,7 +406,13 @@ local function PickCandidate(members, def, anyValid, requireInRange)
         then
             if anyValid then return m.unit end
             firstValid = firstValid or m.unit
-            local rem, _, state = BuffRem(m.unit, def)
+            local rem, state
+            local known = st and st.byUnit and st.byUnit[m.unit]
+            if known then
+                rem, state = known.rem, known.state
+            else
+                rem, _, state = BuffRem(m.unit, def)
+            end
             if state == ST_MISSING then return m.unit end
             if state == ST_HAS and rem < bestRem then
                 bestRem = rem
@@ -395,7 +423,7 @@ local function PickCandidate(members, def, anyValid, requireInRange)
     return bestUnit or firstValid
 end
 
-local function PickTarget(members, def, anyValid)
+local function PickTarget(members, def, anyValid, st)
     -- Prefer somebody we can actually reach. Casting at an out-of-range member
     -- while an in-range one is missing the buff simply fails, and a group
     -- Prayer covers the whole subgroup no matter which member it lands on - so
@@ -404,8 +432,8 @@ local function PickTarget(members, def, anyValid)
     -- The range check falls back to ignoring range: it answers UNKNOWN for a
     -- spell the player does not know and in a few other cases, and picking
     -- nobody would be worse than picking someone out of range.
-    return PickCandidate(members, def, anyValid, true)
-        or PickCandidate(members, def, anyValid, false)
+    return PickCandidate(members, def, anyValid, true, st)
+        or PickCandidate(members, def, anyValid, false, st)
 end
 
 local function ClassColor(classFile)
@@ -556,12 +584,14 @@ end
 -- secrecy, no cached state). They are deliberately NOT counted as missing.
 local function GroupStat(members, def)
     local minR, minDur, miss, unknown = PERMANENT, 0, {}, 0
+    local byUnit = {}
     for _, m in ipairs(members) do
         -- Offline/disconnected always counts as missing
         if not UnitIsConnected(m.unit) then
             miss[#miss + 1] = m
         else
             local r, d, state = BuffRem(m.unit, def)
+            byUnit[m.unit] = { rem = r, state = state }
             if state == ST_UNKNOWN then
                 unknown = unknown + 1
             elseif r <= 0 then
@@ -580,6 +610,9 @@ local function GroupStat(members, def)
         nMiss    = #miss,
         nUnknown = unknown,
         nTotal   = #members,
+        -- What each member's state was during this pass, so target picking can
+        -- reuse it instead of re-reading every aura.
+        byUnit   = byUnit,
     }
 end
 
@@ -1021,12 +1054,7 @@ InitUI = function()
         end
         if not overPop and not overAnchor and not overChild then
             if InCombatLockdown() then
-                -- Can't Hide() a frame parenting secure buttons during combat.
-                -- Move offscreen + zero alpha so it's invisible but not tainted.
-                self:SetAlpha(0)
-                self:ClearAllPoints()
-                self:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10000, -10000)
-                self._combatHidden = true
+                CombatPark(self)
             else
                 self:Hide()
             end
@@ -1092,15 +1120,6 @@ end
 
 -- ─── CloseUI ─────────────────────────────────────────────────────────────────
 
--- Park a frame that parents secure buttons offscreen instead of hiding it.
--- Hiding a secure button's parent is refused under combat lockdown.
-local function CombatPark(f)
-    f:SetAlpha(0)
-    f:ClearAllPoints()
-    f:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10000, -10000)
-    f._combatHidden = true
-end
-
 CloseUI = function(manual)
     -- g_Main parents the secure row buttons just as g_Pop parents the popover
     -- rows, so it needs the same combat treatment.
@@ -1119,6 +1138,10 @@ CloseUI = function(manual)
         end
     end
     g_Vis = false
+    -- Cancel any show that was queued while we were in combat: the user has
+    -- since asked for the window to be closed, and honouring the older request
+    -- would reopen it and overwrite the saved preference.
+    g_PendingShow = false
     -- Only save "closed" state if user manually closed (not from leaving group)
     if manual and PriestlyDB then PriestlyDB.visible = false end
 end
@@ -1129,11 +1152,7 @@ UpdatePopover = function(anchorRow, members, def)
     if InCombatLockdown() then return end
 
     -- If popover was visually hidden during combat, properly restore it first
-    if g_Pop._combatHidden then
-        g_Pop:Hide()       -- properly hide it now that we're out of combat
-        g_Pop:SetAlpha(1)
-        g_Pop._combatHidden = false
-    end
+    CombatUnpark(g_Pop)
 
     -- Header
     g_Pop.hdrIcon:SetTexture(SpellIcon(def.hasSingle and def.snglID or def.grpID, def.fallbackIcon))
@@ -1259,8 +1278,8 @@ UpdateUI = function()
             local primary, secondary = ClickSpells(def)
             local groupMode = def.hasGroup and true or false
 
-            local primaryUnit   = primary   and PickTarget(members, def, groupMode) or nil
-            local secondaryUnit = secondary and PickTarget(members, def, false) or nil
+            local primaryUnit   = primary   and PickTarget(members, def, groupMode, st) or nil
+            local secondaryUnit = secondary and PickTarget(members, def, false, st) or nil
 
             r:ClearAllPoints()
             r:SetPoint("TOPLEFT", g_Main, "TOPLEFT", ROW_X, y)
@@ -1397,6 +1416,21 @@ UpdateUI = function()
     g_Main:Show()
     g_Vis = true
     if PriestlyDB then PriestlyDB.visible = true end
+
+    -- A rebuild rewires the rows but not an open popover: its member list and
+    -- its secure attributes still name the previous roster's unit tokens. The
+    -- popover only refreshes on a row's OnEnter, which does not fire again if
+    -- the mouse is already resting on that row while the raid reshuffles - so
+    -- it would keep showing one player's buff state under another's name, and
+    -- a click would cast at the stale token.
+    if g_Pop and g_Pop:IsShown() and not g_Pop._combatHidden then
+        local anchor = g_Pop._anchorRow
+        if anchor and anchor._active and anchor._members and anchor._def then
+            UpdatePopover(anchor, anchor._members, anchor._def)
+        else
+            g_Pop:Hide()    -- the row it belonged to is gone
+        end
+    end
 end
 
 -- ─── Throttled roster/aura refresh ───────────────────────────────────────────
@@ -1446,12 +1480,21 @@ local function AuraEventIsRelevant(unit, updateInfo)
     if not updateInfo or updateInfo.isFullUpdate then return true end
     local added = updateInfo.addedAuras
     if added then
-        for _, aura in ipairs(added) do
-            local nm = aura and aura.name
-            for _, d in ipairs(DEFS) do
-                if nm == d.sngl or nm == d.grp then return true end
+        -- These are aura structs, and aura fields throw while secret - which is
+        -- exactly when UNIT_AURA fires most. Reading one unguarded here would
+        -- error straight out of the event handler, once per aura event, for the
+        -- whole fight.
+        local ok, hit = pcall(function()
+            for _, aura in ipairs(added) do
+                local nm = aura and aura.name
+                for _, d in ipairs(DEFS) do
+                    if nm == d.sngl or nm == d.grp then return true end
+                end
             end
-        end
+            return false
+        end)
+        if not ok then return true end   -- unreadable: refresh and let the throttle absorb it
+        if hit then return true end
     end
     -- Updated/removed auras arrive as instance IDs with no spell attached, so
     -- there is nothing to filter on - refresh and let the throttle absorb it.
@@ -1498,7 +1541,11 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         )
 
     elseif event == "READY_CHECK" then
-        if g_IsPriest then After(0.4, UpdateUI) end
+        -- A ready check is a good moment to rebuff, but not a reason to
+        -- override someone who closed the window.
+        if g_IsPriest and (not PriestlyDB or PriestlyDB.visible ~= false) then
+            After(0.4, UpdateUI)
+        end
 
     elseif event == "UNIT_AURA" then
         if AuraEventIsRelevant(arg1, arg2) then ScheduleRefresh() end
@@ -1544,15 +1591,8 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- Combat ended: properly hide anything we only parked offscreen
-        if g_Pop and g_Pop._combatHidden then
-            g_Pop:Hide()
-            g_Pop:SetAlpha(1)
-            g_Pop._combatHidden = false
-        end
-        if g_Main and g_Main._combatHidden then
-            g_Main:Hide()
-            g_Main:SetAlpha(1)
-            g_Main._combatHidden = false
+        CombatUnpark(g_Pop)
+        if CombatUnpark(g_Main) then
             -- Parking cleared its anchors; let the next UpdateUI re-apply the
             -- saved position instead of leaving the frame unanchored.
             g_Moved = false

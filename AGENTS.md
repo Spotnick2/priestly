@@ -3,6 +3,22 @@
 Trust these instructions. Search the codebase only when information here is incomplete, stale, or
 appears incorrect.
 
+## Review preferences
+
+- When asked to review a pull request, review its committed changes and post actionable findings on
+  that PR. If there are no actionable findings, post a review summary with validation performed and
+  any material limitations. Link the posted review in the final response.
+- End every pull-request review and follow-up review with an explicit merge-readiness verdict:
+  `Ready for merge` or `Not ready for merge`, followed by the reason and any remaining required
+  work. State the same verdict clearly in the final response to the user.
+- Before starting a substantive code review, assess its scope and recommend an appropriate model
+  and reasoning effort. Use a GPT-5.6 model as the floor for substantive reviews; normally recommend
+  `gpt-5.6-sol`, reserving stronger models for exceptional cases. Keep making recommendations on
+  future reviews; the user handles session model switches. Ask when an escalation or de-escalation
+  is warranted, and honor explicit approval to use the current model for that review without asking
+  again. Do not silently switch models or effort. Follow the user's cost policy.
+- Preserve unrelated local edits during reviews.
+
 ## What This Repository Is
 
 Priestly Forever is a World of Warcraft addon for **WoW: Forever 1.60.1** (Interface `16001`). It

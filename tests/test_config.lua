@@ -94,6 +94,7 @@ H.eq(Priestly_GetLearnedDuration("shadow"), 600, "each buff is stored separately
 H.eq(Priestly_GetLearnedDuration("fort"), 1800, "...without disturbing the others")
 
 WoW.build = "70000"
+Priestly_EnsureDefaults()       -- a build change means a restart means a login
 H.check(Priestly_GetLearnedDuration("fort") == nil, "a new build resets the table")
 Priestly_LearnDuration("fort", 900)
 H.eq(Priestly_GetLearnedDuration("fort"), 900, "and starts learning again")

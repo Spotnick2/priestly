@@ -146,8 +146,10 @@ T.BuffRem("party1", fort)
 H.eq(Priestly_GetLearnedDuration("fort"), 600,
     "durations are replaced in both directions, not maxed")
 
--- A new client build throws the whole table away.
+-- A new client build throws the whole table away. A build can only change
+-- across a client restart, so a fresh login (EnsureDefaults) is what notices.
 WoW.build = "70000"
+Priestly_EnsureDefaults()
 H.check(Priestly_GetLearnedDuration("fort") == nil,
     "what was learned on an older build is discarded")
 

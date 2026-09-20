@@ -70,8 +70,16 @@ local INSTANCE_DB = {
 
 local FLAVOR = "forever"
 
+-- Resolved once per session (see Priestly_EnsureDefaults) so that learning a
+-- duration does not call GetBuildInfo for every member of every group.
+local g_Build
+
 function Priestly_EnsureDefaults()
     if not PriestlyDB then PriestlyDB = {} end
+    -- A client build can only change across a restart, which means a fresh
+    -- login, which means this runs again. Re-resolving here is what keeps the
+    -- cached build honest while keeping GetBuildInfo off the aura hot path.
+    g_Build = nil
     for k, v in pairs(DEFAULTS) do
         if PriestlyDB[k] == nil then
             PriestlyDB[k] = v
@@ -115,10 +123,10 @@ end
 
 local function DurationStore()
     if not PriestlyDB then return nil end
-    local build = API and API.ClientBuild() or "?"
+    if not g_Build then g_Build = (API and API.ClientBuild()) or "?" end
     local store = PriestlyDB.learnedDurations
-    if not store or store.build ~= build then
-        store = { build = build }
+    if not store or store.build ~= g_Build then
+        store = { build = g_Build }
         PriestlyDB.learnedDurations = store
     end
     return store
@@ -128,6 +136,9 @@ function Priestly_LearnDuration(defId, seconds)
     if not defId or not seconds or seconds <= 0 then return end
     local store = DurationStore()
     if not store then return end
+    -- Almost every call re-learns the value we already have; only write when it
+    -- actually changed.
+    if store[defId] == seconds then return end
     store[defId] = seconds
 end
 
@@ -167,7 +178,11 @@ function Priestly_ShouldShowShadow(groups, ord)
         if groups and ord and names then
             for _, gn in ipairs(ord) do
                 for _, m in ipairs(groups[gn] or {}) do
-                    if API.HasBuff(m.unit, names) then return true end
+                    local status = API.ReadBuff(m.unit, names)
+                    if status == "HAS" then return true end
+                    -- A refused read is not evidence that nobody has it; making
+                    -- the row vanish mid-fight would be worse than leaving it.
+                    if status == "BLOCKED" then return true end
                 end
             end
         end
@@ -233,21 +248,24 @@ local CHECK_ART = {
     checked   = "Interface\\Buttons\\UI-CheckBox-Check",
 }
 
--- Returns frame, templateApplied
+-- Returns frame, templateApplied.
+--
+-- Never returns nil: callers go straight on to :SetPoint() and a nil here would
+-- just move the load-blocking error one line down, which is the opposite of the
+-- point. If the template is missing we fall back to a bare frame; if even that
+-- fails nothing about the UI can work anyway, so let it raise.
 local function SafeFrame(frameType, name, parent, template)
     if template then
         local ok, f = pcall(CreateFrame, frameType, name, parent, template)
         if ok and f then return f, true end
     end
-    local ok, f = pcall(CreateFrame, frameType, name, parent)
-    return (ok and f or nil), false
+    return CreateFrame(frameType, name, parent), false
 end
 
 -- A check button that looks right whether or not the template exists, with a
 -- label we own (template label fields have moved around between UI versions).
 local function MakeCheckButton(parent, name, label, labelWidth)
     local cb, templated = SafeFrame("CheckButton", name, parent, "UICheckButtonTemplate")
-    if not cb then return nil end
     cb:SetSize(24, 24)
     if not templated then
         cb:SetNormalTexture(CHECK_ART.normal)
@@ -269,7 +287,10 @@ local function MakeHeader(parent, yRef, text, width)
     local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     fs:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, yRef.v)
     fs:SetText(text)
-    local textH = fs:GetStringHeight() or 16
+    -- GetStringHeight is 0 for a FontString that has not been laid out yet,
+    -- and `0 or 16` is 0 in Lua - the section rule would land on its own title.
+    local textH = fs:GetStringHeight()
+    if not textH or textH <= 0 then textH = 16 end
     yRef.v = yRef.v - textH - 2
     local line = parent:CreateTexture(nil, "ARTWORK")
     line:SetColorTexture(0.40, 0.40, 0.65, 0.45)
@@ -403,7 +424,11 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
             local xOff = col * (COL_W + COL_GAP)
             local yOff = startY - row * ROW_H
 
-            local icb = MakeCheckButton(child, "PriestlyInst_"..parent:GetName().."_"..idx,
+            -- The index restarts per category, so a per-category suffix would
+            -- give Naxxramas and Scholomance the same global name and _G would
+            -- keep only one of them.
+            local icb = MakeCheckButton(child,
+                "PriestlyInst_" .. parent:GetName() .. "_" .. instName:gsub("%W", ""),
                 instName, COL_W - 28)
             icb:SetPoint("TOPLEFT", child, "TOPLEFT", xOff, yOff)
             icb:SetChecked(PriestlyDB.shadowInstances[instName] == true)

@@ -203,4 +203,91 @@ H.eq(WoW.settingsOpenedTo, 42, "and it opens the registered Settings category")
 -- Everything the deferred helpers queued must also run clean.
 H.check(pcall(WoW.flushTimers), "queued timers run")
 
+
+
+------------------------------------------------------------
+-- Regressions from the PR #2 review
+------------------------------------------------------------
+
+setup()
+
+-- The UNIT_AURA payload carries aura structs, and their fields throw while
+-- secret - which is exactly when UNIT_AURA fires most. Reading one unguarded
+-- errored straight out of the event handler, once per aura event, all fight.
+local okSecret = pcall(T.AuraEventIsRelevant, "party1",
+    { addedAuras = { WoW.SecretAura() } })
+H.check(okSecret, "a secret aura in the UNIT_AURA payload does not throw out of the handler")
+H.check(T.AuraEventIsRelevant("party1", { addedAuras = { WoW.SecretAura() } }) == true,
+    "and an unreadable payload refreshes rather than being skipped")
+
+-- Both frames are clamped to the screen, so parking has to drop the clamp or
+-- the frame is dragged back to the edge - an invisible, still-clickable row.
+T.UpdateUI()
+local mainFrame = T.mainFrame()
+mainFrame._clamped = true
+WoW.inCombat = true
+T.CloseUI(false)
+H.check(mainFrame._combatHidden == true, "parked during combat")
+H.eq(mainFrame._clamped, false, "and the screen clamp is dropped so it really goes offscreen")
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+H.eq(mainFrame._clamped, true, "the clamp comes back when combat ends")
+WoW.flushTimers()
+
+-- A ready check is not a reason to reopen a window the user closed.
+T.CloseUI(true)
+H.eq(PriestlyDB.visible, false, "closed by hand")
+WoW.dispatch("READY_CHECK")
+WoW.flushTimers()
+H.check(not (T.mainFrame():IsShown()), "a ready check does not resurrect it")
+H.eq(PriestlyDB.visible, false, "nor overwrite the preference")
+
+-- A group Prayer reaches further than the single-target spell, so the range
+-- check must test whichever spell the click will actually cast.
+H.TeachSpells({ "FORT_SINGLE", "FORT_GROUP" })
+T.RefreshSpellData()
+local fortDef
+for _, d in ipairs(T.DEFS) do if d.id == "fort" then fortDef = d end end
+WoW.SetUnit("party2", { name = "Sten Thornbeard", guid = "P2", class = "MAGE" })
+local spread = {
+    { unit = "party1", name = "Zoruka Mortalis" },   -- out of reach of either
+    { unit = "party2", name = "Sten Thornbeard" },   -- inside 40y, outside 30y
+}
+WoW.range["party1"] = { ["Power Word: Fortitude"] = false, ["Prayer of Fortitude"] = false }
+WoW.range["party2"] = { ["Power Word: Fortitude"] = false, ["Prayer of Fortitude"] = true }
+
+H.eq(T.PickTarget(spread, fortDef, true), "party2",
+    "a group Prayer is range-checked against the Prayer's own 40y reach, so it "
+    .. "picks the member it can actually land on")
+
+-- The single-target click uses the shorter range, finds nobody inside it, and
+-- falls back rather than refusing to cast at all.
+H.eq(T.PickTarget(spread, fortDef, false), "party1",
+    "the single-target click falls back rather than picking nobody")
+
+WoW.range["party1"] = nil
+WoW.range["party2"] = nil
+
+-- An open popover must follow a rebuild. Its rows carry unit tokens, and a
+-- roster reshuffle hands those tokens to different players while the mouse is
+-- still resting on the row that opened it.
+setup()
+local anchorRow
+for _, r in ipairs(T.rows()) do
+    if r._active then anchorRow = r break end
+end
+runScript(anchorRow, "OnEnter")
+H.check(T.popFrame():IsShown(), "popover open")
+H.eq(T.popRows()[1]:GetAttribute("unit1"), "player", "aimed at the current roster")
+
+-- party1 leaves; the group is now just the player.
+WoW.RemoveUnit("party1")
+WoW.groupMembers = 1
+T.UpdateUI()
+local live = 0
+for _, prow in ipairs(T.popRows()) do
+    if prow._active then live = live + 1 end
+end
+H.eq(live, 1, "the popover follows the rebuild instead of listing a departed member")
+
 H.done("test_frames")

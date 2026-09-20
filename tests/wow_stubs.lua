@@ -88,6 +88,16 @@ function WoW.SetAura(unit, name, duration, remaining, spellID)
     }
 end
 
+-- An aura struct whose fields throw, the way a secret one does. The UNIT_AURA
+-- payload carries these, so anything reading .name off it must be guarded.
+function WoW.SecretAura()
+    return setmetatable({}, {
+        __index = function()
+            error("Auras cannot be accessed when secret while tainted by 'Test'", 2)
+        end,
+    })
+end
+
 function WoW.ClearAuras(unit)
     WoW.auras[unit] = nil
 end
@@ -133,6 +143,7 @@ local function makeFrame(name)
     -- function for any unknown method, and a function is truthy, so an
     -- undefined frame:IsFoo() would silently answer "yes" forever.
     f.IsMouseOver = function(self) return WoW.mouseOver[self] == true end
+    f.SetClampedToScreen = function(self, v) self._clamped = v return self end
     f.IsVisible = function(self) return self._shown end
     f.IsMouseEnabled = function(self) return true end
     f.RegisterEvent = function(self, ev)
@@ -415,7 +426,12 @@ C_Spell = {
         -- same as for a missing unit.
         local info, id = findSpell(spell)
         if not info or not WoW.knownSpells[id] then return nil end
-        return WoW.range[unit]
+        -- WoW.range[unit] is a boolean, or a table keyed by spell name when a
+        -- test needs the spells to differ - the Prayers reach 40 yards where
+        -- the single-target forms reach 30.
+        local r = WoW.range[unit]
+        if type(r) == "table" then return r[info.name] end
+        return r
     end,
     SpellHasRange = function() return true end,
 }
