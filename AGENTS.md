@@ -123,9 +123,17 @@ Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exis
 - **Auras are unreadable in combat, for every unit** — not just the player. Measured: index reads
   *throw* ("Auras cannot be accessed when secret while tainted by '<addon>'"), while
   `GetAuraDataBySpellName` quietly returns nil, which looks exactly like "not buffed". Never read an
-  aura outside `API.ReadBuff`, which pcalls everything and returns `BLOCKED` as distinct from
+  aura outside `API.ReadBuff`, which guards everything and returns `BLOCKED` as distinct from
   `NONE`. `BuffRem` then falls back to the GUID-keyed cache, or reports `UNKNOWN` rather than a
   confident `MISS`.
+- **A secret value throws when it is COMPARED or TRUTH-TESTED, not only when it is read.**
+  `if updateInfo.isFullUpdate then` raises *"attempt to perform boolean test on field 'isFullUpdate'
+  (a secret boolean value)"*; so does `nm == name` on a secret string and `if aura then` on a secret
+  table. Guarding the field read and testing the result one line later is **not** enough — that shape
+  shipped once and errored on the first pull. Every touch of data that came from the client in
+  combat belongs *inside* the same `pcall`.
+- **The `UNIT_AURA` payload is secret data too**, not just the auras it describes: `isFullUpdate`
+  arrives as a secret boolean and `updatedAuraInstanceIDs` as a secret table.
 - `GetInstanceInfo()` names in `INSTANCE_DB` are unverified until those zones are reachable.
 
 ## Secure UI Rules

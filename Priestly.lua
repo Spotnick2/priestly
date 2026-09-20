@@ -1466,31 +1466,38 @@ local function AuraEventIsRelevant(unit, updateInfo)
         or unit:find("^party") or unit:find("^raid")) then
         return false
     end
-    if not updateInfo or updateInfo.isFullUpdate then return true end
-    local added = updateInfo.addedAuras
-    if added then
-        -- These are aura structs, and aura fields throw while secret - which is
-        -- exactly when UNIT_AURA fires most. Reading one unguarded here would
-        -- error straight out of the event handler, once per aura event, for the
-        -- whole fight.
-        local ok, hit = pcall(function()
+    if not updateInfo then return true end
+
+    -- Every field of updateInfo can be a SECRET VALUE in combat, and on this
+    -- client a secret value throws when it is truth-tested, not only when it is
+    -- read: `if updateInfo.isFullUpdate then` raises
+    -- "attempt to perform boolean test on field 'isFullUpdate' (a secret
+    -- boolean value)". So the whole inspection is guarded, and anything we
+    -- cannot inspect counts as relevant - refresh and let the throttle absorb
+    -- it, rather than dropping an update we simply were not allowed to read.
+    local ok, relevant = pcall(function()
+        if updateInfo.isFullUpdate then return true end
+
+        local added = updateInfo.addedAuras
+        if added then
             for _, aura in ipairs(added) do
                 local nm = aura and aura.name
                 for _, d in ipairs(DEFS) do
                     if nm == d.sngl or nm == d.grp then return true end
                 end
             end
-            return false
-        end)
-        if not ok then return true end   -- unreadable: refresh and let the throttle absorb it
-        if hit then return true end
-    end
-    -- Updated/removed auras arrive as instance IDs with no spell attached, so
-    -- there is nothing to filter on - refresh and let the throttle absorb it.
-    if updateInfo.updatedAuraInstanceIDs or updateInfo.removedAuraInstanceIDs then
-        return true
-    end
-    return false
+        end
+
+        -- Updated/removed auras arrive as instance IDs with no spell attached,
+        -- so there is nothing to filter on.
+        if updateInfo.updatedAuraInstanceIDs or updateInfo.removedAuraInstanceIDs then
+            return true
+        end
+        return false
+    end)
+
+    if not ok then return true end
+    return relevant and true or false
 end
 
 evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)

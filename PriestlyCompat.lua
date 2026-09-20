@@ -62,20 +62,49 @@ function API.AurasAreSecret()
     return false
 end
 
--- Normalise one aura struct into what the UI needs.
--- expirationTime 0 means "no duration" (a permanent buff), which the caller
--- renders as a full bar with no timer.
-local function auraResult(aura)
-    if not aura then return nil end
-    local dur = aura.duration or 0
-    local exp = aura.expirationTime or 0
-    local remaining
-    if exp == 0 then
-        remaining = huge
-    else
-        remaining = max(0, exp - GetTime())
-    end
-    return remaining, dur, exp
+-- Read one aura and match it against `names`, with every single touch of the
+-- returned data inside the pcall.
+--
+-- That is stronger than it looks. On this client a secret value throws not
+-- only when a field is read off it but when it is *compared* or even
+-- truth-tested: `if aura then` on a secret table, or `nm == name` on a secret
+-- string, raises exactly like a field access. Guarding only the read - which is
+-- what an earlier version of this file did - leaves the test one line later
+-- unprotected.
+--
+-- Returns one of:
+--   "HIT", remaining, duration, expirationTime
+--   "MISS"     - an aura is there, but not one of ours
+--   "EMPTY"    - no aura in that slot, so the walk can stop
+--   "BLOCKED"  - the client would not let us look
+local function matchAura(getter, names, ...)
+    local packed = { pcall(function(...)
+        local aura = getter(...)
+        if not aura then return "EMPTY" end
+
+        local nm = aura.name
+        local hit = false
+        for j = 1, #names do
+            if names[j] and nm == names[j] then
+                hit = true
+                break
+            end
+        end
+        if not hit then return "MISS" end
+
+        local dur = aura.duration or 0
+        local exp = aura.expirationTime or 0
+        local remaining
+        if exp == 0 then
+            remaining = huge          -- permanent, not expired
+        else
+            remaining = max(0, exp - GetTime())
+        end
+        return "HIT", remaining, dur, exp
+    end, ...) }
+
+    if not packed[1] then return "BLOCKED" end
+    return packed[2], packed[3], packed[4], packed[5]
 end
 
 -- Returns status, remaining, duration, expirationTime.
@@ -103,14 +132,10 @@ function API.ReadBuff(unit, names)
     if C_UnitAuras.GetAuraDataBySpellName then
         for i = 1, #names do
             if names[i] then
-                local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, unit, names[i], "HELPFUL")
-                if not ok then
-                    blocked = true
-                elseif aura then
-                    local ok2, rem, dur, exp = pcall(auraResult, aura)
-                    if ok2 and rem then return "HAS", rem, dur, exp end
-                    blocked = true      -- the fields themselves were secret
-                end
+                local st, rem, dur, exp = matchAura(
+                    C_UnitAuras.GetAuraDataBySpellName, names, unit, names[i], "HELPFUL")
+                if st == "HIT" then return "HAS", rem, dur, exp end
+                if st == "BLOCKED" then blocked = true end
             end
         end
     end
@@ -126,22 +151,14 @@ function API.ReadBuff(unit, names)
 
     local sawAny = false
     for i = 1, 40 do
-        local ok, aura = pcall(byIndex, unit, i, "HELPFUL")
-        if not ok then blocked = true break end
-        if not aura then break end
-        sawAny = true
-        local okName, nm = pcall(function() return aura.name end)
-        if not okName then
+        local st, rem, dur, exp = matchAura(byIndex, names, unit, i, "HELPFUL")
+        if st == "BLOCKED" then
             blocked = true
             break
         end
-        for j = 1, #names do
-            if nm == names[j] then
-                local ok2, rem, dur, exp = pcall(auraResult, aura)
-                if ok2 and rem then return "HAS", rem, dur, exp end
-                blocked = true
-            end
-        end
+        if st == "EMPTY" then break end
+        sawAny = true
+        if st == "HIT" then return "HAS", rem, dur, exp end
     end
 
     if blocked then return "BLOCKED" end
@@ -416,6 +433,6 @@ API.IsForever = (WOW_PROJECT_ID ~= nil and WOW_PROJECT_MAINLINE ~= nil
 -- Harmless in game; the unit tests reach the file-locals through it.
 
 Priestly._testCompat = {
-    auraResult = auraResult,
-    spellInfo  = spellInfo,
+    matchAura = matchAura,
+    spellInfo = spellInfo,
 }

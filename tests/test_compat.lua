@@ -97,6 +97,18 @@ WoW.SetAura("party1", "Power Word: Fortitude", 3600, 1200)
 H.check(API.GetBuff("raid17", FORT) == nil, "missing unit -> nil")
 H.check(API.HasBuff("party1", FORT) == true, "HasBuff mirrors GetBuff")
 
+-- Secrecy has a second shape: the getter succeeds but hands back a struct whose
+-- fields are secret. On this client touching one throws - and so does merely
+-- COMPARING it, so every match has to happen inside the guard too.
+WoW.reset()
+WoW.SetUnit("party1", { name = "Karuzo Elegia" })
+WoW.SetAura("party1", "Power Word: Fortitude", 3600, 1200)
+WoW.aurasAreSecret = true
+H.eq(API.ReadBuff("party1", FORT), "BLOCKED",
+    "an aura struct with secret fields is BLOCKED, not a crash and not a NONE")
+WoW.aurasAreSecret = false
+H.eq(API.ReadBuff("party1", FORT), "HAS", "...and readable again once secrecy lifts")
+
 ------------------------------------------------------------
 -- Range: the 1/0/nil -> true/false/nil trap
 --

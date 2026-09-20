@@ -54,6 +54,7 @@ function WoW.reset()
     WoW.mouseOver   = {}         -- [frame] = true; drives frame:IsMouseOver()
     WoW.byNameBlind = false      -- simulate GetAuraDataBySpellName not resolving
     WoW.auraReadsThrow = false   -- combat secrecy: index reads throw
+    WoW.aurasAreSecret = false   -- combat secrecy: the struct's fields throw
 
     WoW.SetUnit("player", { name = "Priestly Testcase", class = "PRIEST", level = 20 })
 end
@@ -95,6 +96,21 @@ function WoW.SecretAura()
     return setmetatable({}, {
         __index = function()
             error("Auras cannot be accessed when secret while tainted by 'Test'", 2)
+        end,
+    })
+end
+
+-- A UNIT_AURA payload whose fields are secret values. Measured on the live
+-- client, `isFullUpdate` comes back as a <secret boolean> and
+-- `updatedAuraInstanceIDs` as a <secret table>, and on this client a secret
+-- value throws when it is TRUTH-TESTED, not only when it is read. Lua has no
+-- way to make a boolean throw on `if x then`, so the closest model is a field
+-- access that raises - which exercises the same guard.
+function WoW.SecretUpdateInfo()
+    return setmetatable({}, {
+        __index = function(_, k)
+            error("attempt to perform boolean test on field '" .. tostring(k)
+                .. "' (a secret boolean value, while execution tainted by 'Test')", 2)
         end,
     })
 end
@@ -401,12 +417,19 @@ end
 C_UnitAuras = {
     GetAuraDataByIndex = function(unit, index, filter)
         local list = liveAuras(unit)
-        return list and list[index] or nil
+        local aura = list and list[index] or nil
+        if aura and WoW.aurasAreSecret then return WoW.SecretAura() end
+        return aura
     end,
     GetBuffDataByIndex = function(unit, index)
         local list = liveAuras(unit)
-        return list and list[index] or nil
+        local aura = list and list[index] or nil
+        if aura and WoW.aurasAreSecret then return WoW.SecretAura() end
+        return aura
     end,
+    -- Set WoW.aurasAreSecret to hand back aura structs whose fields throw,
+    -- rather than throwing from the getter itself - the other shape secrecy
+    -- can take.
     GetAuraDataBySpellName = function(unit, name, filter)
         -- Set WoW.byNameBlind = true to simulate the by-name lookup failing to
         -- resolve a spell the player does not know, which is the reason
@@ -419,6 +442,7 @@ C_UnitAuras = {
         for _, aura in ipairs(list) do
             if aura.name == name
                 and (aura.expirationTime == 0 or aura.expirationTime > WoW.time) then
+                if WoW.aurasAreSecret then return WoW.SecretAura() end
                 return aura
             end
         end

@@ -220,6 +220,20 @@ H.check(okSecret, "a secret aura in the UNIT_AURA payload does not throw out of 
 H.check(T.AuraEventIsRelevant("party1", { addedAuras = { WoW.SecretAura() } }) == true,
     "and an unreadable payload refreshes rather than being skipped")
 
+-- The payload's OWN fields are secret values in combat, and on this client a
+-- secret value throws when truth-tested, not only when read. Guarding the
+-- aura loop while leaving `if updateInfo.isFullUpdate then` bare one line above
+-- it errored out of the handler on the first pull.
+local secretInfo = WoW.SecretUpdateInfo()
+H.check(pcall(T.AuraEventIsRelevant, "player", secretInfo),
+    "a UNIT_AURA payload whose own fields are secret does not throw out of the handler")
+H.check(T.AuraEventIsRelevant("player", secretInfo) == true,
+    "and counts as relevant, rather than silently dropping the update")
+
+-- ...and the whole way through the event handler, which is where it surfaced.
+H.check(pcall(WoW.dispatch, "UNIT_AURA", "player", WoW.SecretUpdateInfo()),
+    "UNIT_AURA with a secret payload is handled end to end")
+
 -- Both frames are clamped to the screen, so parking has to drop the clamp or
 -- the frame is dragged back to the edge - an invisible, still-clickable row.
 T.UpdateUI()
