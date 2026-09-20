@@ -128,6 +128,30 @@ H.check(_G[instBox("Naxxramas")] ~= _G[instBox("Scholomance")],
     "and is a different frame from the first dungeon's")
 
 ------------------------------------------------------------
+-- Hooked handlers
+--
+-- The instance tooltips and the slider's OnShow are installed with HookScript
+-- rather than SetScript. The stub used to discard hooks outright, so none of
+-- them ran under test and they sat outside the strict-global net.
+------------------------------------------------------------
+
+local function runHandler(name, script, ...)
+    local f = _G[name]
+    if not f then H.check(false, "no widget named " .. name) return end
+    local fn = f._scripts and f._scripts[script]
+    if not fn then H.check(false, name .. " has no " .. script) return end
+    local ok, err = pcall(fn, f, ...)
+    H.check(ok, name .. " " .. script .. " ran: " .. tostring(err))
+end
+
+runHandler(instBox("Scholomance"), "OnEnter")   -- tooltip with encounter notes
+runHandler(instBox("Scholomance"), "OnLeave")
+runHandler(instBox("Naxxramas"), "OnEnter")
+runHandler(instBox("Naxxramas"), "OnLeave")
+runHandler("PriestlyAlphaSlider", "OnShow")
+WoW.flushTimers()                                -- the OnShow hook defers its work
+
+------------------------------------------------------------
 -- The bulk buttons must refresh the frame, not just the detector
 --
 -- In "instance" mode, whether the current instance is checked decides whether

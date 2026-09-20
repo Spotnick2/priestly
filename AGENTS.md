@@ -72,6 +72,9 @@ Load order from `Priestly.toc`:
 | `UnitKey(unit)` / `UnitDisplayName(unit, fallback)` | `UnitGUID` / `UnitName` |
 | `RegisterEvents(frame, ...)` | bare `RegisterEvent` (throws on unknown names here) |
 | `ClientBuild()` | `select(2, GetBuildInfo())` |
+| `CountItem(itemID)` — whole carried inventory, reagent bag included | `GetItemCount` / the `GetContainerNumSlots` walk |
+| `AddonVersion(addonName)` | `GetAddOnMetadata` |
+| `IsMouseOver(frame)` | `MouseIsOver` (absent on this client) |
 
 `PriestlyConfig.lua` exposes: `Priestly_EnsureDefaults`, `Priestly_ShowSolo`, `Priestly_TrackPets`,
 `Priestly_IsBuffEnabled`, `Priestly_ShouldShowShadow`, `Priestly_GetFrameAlpha`,

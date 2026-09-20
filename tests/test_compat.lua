@@ -153,6 +153,35 @@ H.check(API.KnowsSpell(nil) == false, "nil is not known")
 H.eq(API.ItemIcon(17028), "icon:17028", "item icon by ID")
 H.check(API.ItemIcon(nil):find("QuestionMark") ~= nil, "no ID -> question mark")
 
+-- Counting reagents has to cover the whole carried inventory. The reagent bag
+-- sits at Enum.BagIndex.ReagentBag, outside the 0..NUM_BAG_SLOTS range, so a
+-- hardcoded `for bag = 0, 4` reports zero for anything stored there - and a
+-- reagent bag is exactly where a player keeps candles.
+WoW.reset()
+H.eq(API.CountItem(17056), 0, "nothing carried")
+
+WoW.itemCounts[17056] = 3
+H.eq(API.CountItem(17056), 3, "counts the backpack")
+
+WoW.bags[Enum.BagIndex.ReagentBag] = { { itemID = 17056, stackCount = 7 } }
+H.eq(API.CountItem(17056), 10, "and the reagent bag, which is past NUM_BAG_SLOTS")
+
+WoW.bags[3] = { { itemID = 17056, stackCount = 5 } }
+H.eq(API.CountItem(17056), 15, "and an ordinary bag in between")
+H.eq(API.CountItem(17028), 0, "a reagent we are not carrying is still zero")
+H.eq(API.CountItem(nil), 0, "no item id -> zero, not an error")
+
+-- All of the above goes through C_Item.GetItemCount, which answers for the
+-- whole carried inventory in one call. The bag walk is the fallback, and it is
+-- where the hardcoded `0, 4` lived - so it needs its own coverage rather than
+-- being shadowed by the fast path.
+local realGetItemCount = C_Item.GetItemCount
+C_Item.GetItemCount = nil
+H.eq(API.CountItem(17056), 15, "the bag-walk fallback reaches every carried bag too")
+WoW.bags[Enum.BagIndex.ReagentBag] = nil
+H.eq(API.CountItem(17056), 8, "...and drops what is no longer in the reagent bag")
+C_Item.GetItemCount = realGetItemCount
+
 ------------------------------------------------------------
 -- Identity and names: surnames, and why GUIDs are the key
 ------------------------------------------------------------

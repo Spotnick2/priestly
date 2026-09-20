@@ -46,7 +46,8 @@ function WoW.reset()
     WoW.raidRoster  = {}         -- { { name, rank, subgroup }, ... }
     WoW.instanceName = ""
     WoW.instanceType = nil       -- nil = derive from instanceName
-    WoW.itemCounts  = {}         -- [itemID] = count in bags
+    WoW.itemCounts  = {}         -- [itemID] = count, treated as sitting in bag 0
+    WoW.bags        = {}         -- [bagID] = { {itemID=, stackCount=}, ... }
     WoW.messages    = {}         -- everything printed to DEFAULT_CHAT_FRAME
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
     WoW.timers      = {}
@@ -133,7 +134,15 @@ local function makeFrame(name)
     f.GetName = function(self) return self._name end
     f.SetScript = function(self, ev, fn) self._scripts[ev] = fn return self end
     f.GetScript = function(self, ev) return self._scripts[ev] end
-    f.HookScript = function(self, ev, fn) return self end
+    f.HookScript = function(self, ev, fn)
+        local existing = self._scripts[ev]
+        if existing then
+            self._scripts[ev] = function(...) existing(...) fn(...) end
+        else
+            self._scripts[ev] = fn
+        end
+        return self
+    end
     f.SetAttribute = function(self, k, v) self._attr[k] = v return self end
     f.GetAttribute = function(self, k) return self._attr[k] end
     f.Show = function(self) self._shown = true return self end
@@ -277,10 +286,15 @@ C_Timer = {
     NewTicker = function() return { Cancel = function() end } end,
 }
 
-Enum = { SpellBookSpellBank = { Player = 0, Pet = 1 } }
+Enum = {
+    SpellBookSpellBank = { Player = 0, Pet = 1 },
+    -- The reagent bag sits past the ordinary 0..NUM_BAG_SLOTS range.
+    BagIndex = { Backpack = 0, ReagentBag = 5 },
+}
 
 WOW_PROJECT_MAINLINE = 1
 WOW_PROJECT_ID = 1
+NUM_BAG_SLOTS = 4                -- measured on this client
 
 function GetTime() return WoW.time end
 function GetLocale() return WoW.locale end
@@ -479,27 +493,51 @@ C_SpellBook = {
 -- Items / containers
 ------------------------------------------------------------
 
+-- Bag 0 holds whatever WoW.itemCounts names; WoW.bags places items in a
+-- specific bag. Forever's carried inventory includes the reagent bag at
+-- Enum.BagIndex.ReagentBag, which is outside the 0..NUM_BAG_SLOTS range.
+local function bagContents(bag)
+    if bag == 0 then
+        local out = {}
+        for itemID, count in pairs(WoW.itemCounts) do
+            out[#out + 1] = { itemID = itemID, stackCount = count }
+        end
+        for _, entry in ipairs(WoW.bags[0] or {}) do out[#out + 1] = entry end
+        return out
+    end
+    return WoW.bags[bag] or {}
+end
+
+local function carriedBags()
+    local ids = { 0, 1, 2, 3, 4, 5 }
+    return ids
+end
+
 C_Item = {
     GetItemIconByID = function(itemID) return "icon:" .. tostring(itemID) end,
     GetItemInfo = function(itemID)
         return "Item " .. tostring(itemID), "link", 1, 1, 1, "", "", 20, "",
             "icon:" .. tostring(itemID)
     end,
-    GetItemCount = function(itemID) return WoW.itemCounts[itemID] or 0 end,
+    -- The live API answers for the whole carried inventory, reagent bag
+    -- included.
+    GetItemCount = function(itemID)
+        local total = 0
+        for _, bag in ipairs(carriedBags()) do
+            for _, entry in ipairs(bagContents(bag)) do
+                if entry.itemID == itemID then total = total + (entry.stackCount or 0) end
+            end
+        end
+        return total
+    end,
 }
 
 C_Container = {
-    GetContainerNumSlots = function(bag) return bag == 0 and 16 or 0 end,
+    GetContainerNumSlots = function(bag)
+        return #bagContents(bag) > 0 and 16 or 0
+    end,
     GetContainerItemInfo = function(bag, slot)
-        if bag ~= 0 then return nil end
-        local i = 0
-        for itemID, count in pairs(WoW.itemCounts) do
-            i = i + 1
-            if i == slot then
-                return { itemID = itemID, stackCount = count }
-            end
-        end
-        return nil
+        return bagContents(bag)[slot]
     end,
 }
 

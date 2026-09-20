@@ -352,11 +352,30 @@ end
 
 local C_Container = C_Container
 
--- How many of `itemID` are in the player's bags.
+-- How many of `itemID` the player is carrying.
+--
+-- C_Item.GetItemCount answers for the whole carried inventory in one call,
+-- which is both cheaper than walking every slot and free of any assumption
+-- about which bag ids exist. The bag walk is only a fallback, and it has to
+-- include the reagent bag: that sits outside the 0..NUM_BAG_SLOTS range, so a
+-- hardcoded `0, 4` silently reports zero for anything stored there.
 function API.CountItem(itemID)
-    if not itemID or not C_Container then return 0 end
+    if not itemID then return 0 end
+
+    if C_Item and C_Item.GetItemCount then
+        local ok, count = pcall(C_Item.GetItemCount, itemID)
+        if ok and count then return count end
+    end
+
+    if not C_Container then return 0 end
+
+    local bags = {}
+    for bag = 0, (NUM_BAG_SLOTS or 4) do bags[#bags + 1] = bag end
+    local reagentBag = Enum and Enum.BagIndex and Enum.BagIndex.ReagentBag
+    if reagentBag then bags[#bags + 1] = reagentBag end
+
     local total = 0
-    for bag = 0, 4 do
+    for _, bag in ipairs(bags) do
         local ok, slots = pcall(C_Container.GetContainerNumSlots, bag)
         if ok and slots then
             for slot = 1, slots do
