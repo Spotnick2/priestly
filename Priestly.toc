@@ -1,11 +1,12 @@
-## Interface: 20505
-## Title: |cff99ddffPriestly|r
-## Notes: Pally Power-style Priest buff manager. Auto-opens on group join. /priestly help
+## Interface: 16001
+## Title: |cff99ddffPriestly|r Forever
+## Notes: Pally Power-style Priest buff manager for WoW: Forever. Auto-opens on group join. /priestly help
 ## Author: Spotnick
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\Spell_Holy_PrayerOfFortitude
 ## SavedVariables: PriestlyDB
 ## X-Curse-Project-ID: 1489106
 
+PriestlyCompat.lua
 PriestlyConfig.lua
 Priestly.lua

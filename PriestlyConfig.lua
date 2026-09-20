@@ -1,9 +1,10 @@
 -- ============================================================================
--- PriestlyConfig.lua  –  Options panel for Priestly
--- Integrates into Interface → AddOns in TBC Anniversary (modern engine)
+-- PriestlyConfig.lua  –  Options panel for Priestly Forever
+-- Registers through Retail's Settings framework (WoW: Forever 1.60.1)
 -- ============================================================================
 
 local ADDON_NAME = "Priestly"
+local API = Priestly.API
 
 -- ─── Default configuration ──────────────────────────────────────────────────
 
@@ -15,70 +16,18 @@ local DEFAULTS = {
     trackPets       = true,
     frameAlpha      = 0.96,
     shadowInstances = nil,
+    learnedDurations = nil,       -- [defId] = seconds, per client build
+    flavor          = nil,        -- migration marker
 }
 
 -- ─── Instance databases ─────────────────────────────────────────────────────
 -- { "Instance Name", "category", defaultEnabled, "Tooltip: boss encounters" }
 -- Instance names must match GetInstanceInfo() return values.
 
-local TBC_INSTANCE_DB = {
-    -- ── TBC Raids ────────────────────────────────────────────────────────────
-    { "Karazhan",             "Raids", true,
-      "Prince Malchezaar (Shadow Nova, SW:P), Netherspite (Netherbreath), Shade of Aran (Shadow Bolts), Nightbane (Smoking Blast)" },
-    { "Gruul's Lair",         "Raids", false,
-      "No significant shadow damage encounters." },
-    { "Magtheridon's Lair",   "Raids", true,
-      "Channelers cast Shadow Bolt Volley during phase 1." },
-    { "Serpentshrine Cavern", "Raids", true,
-      "Leotheras the Blind (Inner Demons), Fathom-Lord Karathress (Shadow Bolt adds)." },
-    { "Tempest Keep",         "Raids", false,
-      "Primarily Arcane/Fire damage. Void Reaver is Arcane." },
-    { "Hyjal Summit",        "Raids", true,
-      "Kaz'rogal (Shadow Bolt Volley, Mark), Azgalor (Doom, Rain of Fire), Archimonde (Grip of the Legion)." },
-    { "Black Temple",        "Raids", true,
-      "Teron Gorefiend (Shadow of Death), Gurtogg Bloodboil (Fel Acid Breath), Mother Shahraz (all beams are Shadow), Illidan (Shadow Blast P2, Dark Barrage)." },
-    { "Sunwell Plateau",     "Raids", true,
-      "M'uru (Darkness, Void Sentinels), Entropius (Shadow Bolt Volley, Negative Energy), Kil'jaeden (Shadow Spike, Legion Lightning)." },
-    { "Zul'Aman",            "Raids", false,
-      "Hex Lord Malacrass can shadow bolt. Generally not required." },
-
-    -- ── TBC Dungeons ─────────────────────────────────────────────────────────
-    { "Hellfire Ramparts",       "Dungeons", false,
-      "No significant shadow damage." },
-    { "The Blood Furnace",       "Dungeons", true,
-      "Keli'dan the Breaker (Shadow Bolt Volley)." },
-    { "The Shattered Halls",     "Dungeons", true,
-      "Grand Warlock Nethekurse (Shadow Bolt, Shadow Cleave, Dark Spin)." },
-    { "The Slave Pens",          "Dungeons", false,
-      "Primarily Nature damage." },
-    { "The Underbog",            "Dungeons", false,
-      "Primarily Nature damage." },
-    { "The Steamvault",          "Dungeons", false,
-      "No significant shadow damage." },
-    { "Mana-Tombs",              "Dungeons", true,
-      "Pandemonius (Shadow Bolt, Dark Shell)." },
-    { "Auchenai Crypts",         "Dungeons", true,
-      "Exarch Maladaar (Shadow Word: Pain, Ribbon of Souls). Heavy shadow trash." },
-    { "Sethekk Halls",           "Dungeons", true,
-      "Darkweaver Syth (Shadow Shock, Shadow elementals)." },
-    { "Shadow Labyrinth",        "Dungeons", true,
-      "Ambassador Hellmaw (Shadow Bolt), Grandmaster Vorpil (Shadow Bolt Volley), Murmur (Murmur's Touch)." },
-    { "Old Hillsbrad Foothills", "Dungeons", false,
-      "No significant shadow damage." },
-    { "The Black Morass",        "Dungeons", false,
-      "No significant shadow damage." },
-    { "The Mechanar",            "Dungeons", false,
-      "Primarily Arcane/Fire damage." },
-    { "The Botanica",            "Dungeons", false,
-      "No significant shadow damage." },
-    { "The Arcatraz",            "Dungeons", true,
-      "Zereketh the Unbound (Shadow Bolt Volley, Void Zone), Harbinger Skyriss (Mind Rend)." },
-    { "Magisters' Terrace",      "Dungeons", true,
-      "Priestess Delrissa (Shadow Priest add), Kael'thas Sunstrider (Gravity Lapse shadow component)." },
-}
-
-local VANILLA_INSTANCE_DB = {
-    -- ── Vanilla Raids ────────────────────────────────────────────────────────
+-- Forever is Vanilla content, so this is the whole instance list. The TBC
+-- database that used to live here was dead content on this client and is gone.
+local INSTANCE_DB = {
+    -- ── Raids ────────────────────────────────────────────────────────
     { "Naxxramas",               "Raids", true,
       "Gothik the Harvester (Shadow Bolt), Loatheb (Inevitable Doom), Four Horsemen (Mark of Zeliek), Kel'Thuzad (Shadow Fissure, Frost Blast)." },
     { "Blackwing Lair",          "Raids", true,
@@ -94,7 +43,7 @@ local VANILLA_INSTANCE_DB = {
     { "Onyxia's Lair",           "Raids", false,
       "Primarily Fire damage (Breath, Fireball)." },
 
-    -- ── Vanilla Dungeons ─────────────────────────────────────────────────────
+    -- ── Dungeons ─────────────────────────────────────────────────────
     { "Scholomance",             "Dungeons", true,
       "Darkmaster Gandling (Shadow damage), Rattlegore, heavy shadow trash throughout." },
     { "Stratholme",              "Dungeons", true,
@@ -119,6 +68,8 @@ local VANILLA_INSTANCE_DB = {
 
 -- ─── Ensure defaults ────────────────────────────────────────────────────────
 
+local FLAVOR = "forever"
+
 function Priestly_EnsureDefaults()
     if not PriestlyDB then PriestlyDB = {} end
     for k, v in pairs(DEFAULTS) do
@@ -126,27 +77,63 @@ function Priestly_EnsureDefaults()
             PriestlyDB[k] = v
         end
     end
+
     if PriestlyDB.shadowInstances == nil then
         PriestlyDB.shadowInstances = {}
-        for _, entry in ipairs(TBC_INSTANCE_DB) do
-            PriestlyDB.shadowInstances[entry[1]] = entry[3]
-        end
-        for _, entry in ipairs(VANILLA_INSTANCE_DB) do
-            PriestlyDB.shadowInstances[entry[1]] = entry[3]
-        end
     end
-    -- If upgrading from an older version, backfill any new instances
-    for _, entry in ipairs(TBC_INSTANCE_DB) do
+
+    -- One-time migration off the TBC line: a PriestlyDB saved by v1.x carries
+    -- Karazhan, Black Temple and the rest, none of which can occur here. Drop
+    -- every key this build does not know about, then backfill new ones.
+    if PriestlyDB.flavor ~= FLAVOR then
+        local known = {}
+        for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
+        for name in pairs(PriestlyDB.shadowInstances) do
+            if not known[name] then PriestlyDB.shadowInstances[name] = nil end
+        end
+        PriestlyDB.learnedDurations = nil   -- TBC durations mean nothing here
+        PriestlyDB.flavor = FLAVOR
+    end
+
+    -- Backfill instances added since this profile was written
+    for _, entry in ipairs(INSTANCE_DB) do
         if PriestlyDB.shadowInstances[entry[1]] == nil then
             PriestlyDB.shadowInstances[entry[1]] = entry[3]
         end
     end
-    for _, entry in ipairs(VANILLA_INSTANCE_DB) do
-        if PriestlyDB.shadowInstances[entry[1]] == nil then
-            PriestlyDB.shadowInstances[entry[1]] = entry[3]
-        end
-    end
+
     PriestlyDB.shadowBosses = nil  -- migration
+end
+
+-- ─── Learned buff durations ─────────────────────────────────────────────────
+--
+-- Forever's durations match neither TBC nor Vanilla and are still moving
+-- during the beta, so the values in DEFS are only seeds: whatever a live aura
+-- reports wins. Replacement goes in BOTH directions - pinning "the longest we
+-- ever saw" would survive a duration nerf and quietly mis-colour every bar -
+-- and the whole table is discarded when the client build changes.
+
+local function DurationStore()
+    if not PriestlyDB then return nil end
+    local build = API and API.ClientBuild() or "?"
+    local store = PriestlyDB.learnedDurations
+    if not store or store.build ~= build then
+        store = { build = build }
+        PriestlyDB.learnedDurations = store
+    end
+    return store
+end
+
+function Priestly_LearnDuration(defId, seconds)
+    if not defId or not seconds or seconds <= 0 then return end
+    local store = DurationStore()
+    if not store then return end
+    store[defId] = seconds
+end
+
+function Priestly_GetLearnedDuration(defId)
+    local store = DurationStore()
+    return store and store[defId] or nil
 end
 
 -- ─── Instance-based shadow detection ────────────────────────────────────────
@@ -154,8 +141,13 @@ end
 local g_InShadowInstance = false
 
 local function CheckCurrentInstance()
-    local name = GetInstanceInfo()
-    if not name or name == "" then
+    -- Out in the world this returns the CONTINENT ("Eastern Kingdoms" while
+    -- standing in Undercity), not an empty string, so the name alone is not a
+    -- test for "am I in an instance". instanceType is "none" outdoors and
+    -- "party"/"raid" inside one - gate on that rather than relying on the
+    -- continent never matching an entry in INSTANCE_DB.
+    local name, instanceType = GetInstanceInfo()
+    if not name or name == "" or instanceType == "none" then
         g_InShadowInstance = false
         return
     end
@@ -169,18 +161,13 @@ function Priestly_ShouldShowShadow(groups, ord)
     local mode = PriestlyDB.shadowMode or "detect"
     if mode == "always" then return true end
     if mode == "detect" then
-        if groups and ord then
+        -- Names come from Priestly.lua's DEFS, which resolves them from spell
+        -- IDs at runtime, so this stays correct in every locale.
+        local names = Priestly.shadowAuraNames
+        if groups and ord and names then
             for _, gn in ipairs(ord) do
-                for _, m in ipairs(groups[gn]) do
-                    if UnitExists(m.unit) then
-                        for i = 1, 40 do
-                            local bName = UnitBuff(m.unit, i)
-                            if not bName then break end
-                            if bName == "Shadow Protection" or bName == "Prayer of Shadow Protection" then
-                                return true
-                            end
-                        end
-                    end
+                for _, m in ipairs(groups[gn] or {}) do
+                    if API.HasBuff(m.unit, names) then return true end
                 end
             end
         end
@@ -212,9 +199,8 @@ end
 -- ─── Instance detection events ──────────────────────────────────────────────
 
 local detectFrame = CreateFrame("Frame", "PriestlyInstanceDetector")
-detectFrame:RegisterEvent("PLAYER_LOGIN")
-detectFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-detectFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+API.RegisterEvents(detectFrame,
+    "PLAYER_LOGIN", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD")
 detectFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         Priestly_EnsureDefaults()
@@ -226,13 +212,57 @@ detectFrame:SetScript("OnEvent", function(self, event)
 end)
 
 -- ═════════════════════════════════════════════════════════════════════════════
--- OPTIONS PANEL  –  Three tabs: Settings | TBC Instances | Vanilla Instances
+-- OPTIONS PANEL  –  Two tabs: Settings | Instances
 -- ═════════════════════════════════════════════════════════════════════════════
 
 local panel = CreateFrame("Frame", "PriestlyOptionsPanel")
 panel.name = ADDON_NAME
 
 -- ─── Widget helpers ─────────────────────────────────────────────────────────
+--
+-- The TBC build leaned on InterfaceOptionsCheckButtonTemplate and
+-- OptionsSliderTemplate. Neither is part of the Retail UI this client ships,
+-- and a missing template makes CreateFrame throw - a load blocker, not a
+-- cosmetic problem. So: ask for a template, accept that it may not be there,
+-- and draw our own art when it is not.
+
+local CHECK_ART = {
+    normal    = "Interface\\Buttons\\UI-CheckBox-Up",
+    pushed    = "Interface\\Buttons\\UI-CheckBox-Down",
+    highlight = "Interface\\Buttons\\UI-CheckBox-Highlight",
+    checked   = "Interface\\Buttons\\UI-CheckBox-Check",
+}
+
+-- Returns frame, templateApplied
+local function SafeFrame(frameType, name, parent, template)
+    if template then
+        local ok, f = pcall(CreateFrame, frameType, name, parent, template)
+        if ok and f then return f, true end
+    end
+    local ok, f = pcall(CreateFrame, frameType, name, parent)
+    return (ok and f or nil), false
+end
+
+-- A check button that looks right whether or not the template exists, with a
+-- label we own (template label fields have moved around between UI versions).
+local function MakeCheckButton(parent, name, label, labelWidth)
+    local cb, templated = SafeFrame("CheckButton", name, parent, "UICheckButtonTemplate")
+    if not cb then return nil end
+    cb:SetSize(24, 24)
+    if not templated then
+        cb:SetNormalTexture(CHECK_ART.normal)
+        cb:SetPushedTexture(CHECK_ART.pushed)
+        cb:SetHighlightTexture(CHECK_ART.highlight)
+        cb:SetCheckedTexture(CHECK_ART.checked)
+    end
+    local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fs:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+    fs:SetJustifyH("LEFT")
+    if labelWidth then fs:SetWidth(labelWidth) end
+    fs:SetText(label or "")
+    cb.label = fs
+    return cb
+end
 
 local function MakeHeader(parent, yRef, text, width)
     yRef.v = yRef.v - 14
@@ -251,9 +281,8 @@ end
 
 local function MakeCheckbox(parent, yRef, label, dbKey, onChange)
     yRef.v = yRef.v - 4
-    local cb = CreateFrame("CheckButton", "PriestlyCB_"..dbKey, parent, "InterfaceOptionsCheckButtonTemplate")
+    local cb = MakeCheckButton(parent, "PriestlyCB_"..dbKey, label)
     cb:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, yRef.v)
-    cb.Text:SetText(label)
     cb:SetChecked(PriestlyDB[dbKey] ~= false)
     cb:SetScript("OnClick", function(self)
         PriestlyDB[dbKey] = self:GetChecked() and true or false
@@ -280,13 +309,25 @@ local function MakeRadioGroup(parent, yRef, options, currentKey, onSelect)
     local radios = {}
     for _, opt in ipairs(options) do
         yRef.v = yRef.v - 4
-        local rb = CreateFrame("CheckButton", "PriestlyRB_"..opt.key, parent, "UIRadioButtonTemplate")
+        -- UIRadioButtonTemplate ships on this client, but fall back to the
+        -- checkbox art rather than risk a load-blocking CreateFrame throw.
+        local rb, templated = SafeFrame("CheckButton", "PriestlyRB_"..opt.key, parent,
+            "UIRadioButtonTemplate")
         rb:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, yRef.v)
-        local textObj = rb.text or rb.Text or _G[rb:GetName().."Text"]
-        if textObj then
-            textObj:SetText(opt.label)
-            textObj:SetFontObject("GameFontHighlight")
+        if not templated then
+            rb:SetSize(20, 20)
+            rb:SetNormalTexture(CHECK_ART.normal)
+            rb:SetHighlightTexture(CHECK_ART.highlight)
+            rb:SetCheckedTexture(CHECK_ART.checked)
         end
+        local textObj = rb.text or rb.Text or (rb:GetName() and _G[rb:GetName().."Text"])
+        if not textObj then
+            textObj = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            textObj:SetPoint("LEFT", rb, "RIGHT", 4, 0)
+            textObj:SetJustifyH("LEFT")
+        end
+        textObj:SetText(opt.label)
+        textObj:SetFontObject("GameFontHighlight")
         rb._key = opt.key
         radios[#radios+1] = rb
         rb:SetScript("OnClick", function(self)
@@ -307,7 +348,8 @@ end
 -- ─── Instance tab builder (shared between TBC and Vanilla) ──────────────────
 
 local function BuildInstanceTab(parent, instanceDB, panelWidth)
-    local scroll = CreateFrame("ScrollFrame", parent:GetName().."Scroll", parent, "UIPanelScrollFrameTemplate")
+    local scroll = SafeFrame("ScrollFrame", parent:GetName().."Scroll", parent,
+        "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 0, 0)
     scroll:SetPoint("BOTTOMRIGHT", -16, 0)
 
@@ -361,11 +403,9 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
             local xOff = col * (COL_W + COL_GAP)
             local yOff = startY - row * ROW_H
 
-            local icb = CreateFrame("CheckButton", "PriestlyInst_"..parent:GetName().."_"..idx, child, "InterfaceOptionsCheckButtonTemplate")
+            local icb = MakeCheckButton(child, "PriestlyInst_"..parent:GetName().."_"..idx,
+                instName, COL_W - 28)
             icb:SetPoint("TOPLEFT", child, "TOPLEFT", xOff, yOff)
-            icb.Text:SetText(instName)
-            icb.Text:SetJustifyH("LEFT")
-            icb.Text:SetWidth(COL_W - 28)
             icb:SetChecked(PriestlyDB.shadowInstances[instName] == true)
             icb._instName = instName
 
@@ -399,7 +439,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
 
     -- Buttons row
     iy.v = iy.v - 6
-    local btnAll = CreateFrame("Button", parent:GetName().."All", child, "UIPanelButtonTemplate")
+    local btnAll = SafeFrame("Button", parent:GetName().."All", child, "UIPanelButtonTemplate")
     btnAll:SetSize(90, 22)
     btnAll:SetPoint("TOPLEFT", child, "TOPLEFT", 0, iy.v)
     btnAll:SetText("Select All")
@@ -411,7 +451,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
         CheckCurrentInstance()
     end)
 
-    local btnNone = CreateFrame("Button", parent:GetName().."None", child, "UIPanelButtonTemplate")
+    local btnNone = SafeFrame("Button", parent:GetName().."None", child, "UIPanelButtonTemplate")
     btnNone:SetSize(90, 22)
     btnNone:SetPoint("LEFT", btnAll, "RIGHT", 8, 0)
     btnNone:SetText("Deselect All")
@@ -423,7 +463,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
         CheckCurrentInstance()
     end)
 
-    local btnDefaults = CreateFrame("Button", parent:GetName().."Defaults", child, "UIPanelButtonTemplate")
+    local btnDefaults = SafeFrame("Button", parent:GetName().."Defaults", child, "UIPanelButtonTemplate")
     btnDefaults:SetSize(110, 22)
     btnDefaults:SetPoint("LEFT", btnNone, "RIGHT", 8, 0)
     btnDefaults:SetText("Reset Defaults")
@@ -466,11 +506,13 @@ local function BuildPanel(panel)
 
     local verFs = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     verFs:SetPoint("LEFT", titleFs, "RIGHT", 6, 0)
-    verFs:SetText("|cff555577v0.2|r")
+    verFs:SetText("|cff555577" ..
+        ((C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "dev")
+        .. "|r")
 
     -- ── Tab bar ─────────────────────────────────────────────────────────────
     local TAB_Y = -38
-    local tabNames = { "Settings", "TBC Instances", "Vanilla Instances" }
+    local tabNames = { "Settings", "Instances" }
     local tabButtons = {}
     local tabFrames  = {}
 
@@ -493,7 +535,7 @@ local function BuildPanel(panel)
 
     local tabX = 14
     for i, name in ipairs(tabNames) do
-        local btnW = (i == 1) and 90 or 120
+        local btnW = 100
         local btn = CreateFrame("Button", "PriestlyTab"..i, panel)
         btn:SetSize(btnW, 24)
         btn:SetPoint("TOPLEFT", panel, "TOPLEFT", tabX, TAB_Y)
@@ -528,7 +570,8 @@ local function BuildPanel(panel)
     -- TAB 1: Settings
     -- ═════════════════════════════════════════════════════════════════════════
 
-    local settingsScroll = CreateFrame("ScrollFrame", "PriestlySettingsScroll", panel, "UIPanelScrollFrameTemplate")
+    local settingsScroll = SafeFrame("ScrollFrame", "PriestlySettingsScroll", panel,
+        "UIPanelScrollFrameTemplate")
     settingsScroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 14, CONTENT_TOP)
     settingsScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -30, 10)
 
@@ -569,7 +612,7 @@ local function BuildPanel(panel)
     MakeRadioGroup(settingsChild, y, {
         { key = "always",   label = "Always show Shadow Protection" },
         { key = "detect",   label = "Show when detected on a group member" },
-        { key = "instance", label = "Show by instance (configure in the |cff99ddffTBC / Vanilla Instances|r tabs)" },
+        { key = "instance", label = "Show by instance (configure in the |cff99ddffInstances|r tab)" },
     }, PriestlyDB.shadowMode, function(key)
         PriestlyDB.shadowMode = key
         CheckCurrentInstance()
@@ -628,15 +671,27 @@ local function BuildPanel(panel)
     trackFill:SetPoint("TOPLEFT", trackBg, "TOPLEFT", 1, -1)
     trackFill:SetHeight(8)
 
-    local alphaSlider = CreateFrame("Slider", "PriestlyAlphaSlider", settingsChild, "OptionsSliderTemplate")
+    -- Template-free slider. OptionsSliderTemplate belongs to the Classic
+    -- options UI and is not guaranteed here; the track and fill above are
+    -- already ours, so all this needs is a thumb and the input handling.
+    local alphaSlider = CreateFrame("Slider", "PriestlyAlphaSlider", settingsChild)
     alphaSlider:SetPoint("TOPLEFT", settingsChild, "TOPLEFT", 4, y.v)
-    alphaSlider:SetWidth(SLIDER_W + 8)
+    alphaSlider:SetSize(SLIDER_W + 8, 18)
+    alphaSlider:SetOrientation("HORIZONTAL")
+    alphaSlider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    local thumb = alphaSlider:GetThumbTexture()
+    if thumb then thumb:SetSize(16, 18) end
     alphaSlider:SetMinMaxValues(0.20, 1.00)
     alphaSlider:SetValueStep(0.05)
-    alphaSlider:SetObeyStepOnDrag(true)
+    if alphaSlider.SetObeyStepOnDrag then alphaSlider:SetObeyStepOnDrag(true) end
     alphaSlider:SetValue(PriestlyDB.frameAlpha or 0.96)
-    alphaSlider.Low:SetText("20%")
-    alphaSlider.High:SetText("100%")
+
+    local lowTxt = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    lowTxt:SetPoint("TOPLEFT", alphaSlider, "BOTTOMLEFT", 2, 2)
+    lowTxt:SetText("20%")
+    local highTxt = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    highTxt:SetPoint("TOPRIGHT", alphaSlider, "BOTTOMRIGHT", -2, 2)
+    highTxt:SetText("100%")
 
     local alphaVal = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     alphaVal:SetPoint("LEFT", alphaSlider, "RIGHT", 10, 0)
@@ -667,26 +722,15 @@ local function BuildPanel(panel)
     settingsChild:SetHeight(math.abs(y.v) + 20)
 
     -- ═════════════════════════════════════════════════════════════════════════
-    -- TAB 2: TBC Instances
+    -- TAB 2: Instances
     -- ═════════════════════════════════════════════════════════════════════════
 
-    local tbcContainer = CreateFrame("Frame", "PriestlyTBCContainer", panel)
-    tbcContainer:SetPoint("TOPLEFT", panel, "TOPLEFT", 14, CONTENT_TOP)
-    tbcContainer:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, 10)
-    tabFrames[2] = tbcContainer
+    local instContainer = CreateFrame("Frame", "PriestlyInstanceContainer", panel)
+    instContainer:SetPoint("TOPLEFT", panel, "TOPLEFT", 14, CONTENT_TOP)
+    instContainer:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, 10)
+    tabFrames[2] = instContainer
 
-    BuildInstanceTab(tbcContainer, TBC_INSTANCE_DB, PANEL_W)
-
-    -- ═════════════════════════════════════════════════════════════════════════
-    -- TAB 3: Vanilla Instances
-    -- ═════════════════════════════════════════════════════════════════════════
-
-    local vanillaContainer = CreateFrame("Frame", "PriestlyVanillaContainer", panel)
-    vanillaContainer:SetPoint("TOPLEFT", panel, "TOPLEFT", 14, CONTENT_TOP)
-    vanillaContainer:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -14, 10)
-    tabFrames[3] = vanillaContainer
-
-    BuildInstanceTab(vanillaContainer, VANILLA_INSTANCE_DB, PANEL_W)
+    BuildInstanceTab(instContainer, INSTANCE_DB, PANEL_W)
 
     -- ── Default to Settings tab ─────────────────────────────────────────────
     SelectTab(1)
@@ -696,18 +740,18 @@ panel:SetScript("OnShow", function(self) BuildPanel(self) end)
 
 -- ─── Register ───────────────────────────────────────────────────────────────
 
+-- Retail's Settings framework only. InterfaceOptions_AddCategory belongs to
+-- the UI this client replaced.
 local function RegisterPanel()
     if Settings and Settings.RegisterCanvasLayoutCategory then
         local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
         Settings.RegisterAddOnCategory(category)
         panel._category = category
-    elseif InterfaceOptions_AddCategory then
-        InterfaceOptions_AddCategory(panel)
     end
 end
 
 local regFrame = CreateFrame("Frame")
-regFrame:RegisterEvent("PLAYER_LOGIN")
+API.RegisterEvents(regFrame, "PLAYER_LOGIN")
 regFrame:SetScript("OnEvent", function()
     Priestly_EnsureDefaults()
     RegisterPanel()
@@ -716,8 +760,19 @@ end)
 function Priestly_OpenConfig()
     if Settings and Settings.OpenToCategory and panel._category then
         Settings.OpenToCategory(panel._category:GetID())
-    elseif InterfaceOptionsFrame_OpenToCategory then
-        InterfaceOptionsFrame_OpenToCategory(panel)
-        InterfaceOptionsFrame_OpenToCategory(panel)
+    else
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "|cff99ddff[Priestly]|r Options are in Game Menu > Options > AddOns > Priestly.")
     end
 end
+
+-- ─── Test seam ───────────────────────────────────────────────────────────────
+
+Priestly._testConfig = {
+    INSTANCE_DB   = INSTANCE_DB,
+    DEFAULTS      = DEFAULTS,
+    FLAVOR        = FLAVOR,
+    DurationStore = DurationStore,
+    CheckCurrentInstance = CheckCurrentInstance,
+    inShadowInstance = function() return g_InShadowInstance end,
+}

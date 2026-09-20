@@ -10,6 +10,8 @@ ignore:
   - .github
   - docs
   - screenshots
+  - tests
+  - Tools
   - README.md
   - CHANGELOG.md
   - LICENSE
