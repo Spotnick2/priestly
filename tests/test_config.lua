@@ -275,6 +275,7 @@ H.eq(PriestlyDB.popoverSide, "auto", "and EnsureDefaults backfills the key")
 
 ------------------------------------------------------------
 -- Frame lock
+-- Click hints
 ------------------------------------------------------------
 
 PriestlyDB = nil
@@ -292,5 +293,15 @@ PriestlyDB.lockFrame = nil
 H.eq(Priestly_FrameLocked(), false, "an older PriestlyDB is unlocked")
 Priestly_EnsureDefaults()
 H.eq(PriestlyDB.lockFrame, false, "and EnsureDefaults backfills it")
+H.eq(PriestlyDB.showClickHints, true, "hints are on by default - they exist to be discovered")
+H.eq(Priestly_ShowClickHints(), true, "and the helper agrees")
+
+PriestlyDB.showClickHints = false
+H.eq(Priestly_ShowClickHints(), false, "turning them off is respected")
+
+-- Only an explicit false turns them off. A PriestlyDB from before this setting
+-- existed has no key, and must not read as "the user turned these off".
+PriestlyDB.showClickHints = nil
+H.eq(Priestly_ShowClickHints(), true, "an older PriestlyDB still gets hints")
 
 H.done("test_config")

@@ -2,12 +2,25 @@
 
 ## Unreleased
 
+### Fixed
+- **A buff row could stop responding until you clicked it twice.** If nobody in a group could be
+  buffed at all - everyone dead, offline, or gone - the row disarmed itself so a click could not
+  land on you by mistake. It then failed to re-arm once somebody could be buffed again, so the next
+  click did nothing and only the one after it cast. Found while building the click hints below: the
+  hint said what the click should do, and the click disagreed.
+
 ### Added
 - **Lock frame position** in Options - Appearance. Stops the window being dragged by its header, so
   it cannot be nudged out of place by a stray click mid-fight. `/priestly reset` still recentres it,
   so a locked window can always be recovered.
 
   Thanks to **Warbullio** on CurseForge for the request.
+- **Click hints.** Hovering a buff row now tells you what each mouse button will cast, and on whom.
+  Worth reading once even if you know the addon: what left-click does depends on which spells you
+  have, so while you have no group Prayer it buffs a single person rather than the group. Turn it
+  off with **Show click hints on mouseover** in Options - Appearance.
+
+  Thanks to **Giruy** on CurseForge, who lost a lot of candles finding this out the other way.
 
 ## v2.0.2 - 2026-09-21
 

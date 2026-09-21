@@ -120,6 +120,55 @@ H.eq(row:GetAttribute("unit2"), "party1", "in combat the wiring is left alone")
 WoW.inCombat = false
 
 ------------------------------------------------------------
+-- A button PreClick disarmed must re-arm itself
+--
+-- PreClick cleared the spell when nobody was valid, then on the next click
+-- wrote only the unit - leaving the spell nil. So the first click after
+-- somebody became valid again did nothing at all: no cast, no error, exactly
+-- the complaint that started #17. PostClick would fix it afterwards, so the
+-- SECOND click worked, which is the kind of thing a user reports as "it
+-- works sometimes".
+------------------------------------------------------------
+
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+
+WoW.units.player.dead = true
+WoW.units.party1.dead = true
+WoW.units.party2.dead = true
+row._scripts.PreClick(row, "RightButton")
+H.check(row:GetAttribute("spell2") == nil, "nobody valid disarms the button")
+
+-- Somebody comes back, without a rebuild.
+WoW.units.party1.dead = false
+row._scripts.PreClick(row, "RightButton")
+H.eq(row:GetAttribute("unit2"), "party1", "the next click retargets to them")
+H.eq(row:GetAttribute("spell2"), "Power Word: Fortitude",
+    "and re-arms the spell, so that click actually casts")
+
+-- Left-click takes the same path.
+WoW.units.party1.dead = true
+row._scripts.PreClick(row, "LeftButton")
+H.check(row:GetAttribute("spell1") == nil, "left-click disarms too")
+WoW.units.party1.dead = false
+row._scripts.PreClick(row, "LeftButton")
+H.eq(row:GetAttribute("spell1"), "Power Word: Fortitude", "and re-arms")
+
+-- Range is NOT what disarms a row, which is easy to assume and wrong:
+-- PickTarget makes a second pass ignoring range, so an out-of-range member is
+-- still a target. Only an invalid one - dead, offline, gone - gives nil.
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+WoW.range.player  = false
+WoW.range.party1  = false
+WoW.range.party2  = false
+row._scripts.PreClick(row, "RightButton")
+H.eq(row:GetAttribute("spell2"), "Power Word: Fortitude",
+    "everyone out of range keeps the button armed")
+H.check(row:GetAttribute("unit2") ~= nil, "and still aimed at somebody")
+WoW.range.player, WoW.range.party1, WoW.range.party2 = nil, nil, nil
+
+------------------------------------------------------------
 -- PostClick restores anything PreClick cleared
 ------------------------------------------------------------
 
@@ -269,5 +318,164 @@ WoW.centers[anchor] = 1700
 T.UpdatePopover(anchor, members, anchor._def)
 point, _, relPoint = pop:GetPoint()
 H.eq(point .. "/" .. relPoint, "RIGHT/LEFT", "and off its left edge on the right")
+
+------------------------------------------------------------
+-- Click hints
+--
+-- The point of these is that the mapping is NOT fixed: with no group Prayer
+-- known, left-click casts the single spell. A static "left is group, right is
+-- single" would be a lie for the whole current level range, and acting on it
+-- burns a reagent. So the hint is read from the attributes the buttons were
+-- wired with, and the tests check it says what a click would actually do.
+------------------------------------------------------------
+
+-- Clear first, and mean it. The previous version set a field nothing reads,
+-- so an early return in ShowClickHint would have been scored against the
+-- PREVIOUS hover's text and every assertion here would still have passed.
+local function hintFor(row)
+    WoW.clearTooltip()
+    row._scripts.OnEnter(row)
+    return WoW.tooltipText()
+end
+
+-- Prove the clear works, or none of the assertions below mean anything.
+WoW.clearTooltip()
+H.eq(WoW.tooltipText(), "", "the tooltip starts empty between hovers")
+
+-- Level 20: no Prayer exists, so BOTH buttons are single-target.
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+local hint = hintFor(row)
+H.check(hint:find("Power Word: Fortitude"), "the hint names the spell, got: " .. hint)
+H.check(not hint:find("Prayer"), "and never names a Prayer this priest cannot cast: " .. hint)
+H.check(hint:find("Left") and hint:find("Right"), "with a line per mouse button: " .. hint)
+
+-- With the Prayer known, left-click changes meaning - and the hint follows.
+rows = setup({ "FORT_SINGLE", "FORT_GROUP" })
+row = activeRows(rows)[1]
+hint = hintFor(row)
+H.check(hint:find("Prayer of Fortitude"), "left-click now reads as the group Prayer: " .. hint)
+H.check(hint:find("Power Word: Fortitude"), "with right-click still single-target: " .. hint)
+H.check(hint:find("your party"), "and the group cast names the group, not one member: " .. hint)
+
+-- The single-target line names who it would land on, which is the part that
+-- tells you whether the click is about to do what you meant.
+H.check(hint:find("Karuzo Elegia") or hint:find("Sten Thornbeard") or hint:find("Mirel Dawnsong"),
+    "the single buff names its target: " .. hint)
+
+-- Nobody valid: say so rather than naming a spell that will not fire.
+rows = setup({ "FORT_SINGLE" })
+WoW.units.player.dead = true
+WoW.units.party1.dead = true
+WoW.units.party2.connected = false
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+hint = hintFor(row)
+H.check(hint:find("nothing to buff"), "a row with no valid target says so: " .. hint)
+
+-- Off by preference.
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+PriestlyDB.showClickHints = false
+H.eq(hintFor(row), "", "turning hints off shows nothing")
+PriestlyDB.showClickHints = true
+
+-- Leaving the row drops the tooltip. The popover has its own polling hide, so
+-- this must not be the thing that closes it.
+row._scripts.OnEnter(row)
+H.check(WoW.tooltipText() ~= "", "hovering shows it again")
+row._scripts.OnLeave(row)
+H.eq(WoW.tooltipText(), "", "and leaving hides it")
+H.check(T.popFrame():IsShown(), "without closing the popover")
+
+------------------------------------------------------------
+-- The hint must name whoever the click will ACTUALLY buff
+--
+-- The wired attributes are only the answer in combat. Out of combat PreClick
+-- calls PickTarget again at click time, so a hover between a rebuild and a
+-- buff falling off named one person while the click buffed another - the hint
+-- lying about the one thing it exists to state.
+------------------------------------------------------------
+
+rows = setup({ "FORT_SINGLE" })
+WoW.SetAura("player", "Power Word: Fortitude", 3600, 3000)
+WoW.SetAura("party1", "Power Word: Fortitude", 3600, 3000)
+WoW.SetAura("party2", "Power Word: Fortitude", 3600, 3000)
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+
+-- Everybody was buffed at rebuild time. Now party1's falls off.
+WoW.ClearAuras("party1")
+hint = hintFor(row)
+H.check(hint:find("Sten Thornbeard"),
+    "the hint re-picks, naming whoever lost the buff since the rebuild: " .. hint)
+
+-- ...and that is the same person the click lands on.
+row._scripts.PreClick(row, "RightButton")
+H.eq(row:GetAttribute("unit2"), "party1", "which is exactly who PreClick retargets to")
+
+-- Range moves without a rebuild too.
+rows = setup({ "FORT_SINGLE" })
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+-- Unset range is UNKNOWN, not in-range, and PickTarget only prefers a
+-- confirmed IN_RANGE - so party2 has to be stated, not left to default.
+WoW.range.player = false
+WoW.range.party1 = false
+WoW.range.party2 = true
+hint = hintFor(row)
+H.check(hint:find("Mirel Dawnsong"),
+    "and it follows range, which never triggers a rebuild: " .. hint)
+WoW.range.player, WoW.range.party1, WoW.range.party2 = nil, nil, nil
+
+-- In combat PreClick cannot rewrite anything, so there the wired attributes
+-- ARE what the click will use and re-picking would be the thing that lies.
+rows = setup({ "FORT_SINGLE" })
+WoW.SetAura("player", "Power Word: Fortitude", 3600, 3000)
+WoW.SetAura("party1", "Power Word: Fortitude", 3600, 3000)
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+local wiredUnit = row:GetAttribute("unit2")
+H.eq(wiredUnit, "party2", "wired at rebuild to the one missing it")
+WoW.inCombat = true
+WoW.SetAura("party2", "Power Word: Fortitude", 3600, 3000)
+WoW.ClearAuras("player")
+hint = hintFor(row)
+H.check(hint:find("Mirel Dawnsong"),
+    "in combat the hint reports the wired target, not a fresh pick: " .. hint)
+WoW.inCombat = false
+
+------------------------------------------------------------
+-- A Prayer on BOTH buttons must not be described as single-target
+--
+-- ClickSpells hands the group spell to both clicks when the priest knows a
+-- Prayer but not the single form. Calling right-click "Prayer of Spirit on
+-- Sten Thornbeard" is the exact mistake this tooltip exists to prevent - the
+-- player casts it expecting one person and spends a reagent on the group.
+------------------------------------------------------------
+
+rows = setup({ "SPIRIT_GROUP" })
+row = activeRows(rows)[1]
+H.eq(row:GetAttribute("spell2"), "Prayer of Spirit", "right-click really does carry the Prayer")
+hint = hintFor(row)
+H.check(not hint:find("Prayer of Spirit on Karuzo Elegia"),
+    "so it is not described as landing on one person: " .. hint)
+H.eq(select(2, hint:gsub("your party", "")), 2,
+    "both lines name the group, because both clicks cast the group spell: " .. hint)
+
+------------------------------------------------------------
+-- Group naming
+------------------------------------------------------------
+
+H.eq(T.GroupLabel(nil), "this group", "an unknown group still reads as something")
+WoW.inRaid = true
+H.eq(T.GroupLabel(3), "group 3", "raid groups are numbered")
+WoW.inRaid = false
+H.eq(T.GroupLabel(1), "your party", "and a party is a party")
+
+-- Pet buckets are a display grouping, not a subgroup: a Prayer cast on a pet
+-- buffs whatever party that pet is in, so there is no "the pets" to name.
+H.eq(T.GroupLabel(99), nil, "the pet bucket names no group")
+H.eq(T.GroupLabel(103), nil, "nor do the later pet buckets")
 
 H.done("test_clicks")

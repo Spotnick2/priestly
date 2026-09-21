@@ -79,7 +79,7 @@ Load order from `Priestly.toc`:
 `PriestlyConfig.lua` exposes: `Priestly_EnsureDefaults`, `Priestly_ShowSolo`, `Priestly_TrackPets`,
 `Priestly_IsBuffEnabled`, `Priestly_ShouldShowShadow`, `Priestly_GetFrameAlpha`,
 `Priestly_OpenConfig`, `Priestly_LearnDuration`, `Priestly_GetLearnedDuration`,
-`Priestly_PopoverSide`, `Priestly_FrameLocked`.
+`Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`.
 
 `Priestly.lua` exposes: `Priestly_ScheduleRefresh`, `Priestly_ForceRebuild`,
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
@@ -100,7 +100,8 @@ gets re-tested.
 
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,
-`lockFrame`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`. `learnedDurations` is keyed by **spell name**,
+`lockFrame`, `showClickHints`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`.
+`learnedDurations` is keyed by **spell name**,
 not by buff id: the single and group forms of one buff share an id and do not share a duration.
 
 ## WoW API And Lua Rules

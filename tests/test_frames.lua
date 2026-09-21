@@ -364,4 +364,25 @@ SlashCmdList["PRIESTLY"]("reset")
 H.check(PriestlyDB.pos == nil, "/priestly reset works while locked")
 PriestlyDB.lockFrame = false
 
+------------------------------------------------------------
+-- Row hover handlers
+--
+-- Every handler the addon installs belongs here, not only in the file that
+-- tests what it produces: strict globals only catch code that actually runs.
+------------------------------------------------------------
+
+local hoverRow
+for _, r in ipairs(T.rows()) do
+    if r._active then hoverRow = r break end
+end
+H.check(hoverRow ~= nil, "there is a drawn row to hover")
+runScript(hoverRow, "OnEnter")
+runScript(hoverRow, "OnLeave")
+
+-- ...and with hints off, which takes a different path out of ShowClickHint.
+PriestlyDB.showClickHints = false
+runScript(hoverRow, "OnEnter")
+runScript(hoverRow, "OnLeave")
+PriestlyDB.showClickHints = true
+
 H.done("test_frames")

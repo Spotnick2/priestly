@@ -1226,6 +1226,93 @@ local function PopoverSide(anchorRow)
     return (rowX < screenW / 2) and "right" or "left"
 end
 
+-- ─── Click hints ────────────────────────────────────────────────────
+-- What a row's clicks will actually cast, shown on hover.
+--
+-- The controls used to be discoverable only from the addon page or
+-- /priestly help, and getting them wrong COSTS A REAGENT - casting the group
+-- Prayer when you meant a single buff burns a candle every time. Somebody
+-- reported doing exactly that.
+--
+-- It matters more here than it would have on TBC, because the mapping is no
+-- longer fixed: while no group Prayer is known - the whole current level range
+-- - left-click casts the single spell instead. So "left is group, right is
+-- single" is not something a static description can promise. The addon knows;
+-- it should say.
+
+-- How a group reads in a sentence. The header says "-- Group 3 --"; a tooltip
+-- wants "group 3", and wants an answer even where there is no header at all.
+--
+-- nil for the pet buckets, deliberately. They are a display grouping, not a
+-- subgroup: a Prayer cast on a pet buffs whatever party that pet is in, so
+-- "on the pets" describes an outcome the click cannot produce. The caller
+-- names the target unit instead, which is literally what happens.
+local function GroupLabel(gNum)
+    if not gNum then return "this group" end
+    if gNum >= PET_GROUP then return nil end
+    if IsInRaid() then return "group " .. gNum end
+    return "your party"
+end
+
+local function HideClickHint()
+    GameTooltip:Hide()
+end
+
+local function ShowClickHint(row)
+    if not Priestly_ShowClickHints() then return end
+    local def = row and row._def
+    if not def then return end
+
+    -- The popover opens on this same hover, so sit on the other side of the
+    -- row rather than on top of it.
+    local side = (PopoverSide(row) == "right") and "ANCHOR_LEFT" or "ANCHOR_RIGHT"
+    GameTooltip:SetOwner(row, side)
+    GameTooltip:SetText(def.hasGroup and def.grp or def.sngl, 0.62, 0.85, 1.0)
+
+    -- Resolve each click the way the click itself resolves it.
+    --
+    -- Out of combat the wired attributes are NOT the answer, which is where I
+    -- had this wrong: PreClick calls PickTarget again at click time and can
+    -- retarget, so a hover between a rebuild and a buff falling off would name
+    -- one person while the click buffs another. Range moves without a rebuild
+    -- too. A hint that can disagree with the click is worse than no hint,
+    -- because it gets trusted.
+    --
+    -- In combat PreClick deliberately bails - it cannot write attributes under
+    -- lockdown - so there the wired values ARE what the click will use, and
+    -- re-picking would be the thing that lies.
+    local function resolve(which)
+        if InCombatLockdown() then
+            return row:GetAttribute("spell" .. which), row:GetAttribute("unit" .. which)
+        end
+        local spell = (which == 1) and row._primary or row._secondary
+        if not spell or not row._members then return nil end
+        -- The same call PreClick makes, groupMode argument and all.
+        local unit = PickTarget(row._members, def, (which == 1) and row._groupMode or false)
+        if not unit then return nil end   -- PreClick clears the spell here too
+        return spell, unit
+    end
+
+    local function describe(label, spell, unit)
+        if not spell then
+            GameTooltip:AddLine(label .. "  |cff888888nothing to buff|r", 1, 1, 1)
+            return
+        end
+        -- Decided from the spell this button actually carries, never from
+        -- which button it is. When a priest knows a Prayer but not the single
+        -- form, ClickSpells hands the group spell to BOTH clicks - and calling
+        -- that a single-target cast on a named person is the exact mistake
+        -- this tooltip exists to stop, reagent and all.
+        local target = (def.hasGroup and spell == def.grp and GroupLabel(row._gNum))
+                        or API.UnitDisplayName(unit, "whoever needs it")
+        GameTooltip:AddLine(label .. "  |cffffffff" .. spell .. "|r on " .. target, 1, 1, 1)
+    end
+
+    describe("|cffaaaaaaLeft|r ", resolve(1))
+    describe("|cffaaaaaaRight|r", resolve(2))
+    GameTooltip:Show()
+end
+
 -- ─── UpdatePopover ───────────────────────────────────────────────────────────
 
 UpdatePopover = function(anchorRow, members, def)
@@ -1379,6 +1466,7 @@ UpdateUI = function()
             r._primary    = primary
             r._secondary  = secondary
             r._groupMode  = groupMode
+            r._gNum       = gNum
 
             ApplyRowVisuals(r, st, def.duration)
 
@@ -1401,29 +1489,35 @@ UpdateUI = function()
                 local df = self._def
                 if not ms or not df then return end
 
+                -- Write the spell from the pick EVERY time, not only when
+                -- clearing it. Setting just the unit left a button that an
+                -- earlier PreClick had disarmed disarmed for good: the whole
+                -- group is dead or offline, the click clears spell1, somebody
+                -- comes back, and the next click writes unit1 over a spell1
+                -- that is still nil. A dead button, which is the complaint
+                -- that started #17 - and nothing on screen says so.
+                --
+                -- Range is NOT a trigger: PickTarget makes a second pass that
+                -- ignores range, so out-of-range members still return a unit.
+                -- Only an invalid one - dead, offline, gone - gives nil.
                 if btn == "LeftButton" then
                     if not self._primary then
                         self:SetAttribute("spell1", nil)
                         return
                     end
+                    -- Nobody valid clears the spell, so a click cannot fall
+                    -- back to casting on yourself.
                     local unit = PickTarget(ms, df, self._groupMode)
-                    if unit then
-                        self:SetAttribute("unit1", unit)
-                    else
-                        -- Nobody valid — clear spell to prevent casting on self
-                        self:SetAttribute("spell1", nil)
-                    end
+                    self:SetAttribute("spell1", unit and self._primary or nil)
+                    if unit then self:SetAttribute("unit1", unit) end
                 else
                     if not self._secondary then
                         self:SetAttribute("spell2", nil)
                         return
                     end
                     local unit = PickTarget(ms, df, false)
-                    if unit then
-                        self:SetAttribute("unit2", unit)
-                    else
-                        self:SetAttribute("spell2", nil)
-                    end
+                    self:SetAttribute("spell2", unit and self._secondary or nil)
+                    if unit then self:SetAttribute("unit2", unit) end
                 end
             end)
 
@@ -1450,8 +1544,12 @@ UpdateUI = function()
                 local cm, cd = members, def
                 r:SetScript("OnEnter", function(self)
                     UpdatePopover(self, cm, cd)
+                    ShowClickHint(self)
                 end)
-                -- OnLeave handled by popover's polling ticker
+                -- The popover's own hide is handled by the polling ticker -
+                -- an OnLeave would fire on the way TO the popover. Dropping
+                -- the tooltip there is right either way.
+                r:SetScript("OnLeave", HideClickHint)
             end
 
             r:Show()
@@ -1791,6 +1889,8 @@ Priestly._test = {
     PickTarget       = PickTarget,
     DurationFor      = DurationFor,
     PopoverSide      = PopoverSide,
+    ShowClickHint    = ShowClickHint,
+    GroupLabel       = GroupLabel,
     PruneAuraCache   = PruneAuraCache,
     IsValidTarget    = IsValidTarget,
     TimerColor       = TimerColor,

@@ -75,9 +75,9 @@ no way to re-register until combat ends. Both edges has no such state, so `C_CVa
 `GetCVar` and `CVAR_UPDATE` are all recorded by the probe for reference and consumed by nothing.
 
 The readers do exist, which closes what this section previously listed as unknown. `/api s GetCVar`
-returns `C_CVar.GetCVar`, `GetCVarBool`, `GetCVarBitfield`, `GetCVarDefault` and `GetCVarInfo` — all
-namespaced, with no documented bare globals. Nothing to change: the addon stopped consuming them
-when it stopped guessing the edge.
+returns `C_CVar.GetCVar`, `GetCVarBool`, `GetCVarBitfield`, `GetCVarDefault` and `GetCVarInfo`, and
+the full API dump's `_G` section lists the bare globals as well. Nothing to change: the addon
+stopped consuming them when it stopped guessing the edge.
 
 One thing is still unread, and it no longer matters. `SecureActionButton_OnClick` also takes
 `isKeyPress` / `isSecureAction` and forces `useOnKeyDown = false` for what it calls a secure mouse
