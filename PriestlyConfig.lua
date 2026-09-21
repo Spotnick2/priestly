@@ -901,7 +901,10 @@ local function BuildPanel(panel)
     local sideLabel = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     sideLabel:SetPoint("TOPLEFT", settingsChild, "TOPLEFT", 0, y.v)
     sideLabel:SetText("Popover Side")
-    y.v = y.v - 6
+    -- Reserve the label's own height, as every sibling does. MakeRadioGroup
+    -- anchors a ~20px button by its TOPLEFT and only subtracts 4 of its own,
+    -- so a smaller step here puts the first radio through the label.
+    y.v = y.v - 18
 
     MakeRadioGroup(settingsChild, y, {
         { key = "auto",  label = "Automatic - open it wherever there is room" },
@@ -909,9 +912,10 @@ local function BuildPanel(panel)
         { key = "right", label = "Always on the right" },
     }, Priestly_PopoverSide(), function(key)
         PriestlyDB.popoverSide = key
-        -- Only affects where the popover opens NEXT, so there is nothing to
-        -- rebuild - but close it so the change is visible immediately rather
-        -- than on the next hover.
+        -- The side is chosen fresh every time the popover opens, so the next
+        -- hover would pick this up on its own. The rebuild is for the popover
+        -- that is open right now: UpdateUI re-anchors it, so the change shows
+        -- without having to move the mouse away and back.
         if Priestly_ForceRebuild then Priestly_ForceRebuild() end
     end)
 

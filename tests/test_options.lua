@@ -88,6 +88,14 @@ H.check(_G["PriestlyRB_always"]:GetChecked() == false,
     "selecting one radio clears the others")
 H.check(_G["PriestlyRB_instance"]:GetChecked() == true, "and checks itself")
 
+-- Popover side radios
+for _, side in ipairs({ "left", "right", "auto" }) do
+    click("PriestlyRB_" .. side)
+    H.eq(PriestlyDB.popoverSide, side, "the " .. side .. " radio selects that side")
+end
+H.check(_G["PriestlyRB_auto"]:GetChecked() == true, "and auto is the one left checked")
+H.check(_G["PriestlyRB_left"]:GetChecked() == false, "with the others cleared")
+
 -- Opacity slider
 local slider = _G["PriestlyAlphaSlider"]
 H.check(slider ~= nil, "the opacity slider was created")

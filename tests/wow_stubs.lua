@@ -218,14 +218,23 @@ local function makeFrame(name)
     f.CreateAnimationGroup = function() return makeFrame() end
     f.GetThumbTexture  = function() return makeFrame() end
     f.SetPoint = function(self, point, rel, relPoint, x, y)
+        -- SetPoint(point, x, y) is the short form, and a number in the second
+        -- slot is the only thing that distinguishes it from
+        -- SetPoint(point, relativeTo, relativePoint). Slot it wrongly and an
+        -- offset is recorded as a relative frame.
+        if type(rel) == "number" then
+            rel, relPoint, x, y = nil, nil, rel, relPoint
+        end
         self._points = self._points or {}
         self._points[#self._points + 1] = { point, rel, relPoint, x, y }
         return self
     end
     f.ClearAllPoints = function(self) self._points = nil return self end
     -- Reports what was actually set, so a test can assert where a frame went.
+    -- The FIRST anchor, which is what the client's GetPoint() returns - it is
+    -- GetPoint(1), not "the most recent one".
     f.GetPoint = function(self)
-        local p = self._points and self._points[#self._points]
+        local p = self._points and self._points[1]
         if not p then return "CENTER", nil, "CENTER", 0, 0 end
         return p[1], p[2], p[3], p[4], p[5]
     end
