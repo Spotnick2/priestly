@@ -455,7 +455,26 @@ function P.secure()
     rec("InCombatLockdown", try(InCombatLockdown))
     local ok, err = pcall(BuildSecureButton)
     rec("buildButton", ok and "OK" or ("ERROR: " .. tostring(err)))
+
+    -- Which mouse edge a secure button has to register for. Priestly follows
+    -- ActionButtonUseKeyDown rather than registering both edges, because on a
+    -- secure button both edges is two casts and two reagents per click.
+    rec("C_CVar", tostring(C_CVar ~= nil))
+    rec("C_CVar.GetCVarBool", tostring(C_CVar ~= nil and C_CVar.GetCVarBool ~= nil))
+    rec("GetCVarBool_global", tostring(_G.GetCVarBool ~= nil))
+    local getBool = (C_CVar and C_CVar.GetCVarBool) or _G.GetCVarBool
+    if getBool then
+        local gotIt, value = pcall(getBool, "ActionButtonUseKeyDown")
+        rec("ActionButtonUseKeyDown", gotIt
+            and (tostring(value) .. " (" .. type(value) .. ")")
+            or ("THROWS: " .. tostring(value)))
+    else
+        say("  |cffff4444no CVar API - Priestly defaults to the Down edge|r")
+    end
+
     rec("MANUAL", "did the click cast? out of combat / in combat - record by hand")
+    rec("MANUAL_edge", "flip ActionButtonUseKeyDown, /reload, and check the click still casts")
+    rec("MANUAL_double", "register both edges by hand: does one click cast TWICE?")
     dumpSection("secure")
 end
 

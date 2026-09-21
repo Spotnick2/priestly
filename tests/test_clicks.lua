@@ -160,4 +160,61 @@ H.eq(#active, 2, "one row per buff")
 H.eq(active[1]:GetAttribute("spell1"), "Power Word: Fortitude", "first row is Fortitude")
 H.eq(active[2]:GetAttribute("spell1"), "Divine Spirit", "second row is Spirit")
 
+------------------------------------------------------------
+-- The mouse edge the rows are registered for
+--
+-- "Single click does nothing" was this: the rows were hard-wired to the Down
+-- edge, and a client set to act on key UP - which AdvancedInterfaceOptions and
+-- MiniPressRelease both do - honours neither the click nor an error message.
+------------------------------------------------------------
+
+local function edgeOf(button)
+    return button._clicks and tostring(button._clicks[1]) or "none"
+end
+
+setup({ "FORT_SINGLE" })
+H.eq(edgeOf(T.rows()[1]), "LeftButtonDown", "rows register for the default edge")
+H.eq(edgeOf(T.popRows()[1]), "LeftButtonDown", "and so do the popover rows")
+
+-- Flip the client to keyup and tell the addon about it the way the game does.
+WoW.SetCVarAPI("namespace")
+WoW.cvars.ActionButtonUseKeyDown = false
+WoW.dispatch("CVAR_UPDATE", "ActionButtonUseKeyDown")
+H.eq(edgeOf(T.rows()[1]), "LeftButtonUp", "a CVar flip re-registers the rows")
+H.eq(edgeOf(T.rows()[#T.rows()]), "LeftButtonUp", "every row in the pool, not just the drawn ones")
+H.eq(edgeOf(T.popRows()[1]), "LeftButtonUp", "and the popover pool too")
+
+-- Only one edge, ever. Registering both is the fix people pass around, and on
+-- a secure button it is two casts and two reagents per click.
+H.eq(#T.rows()[1]._clicks, 2, "two arguments - left and right button")
+H.check(not tostring(T.rows()[1]._clicks[2]):find("Down"),
+    "both arguments are the same edge, never one of each")
+
+-- CVAR_UPDATE fires for every CVar in the game, and the name it passes has
+-- been spelled differently across versions, so the guard is the outcome.
+T.rows()[1]._clicks = nil
+WoW.dispatch("CVAR_UPDATE", "SomethingElseEntirely")
+H.eq(edgeOf(T.rows()[1]), "none", "an unrelated CVar does not churn the pools")
+
+------------------------------------------------------------
+-- RegisterForClicks is protected, so a mid-fight flip has to wait
+------------------------------------------------------------
+
+WoW.inCombat = true
+WoW.cvars.ActionButtonUseKeyDown = true
+WoW.dispatch("CVAR_UPDATE", "ActionButtonUseKeyDown")
+H.eq(edgeOf(T.rows()[2]), "LeftButtonUp",
+    "under lockdown the rows keep the old edge rather than being left unregistered")
+local _, pending = T.clickEdge()
+H.check(pending, "and the change is remembered")
+
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+H.eq(edgeOf(T.rows()[2]), "LeftButtonDown", "combat ending applies it")
+local edge, stillPending = T.clickEdge()
+H.eq(edge, "LeftButtonDown", "and the recorded edge follows")
+H.check(not stillPending, "with nothing left outstanding")
+
+WoW.SetCVarAPI("none")
+
 H.done("test_clicks")

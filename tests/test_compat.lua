@@ -237,4 +237,56 @@ H.check(API.AurasAreSecret() == false, "auras readable out of combat")
 WoW.secret = true
 H.check(API.AurasAreSecret() == true, "secrecy is reported when the client says so")
 
+------------------------------------------------------------
+-- Which mouse edge the secure buttons register for
+--
+-- Registering the edge the client is not honouring makes every row a dead
+-- button: no cast, no error. Registering BOTH edges would cover it, and is the
+-- fix that gets passed around, but each edge is its own click on a secure
+-- button - two casts, two reagents.
+------------------------------------------------------------
+
+local function edges()
+    local left, right = API.ClickEdges()
+    return tostring(left) .. "/" .. tostring(right)
+end
+
+WoW.reset()   -- no CVar API at all, which is the unmeasured case
+H.eq(edges(), "LeftButtonDown/RightButtonDown",
+    "with no CVar API to ask, keep what has always shipped rather than guessing")
+
+WoW.SetCVarAPI("namespace")
+WoW.cvars.ActionButtonUseKeyDown = true
+H.eq(edges(), "LeftButtonDown/RightButtonDown", "keydown client -> the Down edge")
+WoW.cvars.ActionButtonUseKeyDown = false
+H.eq(edges(), "LeftButtonUp/RightButtonUp",
+    "keyup client -> the Up edge, which is the whole bug")
+
+WoW.SetCVarAPI("global")
+H.eq(edges(), "LeftButtonUp/RightButtonUp", "the bare global is read too, if that is all there is")
+
+-- An unset CVar is not a "no": it is no answer, and the default stands.
+WoW.cvars.ActionButtonUseKeyDown = nil
+H.eq(edges(), "LeftButtonDown/RightButtonDown", "an unknown CVar falls back rather than flipping")
+
+-- ZERO IS TRUTHY, and so is "0". A GetCVar-backed shim that hands back the
+-- string form would otherwise pin every client to keydown and silently
+-- reinstate the dead button.
+local cvarBool = Priestly._testCompat.cvarBool
+WoW.cvars.probe = "0"
+H.eq(cvarBool("probe"), false, "the string \"0\" is false, not truthy")
+WoW.cvars.probe = 0
+H.eq(cvarBool("probe"), false, "and so is the number 0")
+WoW.cvars.probe = "1"
+H.eq(cvarBool("probe"), true, "\"1\" is true")
+WoW.cvars.probe = nil
+H.eq(cvarBool("probe"), nil, "and absent stays absent, distinct from false")
+
+-- A CVar API that throws must not take the addon down with it.
+C_CVar = { GetCVarBool = function() error("nope") end }
+GetCVarBool = nil
+H.eq(edges(), "LeftButtonDown/RightButtonDown", "a throwing CVar API falls back")
+
+WoW.SetCVarAPI("none")
+
 H.done("test_compat")

@@ -418,10 +418,50 @@ function API.ClientBuild()
     return ok and tostring(build) or "?"
 end
 
+-- ─── click registration ─────────────────────────────────────────────────────
+-- A secure action button only casts on the mouse edge it is registered for,
+-- and the client honours the edge that matches ActionButtonUseKeyDown. Wire up
+-- the other one and the button is simply dead: no cast, no error, nothing to
+-- see. That is what people running AdvancedInterfaceOptions or
+-- MiniPressRelease - both of which flip that CVar - reported as "single click
+-- does nothing".
+--
+-- Registering BOTH edges covers every setting, and is the fix that gets passed
+-- around, but on a secure button each edge is its own click: two casts and two
+-- reagents. So follow the CVar instead, which is what Blizzard's own action
+-- buttons do.
+
+-- The CVar API is not confirmed present on this client (see the note in
+-- docs/FOREVER-PROBE.md), so every route to it is optional.
+local function cvarBool(name)
+    local get = (C_CVar and C_CVar.GetCVarBool) or GetCVarBool
+    if not get then return nil end
+    local ok, value = pcall(get, name)
+    if not ok or value == nil then return nil end
+    -- GetCVarBool answers with a boolean, but a GetCVar-backed shim can hand
+    -- back the string "0" - and "0" is TRUTHY in Lua, which would pin every
+    -- client to keydown and quietly reintroduce the bug this exists to fix.
+    if value == 0 or value == "0" or value == "" then return false end
+    return value and true or false
+end
+
+-- The RegisterForClicks event names for the left and right mouse button, in
+-- that order.
+function API.ClickEdges()
+    -- nil means the CVar, or the whole API, is missing. Keydown is what has
+    -- always shipped and what works for most people, so it is the safe answer
+    -- to "no idea".
+    if cvarBool("ActionButtonUseKeyDown") == false then
+        return "LeftButtonUp", "RightButtonUp"
+    end
+    return "LeftButtonDown", "RightButtonDown"
+end
+
 -- ─── test seam ───────────────────────────────────────────────────────────────
 -- Harmless in game; the unit tests reach the file-locals through it.
 
 Priestly._testCompat = {
     matchAura = matchAura,
     spellInfo = spellInfo,
+    cvarBool  = cvarBool,
 }

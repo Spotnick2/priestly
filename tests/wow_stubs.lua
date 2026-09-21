@@ -52,6 +52,11 @@ function WoW.reset()
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
     WoW.timers      = {}
     WoW.mouseOver   = {}         -- [frame] = true; drives frame:IsMouseOver()
+    -- The CVar API is NOT confirmed present on this client, so it is absent by
+    -- default and a test that wants it installs it with WoW.SetCVarAPI.
+    WoW.cvars       = {}         -- [name] = boolean, once an API is installed
+    C_CVar          = nil
+    GetCVarBool     = nil
     WoW.ejNumTiers  = 0          -- what this client actually reports
     WoW.ejSelectThrows = false
     WoW.ejDungeons  = {}         -- { { id =, name = }, ... }
@@ -133,6 +138,25 @@ end
 
 -- Make a spell exist in the client's spell database without the player knowing
 -- it (GetSpellInfo resolves, IsSpellKnown does not).
+-- Install a CVar API of a given shape. Which one Forever actually has is not
+-- measured yet, so the addon has to cope with all three and the tests say so
+-- out loud rather than picking one and calling it the truth.
+--
+--   "namespace" - C_CVar.GetCVarBool only
+--   "global"    - the bare GetCVarBool only
+--   "none"      - neither, which is the default after WoW.reset()
+--
+-- What it answers comes from WoW.cvars[name].
+function WoW.SetCVarAPI(shape)
+    local function get(name) return WoW.cvars[name] end
+    C_CVar, GetCVarBool = nil, nil
+    if shape == "namespace" then
+        C_CVar = { GetCVarBool = get }
+    elseif shape == "global" then
+        GetCVarBool = get
+    end
+end
+
 function WoW.DefineSpell(spellID, name)
     WoW.spells[spellID] = { name = name, iconID = 100000 + spellID }
 end
@@ -163,6 +187,7 @@ local function makeFrame(name)
         end
         return self
     end
+    f.RegisterForClicks = function(self, ...) self._clicks = { ... } return self end
     f.SetAttribute = function(self, k, v) self._attr[k] = v return self end
     f.GetAttribute = function(self, k) return self._attr[k] end
     f.Show = function(self) self._shown = true return self end
@@ -615,6 +640,9 @@ local KNOWN_ABSENT = {
     GetAddOnMetadata = true, InterfaceOptions_AddCategory = true,
     InterfaceOptionsFrame_OpenToCategory = true,
     loadstring_untainted = true, SecureHandlerWrapScript = true,
+    -- Unverified on this client: the addon must work whether or not they are
+    -- there, so they stay absent unless a test installs them.
+    C_CVar = true, GetCVarBool = true,
     -- Globals the probe deliberately tests for the presence of.
     C_EncounterJournal = true, EJ_GetNumTiers = true, EJ_SelectTier = true,
     EJ_GetTierInfo = true, EJ_GetInstanceByIndex = true,

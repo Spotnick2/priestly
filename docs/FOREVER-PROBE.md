@@ -33,6 +33,27 @@ design holds.
 > Still to confirm: clicking in combat, where `PreClick` cannot re-target and the click has to use
 > the pre-combat wiring.
 
+### Which mouse edge to register for — **unmeasured**
+
+A secure button only acts on the edge it is registered for, and the client honours the edge that
+matches the `ActionButtonUseKeyDown` CVar. Registering the other one leaves a button that casts
+nothing and says nothing — which is what CurseForge reports of "single click does nothing" from
+people running AdvancedInterfaceOptions or MiniPressRelease, both of which flip that CVar.
+
+`API.ClickEdges()` follows the CVar rather than registering both edges, because on a secure button
+each edge is a separate click: two casts and two reagents.
+
+| Question | Status |
+|---|---|
+| `C_CVar.GetCVarBool` present | **unknown** — `/pprobe secure` records it |
+| bare `GetCVarBool` present | **unknown** — same |
+| `ActionButtonUseKeyDown` exists and what it returns | **unknown** |
+| Does the CVar govern **mouse** clicks here, or only keybinds? | **unknown** |
+| Does registering both edges really double-cast on this client? | **unmeasured** — `MANUAL_double` |
+
+Until those are answered the addon defaults to the Down edge, which is what has always shipped,
+and the tests cover all three shapes (namespaced, global, absent) rather than assuming one.
+
 ## 2. Events — all 16 register, none throw
 
 Including `ACTIVE_TALENT_GROUP_CHANGED`, which was the one to distrust (no working Forever addon in
@@ -251,4 +272,5 @@ The encounter journal is not a usable source on this client: `EJ_GetNumTiers()` 
 ## 13. Still open
 
 - **Clicking in combat.** Casting works out of combat on both self and another player.
+- **The CVar API and the click edge** — see the table at the end of section 1. `/pprobe secure`.
 - **`INSTANCE_DB` names** against real `GetInstanceInfo()` output, once those zones are reachable.

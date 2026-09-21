@@ -71,6 +71,7 @@ Load order from `Priestly.toc`:
 | `UnitKey(unit)` / `UnitDisplayName(unit, fallback)` | `UnitGUID` / `UnitName` |
 | `RegisterEvents(frame, ...)` | bare `RegisterEvent` (throws on unknown names here) |
 | `ClientBuild()` | `select(2, GetBuildInfo())` |
+| `ClickEdges()` → left, right `RegisterForClicks` names | — (`ActionButtonUseKeyDown`) |
 | `CountItem(itemID)` — whole carried inventory, reagent bag included | `GetItemCount` / the `GetContainerNumSlots` walk |
 | `AddonVersion(addonName)` | `GetAddOnMetadata` |
 | `IsMouseOver(frame)` | `MouseIsOver` (absent on this client) |
@@ -164,6 +165,14 @@ player while the attribute still names that token, so a click can land on the wr
 no way out: attributes cannot be rewritten under lockdown, and an insecure `PreClick` cannot cancel
 a secure action. Parking the affected rows would need the same forbidden writes. It corrects itself
 on `PLAYER_REGEN_ENABLED`.
+
+**Row buttons register for one mouse edge, never both.** A secure button acts on the edge it is
+registered for, and the client honours the edge matching `ActionButtonUseKeyDown`; register the
+other one and every row is a dead button with no error. `API.ClickEdges()` answers which, and
+`ApplyClickRegistration()` re-applies it on `CVAR_UPDATE` (guarded — `RegisterForClicks` is
+protected under lockdown, so a mid-fight change waits for `PLAYER_REGEN_ENABLED`). Do not
+"simplify" this to `RegisterForClicks("AnyUp", "AnyDown")`: on a secure button both edges is two
+casts and two reagents per click.
 
 Secure *snippets* are broken on this client (`loadstring_untainted` is missing, so
 `SecureHandlerWrapScript`, `_onstate-*` and state drivers throw). Priestly uses none of them — plain
