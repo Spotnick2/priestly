@@ -422,4 +422,24 @@ H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "and with one")
 said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("RIGHT"), "reporting the saved anchor: " .. said)
 
+-- The restore decision must survive ordinary refreshes.
+--
+-- Every UpdateUI after the window is up skips the restore, correctly, because
+-- it is already anchored. If a skip overwrote the decision, one aura or roster
+-- event would erase the only thing this command exists to report - and it
+-- would be gone long before anybody thought to ask. That is a diagnostic that
+-- works in testing and is empty exactly when it is needed.
+before = #WoW.messages
+runScript(T.eventFrame(), "OnEvent", "PLAYER_LOGIN")
+WoW.flushTimers()
+T.UpdateUI()
+T.UpdateUI()
+T.UpdateUI()
+H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "/priestly pos after several refreshes")
+said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(said:find("applied saved") or said:find("DEFAULT"),
+    "still reports what the restore actually decided: " .. said)
+H.check(not said:find("SKIPPED"), "rather than the skip that came after it: " .. said)
+H.check(said:find("refresh"), "while saying refreshes have happened since: " .. said)
+
 H.done("test_frames")

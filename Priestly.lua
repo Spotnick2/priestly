@@ -175,7 +175,14 @@ local g_LastGroupSize = 0
 -- `/priestly pos`. Reading the code twice and consulting a second reviewer
 -- both said this path is sound, while the frame demonstrably came back at the
 -- default - so the next step is to make it say what it did.
+--
+-- This holds the last time the restore ACTUALLY RAN. Every refresh after that
+-- skips it, correctly, because the window is already up - and a skip must not
+-- overwrite the decision. Otherwise the one thing worth knowing is gone by the
+-- time anyone asks: a single aura or roster event fires ScheduleRefresh, and
+-- the answer becomes "SKIPPED" forever.
 local g_RestoreLog = "UpdateUI has not run yet"
+local g_RestoreSkips = 0
 
 local g_GHdrs = {}   -- FontStrings [1..MAX_GROUPS]
 local g_Rows  = {}   -- Buttons     [1..MAX_ROWS]
@@ -1630,8 +1637,8 @@ UpdateUI = function()
                 (PriestlyDB and "pos was nil" or "was nil")
         end
     else
-        g_RestoreLog = string.format("SKIPPED - g_Moved=%s shown=%s",
-            tostring(g_Moved), tostring(g_Main:IsShown()))
+        -- Counted, not recorded over the decision above.
+        g_RestoreSkips = g_RestoreSkips + 1
     end
 
     g_Main:Show()
@@ -1909,6 +1916,11 @@ SlashCmdList["PRIESTLY"] = function(msg)
             "%s/%s  %.1f, %.1f", tostring(p.point), tostring(p.relPoint),
             tonumber(p.x) or 0/0, tonumber(p.y) or 0/0) or "|cffff6666nothing saved|r"))
         DEFAULT_CHAT_FRAME:AddMessage("  last restore: " .. tostring(g_RestoreLog))
+        if g_RestoreSkips > 0 then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                "    (%d refresh%s since, which leave the position alone)",
+                g_RestoreSkips, g_RestoreSkips == 1 and "" or "es"))
+        end
         if g_Main then
             local pt, rel, relPt, x, y = g_Main:GetPoint()
             DEFAULT_CHAT_FRAME:AddMessage(string.format(
