@@ -28,46 +28,117 @@ local DEFAULTS = {
 -- { "Instance Name", "category", defaultEnabled, "Tooltip: boss encounters" }
 -- Instance names must match GetInstanceInfo() return values.
 
--- Forever is Vanilla content, so this is the whole instance list. The TBC
--- database that used to live here was dead content on this client and is gone.
+-- What is reachable on Forever, not what existed in Vanilla. The legacy raids
+-- beyond Onyxia's Lair are not listed because they are not in the game.
+--
+-- Dungeons are ordered by level, which is how a player thinks about them.
+-- Entries marked NEW are Forever's own content: nothing is known about their
+-- encounters, so they carry an honest tooltip rather than an invented one.
+--
+-- A checked instance describes the INSTANCE, not the player: whether its bosses
+-- deal meaningful shadow damage. It says nothing about whether the buff is
+-- available, because ActiveDefs already refuses to build a row for a spell the
+-- priest has not learned - so checking a level 22 dungeon costs a level 22
+-- priest nothing, and is simply correct for the level 60 one running it.
+--
+-- MULTI-WING INSTANCES ARE ONE ENTRY. Scarlet Monastery, Maraudon, Dire Maul,
+-- Stratholme and Blackrock Spire each have several entrances, but
+-- GetInstanceInfo() reports one name for all of them - so a key per wing would
+-- give several that never match anything.
+--
+-- CAUTION: these names are the keys matched against GetInstanceInfo(), and a
+-- name that is wrong fails silently - so CheckCurrentInstance announces any
+-- instance it does not recognise, turning that into a report rather than a
+-- mystery.
+--
+-- MEASURED so far, with `/pprobe here`:
+--   "Ruins of Lordaeron"  instanceMapID 2999, party, 5 players  (2026-09-20)
+--
+-- Everything else is unverified. Most is above the current level cap and
+-- cannot be measured yet. Blizzard's roster writes "The Hall of Thanes" and
+-- "Alcaz Prison", which is what is used here - but a forum roster is not the
+-- client, and only GetInstanceInfo() settles it.
+-- Note the apostrophes are ASCII ('), not typographic - a detail that costs
+-- nothing to get right and everything to get wrong. `/pprobe here` inside an
+-- instance prints the exact string. Issue #12 covers matching on map ID
+-- instead, which is both verifiable and locale-proof.
 local INSTANCE_DB = {
-    -- ── Raids ────────────────────────────────────────────────────────
-    { "Naxxramas",               "Raids", true,
-      "Gothik the Harvester (Shadow Bolt), Loatheb (Inevitable Doom), Four Horsemen (Mark of Zeliek), Kel'Thuzad (Shadow Fissure, Frost Blast)." },
-    { "Blackwing Lair",          "Raids", true,
-      "Nefarian (Shadow Flame), Vaelastrasz (Burning Adrenaline has shadow component)." },
-    { "Temple of Ahn'Qiraj",    "Raids", true,
-      "Twin Emperors (Shadow Bolt), C'Thun (Dark Glare), Ouro (Shadow damage on submerge)." },
-    { "Zul'Gurub",               "Raids", true,
-      "High Priest Venoxis (Shadow Bolt Volley), Hakkar (Corrupted Blood, Life Drain)." },
-    { "Ruins of Ahn'Qiraj",     "Raids", false,
-      "Ossirian (Shadow damage component). Generally not required." },
-    { "Molten Core",             "Raids", false,
-      "Primarily Fire damage throughout." },
-    { "Onyxia's Lair",           "Raids", false,
-      "Primarily Fire damage (Breath, Fireball)." },
+    -- ── Raids, by size ───────────────────────────────────────────────
+    { "The Barrow Deeps", "Raids", true,
+      "10 player. NEW in Forever. Encounters are not catalogued yet - pre-checked because a raid "
+      .. "is where missing Shadow Protection costs the most, while an unnecessary row costs "
+      .. "little." },
+    { "Hyjal Summit",    "Raids", true,
+      "20 player. NEW in Forever. Encounters are not catalogued yet - pre-checked for the same "
+      .. "reason. Note this is Forever's own raid, not the TBC one of the same name." },
+    { "Onyxia's Lair",   "Raids", false,
+      "40 player. Primarily Fire damage (Breath, Fireball)." },
 
-    -- ── Dungeons ─────────────────────────────────────────────────────
-    { "Scholomance",             "Dungeons", true,
-      "Darkmaster Gandling (Shadow damage), Rattlegore, heavy shadow trash throughout." },
-    { "Stratholme",              "Dungeons", true,
-      "Baron Rivendare (Shadow Bolt), Baroness Anastari (Shadow Bolt), undead shadow casters." },
-    { "Dire Maul",               "Dungeons", true,
-      "Immol'thar (Shadow Bolt, Portal of Immol'thar). West wing warlocks cast shadow." },
-    { "The Temple of Atal'Hakkar","Dungeons", true,
-      "Shade of Eranikus (Shadow Bolt Volley), Jammal'an the Prophet (Shadow Bolt)." },
-    { "Upper Blackrock Spire",   "Dungeons", false,
-      "Some shadow casters. Generally not required." },
-    { "Lower Blackrock Spire",   "Dungeons", false,
-      "Some shadow casters. Generally not required." },
-    { "Blackrock Depths",        "Dungeons", false,
-      "Ambassador Flamelash (shadow), scattered shadow casters. Generally not required." },
-    { "Maraudon",                "Dungeons", false,
-      "Princess Theradras (shadow component). Low-level instance." },
-    { "Razorfen Downs",          "Dungeons", false,
-      "Amnennar the Coldbringer (shadow/frost). Low-level instance." },
-    { "Shadowfang Keep",         "Dungeons", false,
-      "Arugal (Shadow Bolt, Void Bolt). Low-level instance." },
+    -- ── Dungeons, by level ───────────────────────────────────────────
+    { "Ragefire Chasm",  "Dungeons", true,
+      "Levels 13-18. Jergosh the Invoker casts Shadow Bolt and Curse of Weakness." },
+    { "The Hall of Thanes", "Dungeons", false,
+      "Levels 13-18. NEW in Forever. Encounters are not catalogued yet." },
+    { "Ruins of Lordaeron", "Dungeons", false,
+      "Levels 15-20. NEW in Forever. Encounters are not catalogued yet." },
+    { "Wailing Caverns", "Dungeons", false,
+      "Levels 15-25. Primarily Nature and poison damage." },
+    { "The Deadmines",   "Dungeons", false,
+      "Levels 18-23. Primarily physical and Fire damage." },
+    { "Shadowfang Keep", "Dungeons", true,
+      "Levels 22-30. Arugal (Shadow Bolt, Void Bolt), Wolf Master Nandos, and shadow casters "
+      .. "throughout." },
+    { "The Stockade",    "Dungeons", false,
+      "Levels 22-30. Primarily physical damage." },
+    { "Excavation Site: Wetlands", "Dungeons", false,
+      "Levels 24-29. NEW in Forever. Encounters are not catalogued yet." },
+    { "Blackfathom Deeps", "Dungeons", false,
+      "Levels 24-32. Twilight Lord Kelris casts Mind Blast; the rest is Nature and Frost." },
+    { "City of Dalaran", "Dungeons", false,
+      "Levels 28-33. NEW in Forever. Encounters are not catalogued yet." },
+    { "Scarlet Monastery", "Dungeons", true,
+      "Levels 28-45, all four wings. Bloodmage Thalnos (Shadow Bolt) in the Graveyard; the "
+      .. "Armory and Cathedral are physical. One entry because GetInstanceInfo() reports every "
+      .. "wing under the same name." },
+    { "Gnomeregan",      "Dungeons", false,
+      "Levels 29-38. Primarily Nature, Fire and mechanical damage." },
+    { "Razorfen Kraul",  "Dungeons", false,
+      "Levels 30-40. Primarily Nature and poison damage." },
+    { "The Drowned City", "Dungeons", false,
+      "Levels 35-40. NEW in Forever. Encounters are not catalogued yet." },
+    { "Krol'Dok Stronghold", "Dungeons", false,
+      "Levels 40-45. NEW in Forever. Encounters are not catalogued yet." },
+    { "Razorfen Downs",  "Dungeons", true,
+      "Levels 40-50. Amnennar the Coldbringer deals Shadow and Frost damage; the rest is Nature." },
+    { "Uldaman",         "Dungeons", false,
+      "Levels 42-52. Primarily physical, Nature and Arcane damage." },
+    { "Zul'Farrak",      "Dungeons", true,
+      "Levels 44-54. Witch Doctor Zum'rah casts Shadow Bolt; the rest is Nature and physical." },
+    { "Maraudon",        "Dungeons", false,
+      "Levels 45-57, all entrances. Princess Theradras has a Shadow component; the rest is "
+      .. "Nature. One entry: GetInstanceInfo() does not distinguish the entrances." },
+    { "Alcaz Prison",    "Dungeons", false,
+      "Levels 48-53. NEW in Forever. Encounters are not catalogued yet." },
+    { "The Temple of Atal'Hakkar", "Dungeons", true,
+      "Levels 50-60. Shade of Eranikus (Shadow Bolt Volley), Jammal'an the Prophet (Shadow "
+      .. "Bolt). Known to players as the Sunken Temple." },
+    { "Blackrock Depths", "Dungeons", false,
+      "Levels 52-60. Ambassador Flamelash and scattered shadow casters. Generally not required." },
+    { "Blackrock Spire", "Dungeons", false,
+      "Levels 55-60, Lower and Upper. Some shadow casters, generally not required. One entry "
+      .. "because both halves share an instance name." },
+    { "Blackmaw Hold",   "Dungeons", false,
+      "Levels 55-60. NEW in Forever. Encounters are not catalogued yet." },
+    { "Dire Maul",       "Dungeons", true,
+      "Levels 58-60, all wings. Immol'thar (Shadow Bolt, Portal of Immol'thar); the West wing "
+      .. "warlocks cast Shadow throughout." },
+    { "Scholomance",     "Dungeons", true,
+      "Levels 58-60. Darkmaster Gandling, Rattlegore, and heavy shadow trash throughout." },
+    { "Stratholme",      "Dungeons", true,
+      "Levels 58-60, both sides. Baron Rivendare (Shadow Bolt), Baroness Anastari (Shadow Bolt), "
+      .. "undead shadow casters throughout." },
+    { "Shaper's Terrace", "Dungeons", false,
+      "Levels 58-60. NEW in Forever. Encounters are not catalogued yet." },
 }
 
 -- ─── Ensure defaults ────────────────────────────────────────────────────────
@@ -94,18 +165,24 @@ function Priestly_EnsureDefaults()
         PriestlyDB.shadowInstances = {}
     end
 
-    -- One-time migration off the TBC line: a PriestlyDB saved by v1.x carries
-    -- Karazhan, Black Temple and the rest, none of which can occur here. Drop
-    -- every key this build does not know about, then backfill new ones.
+    -- One-time migration off the TBC line: drop the instances that build knew
+    -- about, and the durations it learned, neither of which mean anything here.
     if PriestlyDB.flavor ~= FLAVOR then
         local known = {}
         for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
         for name in pairs(PriestlyDB.shadowInstances) do
             if not known[name] then PriestlyDB.shadowInstances[name] = nil end
         end
-        PriestlyDB.learnedDurations = nil   -- TBC durations mean nothing here
+        PriestlyDB.learnedDurations = nil
         PriestlyDB.flavor = FLAVOR
     end
+
+    -- Deliberately NOT pruning unknown keys on every load. An entry the current
+    -- list does not name is inert - nothing reads shadowInstances except
+    -- CheckCurrentInstance, which looks up the zone you are standing in - so
+    -- pruning buys tidiness and costs real data: install an older build once,
+    -- or hand-edit an instance the list is missing, and every choice for those
+    -- entries is gone with no way to get it back.
 
     -- Backfill instances added since this profile was written
     for _, entry in ipairs(INSTANCE_DB) do
@@ -156,6 +233,10 @@ end
 
 local g_InShadowInstance = false
 
+-- Instances we have already complained about, so the message appears once per
+-- session rather than on every zone-in.
+local g_ReportedUnknown = {}
+
 local function CheckCurrentInstance()
     -- Out in the world this returns the CONTINENT ("Eastern Kingdoms" while
     -- standing in Undercity), not an empty string, so the name alone is not a
@@ -167,9 +248,35 @@ local function CheckCurrentInstance()
         g_InShadowInstance = false
         return
     end
-    g_InShadowInstance = (PriestlyDB
-        and PriestlyDB.shadowInstances
-        and PriestlyDB.shadowInstances[name] == true)
+
+    local saved = PriestlyDB and PriestlyDB.shadowInstances
+    g_InShadowInstance = (saved and saved[name] == true) or false
+
+    -- The list is keyed on exact instance names that mostly cannot be verified
+    -- until the level cap rises, and a wrong key fails SILENTLY - the mode
+    -- simply never fires, with nothing to explain why. So say something. This
+    -- turns an invisible bug into a bug report, and the players standing in
+    -- these instances are the only ones who can measure them.
+    --
+    -- Narrowly, though. Battlegrounds and arenas report an instanceType too,
+    -- and asking for their names would be asking for entries that do not
+    -- belong in a shadow-damage list. And a player who has not chosen "by
+    -- instance" is being warned about a feature they are not using - worse,
+    -- being marked as already told, so the warning would never appear when
+    -- they did turn it on.
+    local relevantType = (instanceType == "party" or instanceType == "raid")
+    local modeActive = PriestlyDB and PriestlyDB.shadowMode == "instance"
+    if relevantType and modeActive
+        and saved and saved[name] == nil and not g_ReportedUnknown[name]
+    then
+        g_ReportedUnknown[name] = true
+        if DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cff99ddff[Priestly]|r does not recognise this instance: |cffffffff\"" ..
+                tostring(name) .. "\"|r - Shadow Protection's \"by instance\" mode cannot " ..
+                "work here. Please report that name so it can be added.")
+        end
+    end
 end
 
 function Priestly_ShouldShowShadow(groups, ord)
@@ -421,7 +528,10 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     desc:SetText("|cff999999When Shadow Protection is set to \"by instance\" in Settings, " ..
         "it activates when you zone into a checked instance. " ..
         "Hover an instance name for encounter details. " ..
-        "Pre-checked instances have bosses with significant shadow damage.|r")
+        "Instances are pre-checked when their bosses deal significant shadow damage - or, for " ..
+        "Forever's own raids, because nothing is known about them yet and a raid is where " ..
+        "missing the buff costs the most. " ..
+        "Either way the row only appears once you have learned Shadow Protection.|r")
     iy.v = iy.v - (TextHeight(desc, 32) + 10)
 
     -- Group by category
@@ -831,6 +941,7 @@ end
 
 Priestly._testConfig = {
     TextHeight    = TextHeight,
+    reportedUnknown = function() return g_ReportedUnknown end,
     INSTANCE_DB   = INSTANCE_DB,
     DEFAULTS      = DEFAULTS,
     FLAVOR        = FLAVOR,

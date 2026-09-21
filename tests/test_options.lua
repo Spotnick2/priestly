@@ -121,10 +121,10 @@ click(instBox("Scholomance"))
 H.eq(PriestlyDB.shadowInstances["Scholomance"], false, "unchecking one saves it")
 
 -- Two instances from different categories must not share a global name: the
--- suffix used to be a per-category index, so Naxxramas (Raids #1) and
--- Scholomance (Dungeons #1) collided and _G kept only one.
-H.check(_G[instBox("Naxxramas")] ~= nil, "a raid checkbox exists")
-H.check(_G[instBox("Naxxramas")] ~= _G[instBox("Scholomance")],
+-- suffix used to be a per-category index, so The Barrow Deeps (Raids #1) and
+-- Ragefire Chasm (Dungeons #1) collided and _G kept only one.
+H.check(_G[instBox("The Barrow Deeps")] ~= nil, "a raid checkbox exists")
+H.check(_G[instBox("The Barrow Deeps")] ~= _G[instBox("Ragefire Chasm")],
     "and is a different frame from the first dungeon's")
 
 ------------------------------------------------------------
@@ -146,8 +146,8 @@ end
 
 runHandler(instBox("Scholomance"), "OnEnter")   -- tooltip with encounter notes
 runHandler(instBox("Scholomance"), "OnLeave")
-runHandler(instBox("Naxxramas"), "OnEnter")
-runHandler(instBox("Naxxramas"), "OnLeave")
+runHandler(instBox("Hyjal Summit"), "OnEnter")
+runHandler(instBox("Hyjal Summit"), "OnLeave")
 runHandler("PriestlyAlphaSlider", "OnShow")
 WoW.flushTimers()                                -- the OnShow hook defers its work
 
@@ -177,7 +177,7 @@ H.check(TC.inShadowInstance() == false, "nothing is a shadow instance now")
 
 queued(function() click("PriestlyInstanceContainerDefaults") end, "Reset Defaults")
 H.eq(PriestlyDB.shadowInstances["Scholomance"], true, "Reset Defaults restored the default")
-H.eq(PriestlyDB.shadowInstances["Molten Core"], false, "...including the unchecked ones")
+H.eq(PriestlyDB.shadowInstances["Onyxia's Lair"], false, "...including the unchecked ones")
 H.check(TC.inShadowInstance() == true, "and the detector caught up again")
 
 WoW.instanceType = nil

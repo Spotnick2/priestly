@@ -122,19 +122,31 @@ WoW.SetAura("party1", "Prayer of Shadow Protection", 600, 300)
 H.eq(ids(T.ActiveDefs(groups, { 1 })), "fort,shadow", "the Prayer form counts too")
 
 PriestlyDB.shadowMode = "instance"
-WoW.instanceName = "Stratholme"
-PriestlyDB.shadowInstances["Stratholme"] = true
+WoW.instanceName = "Scholomance"
+PriestlyDB.shadowInstances["Scholomance"] = true
 TC.CheckCurrentInstance()
 H.eq(ids(T.ActiveDefs({}, {})), "fort,shadow", "'instance' shows it in a checked instance")
-PriestlyDB.shadowInstances["Stratholme"] = false
+PriestlyDB.shadowInstances["Scholomance"] = false
 TC.CheckCurrentInstance()
 H.eq(ids(T.ActiveDefs({}, {})), "fort", "and hides it in an unchecked one")
 
 -- Availability still wins: not knowing Shadow Protection beats every mode.
+-- This is why the instance list can mark a level-13 dungeon as shadow-heavy
+-- without bothering a level-13 priest - the row cannot exist either way, so a
+-- checkbox describes the instance rather than the player.
 setup({ "FORT_SINGLE" })
 PriestlyDB.shadowMode = "always"
 H.eq(ids(T.ActiveDefs({}, {})), "fort",
     "'always' cannot conjure a row for a spell the priest does not have")
+
+PriestlyDB.shadowMode = "instance"
+WoW.instanceName = "Scholomance"
+WoW.instanceType = "party"
+PriestlyDB.shadowInstances["Scholomance"] = true
+TC.CheckCurrentInstance()
+H.eq(ids(T.ActiveDefs({}, {})), "fort",
+    "nor can standing in a checked shadow instance, if the spell is unknown")
+WoW.instanceType = nil
 
 ------------------------------------------------------------
 -- Localized names come from the client, not from our literals

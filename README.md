@@ -75,8 +75,9 @@ catch up:
   real duration from your own buffs rather than assuming one, and forgets what it learned whenever
   the client build changes.
 * **Reagents** (candles, Light Feather) only appear once you know the spells that need them.
-* The **by-instance** Shadow Protection mode lists the Vanilla dungeons and raids, none of which are
-  reachable yet. The instance names it matches on are unverified until they are.
+* The **by-instance** Shadow Protection mode lists Forever's own raids and dungeons. Most are above
+  the current level cap, so the names it matches on are still unverified — if it ever fails to
+  notice an instance you are standing in, that is why.
 * **Settings are saved per character.** This client has a bug where account-wide saved variables are
   written but never read back, so addons that use them reset to defaults every session. Priestly
   stores its settings per character, which does work — the cost is that configuring one character

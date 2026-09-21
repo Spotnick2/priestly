@@ -31,7 +31,7 @@ for _, entry in ipairs(TC.INSTANCE_DB) do
 end
 H.eq(seeded, #TC.INSTANCE_DB, "every instance gets a saved default")
 H.eq(PriestlyDB.shadowInstances["Scholomance"], true, "heavy-shadow instances start checked")
-H.eq(PriestlyDB.shadowInstances["Molten Core"], false, "fire raids do not")
+H.eq(PriestlyDB.shadowInstances["Onyxia's Lair"], false, "fire raids do not")
 
 ------------------------------------------------------------
 -- Migration from a TBC-era profile
@@ -46,8 +46,8 @@ PriestlyDB = {
     shadowInstances = {
         ["Karazhan"]        = true,     -- TBC content: cannot occur here
         ["Black Temple"]    = true,
-        ["Shadow Labyrinth"] = true,
-        ["Scholomance"]     = false,    -- Vanilla, and the user unchecked it
+        ["Naxxramas"]       = true,     -- Vanilla, but not in Forever either
+        ["Scholomance"]     = false,    -- reachable, and the user unchecked it
     },
     learnedDurations = { build = "old", fort = 1800 },
 }
@@ -60,19 +60,30 @@ H.eq(PriestlyDB.visible, false, "...and the window state")
 
 H.check(PriestlyDB.shadowInstances["Karazhan"] == nil, "TBC instances are dropped")
 H.check(PriestlyDB.shadowInstances["Black Temple"] == nil, "all of them")
-H.check(PriestlyDB.shadowInstances["Shadow Labyrinth"] == nil, "dungeons too")
+H.check(PriestlyDB.shadowInstances["Naxxramas"] == nil,
+    "and Vanilla raids that Forever does not have")
 H.eq(PriestlyDB.shadowInstances["Scholomance"], false,
-    "a Vanilla instance the user unchecked stays unchecked - not reset to the default")
-H.eq(PriestlyDB.shadowInstances["Naxxramas"], true, "new instances are backfilled")
+    "an instance the user unchecked stays unchecked - not reset to the default")
+H.eq(PriestlyDB.shadowInstances["Hyjal Summit"], true, "new instances are backfilled")
 H.check(PriestlyDB.learnedDurations == nil or PriestlyDB.learnedDurations.fort == nil,
     "durations learned on the TBC client are thrown away")
 H.eq(PriestlyDB.flavor, TC.FLAVOR, "the marker means this only happens once")
 
 -- Running it again must not undo the user's choices.
-PriestlyDB.shadowInstances["Naxxramas"] = false
+PriestlyDB.shadowInstances["Hyjal Summit"] = false
 Priestly_EnsureDefaults()
-H.eq(PriestlyDB.shadowInstances["Naxxramas"], false,
+H.eq(PriestlyDB.shadowInstances["Hyjal Summit"], false,
     "a second run does not re-apply defaults over user choices")
+
+-- Pruning is deliberately one-time, guarded by the flavor marker. An entry the
+-- current list does not name is inert - nothing reads shadowInstances except
+-- the zone lookup - so pruning on every load would buy tidiness and cost real
+-- data: install an older build once, and every choice it does not list is gone.
+PriestlyDB.shadowInstances["Some Future Instance"] = true
+Priestly_EnsureDefaults()
+H.eq(PriestlyDB.shadowInstances["Some Future Instance"], true,
+    "an unknown entry survives, because a build that does not list it may be an old one")
+H.eq(PriestlyDB.flavor, TC.FLAVOR, "and the marker keeps the migration from running again")
 
 ------------------------------------------------------------
 -- Duration store is per client build
@@ -137,7 +148,7 @@ TC.CheckCurrentInstance()
 H.check(Priestly_ShouldShowShadow(nil, nil) == true, "in a checked instance")
 H.check(TC.inShadowInstance() == true, "and the detector agrees")
 
-WoW.instanceName = "Molten Core"
+WoW.instanceName = "Onyxia's Lair"
 TC.CheckCurrentInstance()
 H.check(Priestly_ShouldShowShadow(nil, nil) == false, "in an unchecked instance")
 
@@ -161,6 +172,75 @@ WoW.instanceType = "party"
 PriestlyDB.shadowInstances["Scholomance"] = true
 TC.CheckCurrentInstance()
 H.check(TC.inShadowInstance() == true, "...but a real instance still counts")
+WoW.instanceType = nil
+
+------------------------------------------------------------
+-- An instance the list does not know must say so
+--
+-- The keys are exact instance names, most of which cannot be verified until
+-- the level cap rises, and a wrong key fails silently - the mode never fires
+-- and nothing explains why. Announcing it turns an invisible bug into a bug
+-- report from the only people who can measure it.
+------------------------------------------------------------
+
+WoW.reset()
+PriestlyDB = nil
+Priestly_EnsureDefaults()
+for k in pairs(TC.reportedUnknown()) do TC.reportedUnknown()[k] = nil end
+
+PriestlyDB.shadowMode = "instance"
+WoW.instanceName = "Scholomance"
+WoW.instanceType = "party"
+local before = #WoW.messages
+TC.CheckCurrentInstance()
+H.eq(#WoW.messages, before, "a known instance says nothing")
+
+WoW.instanceName = "Some Unlisted Dungeon"
+TC.CheckCurrentInstance()
+H.check(#WoW.messages > before, "an instance the list does not know is reported")
+H.check(WoW.messages[#WoW.messages]:find("Some Unlisted Dungeon", 1, true) ~= nil,
+    "and the message names it, so it can be reported and added")
+
+-- Once per session, not once per zone-in.
+before = #WoW.messages
+TC.CheckCurrentInstance()
+H.eq(#WoW.messages, before, "and it does not repeat itself every time you zone in")
+
+-- Out in the world there is no instance to complain about.
+WoW.instanceName = "Eastern Kingdoms"
+WoW.instanceType = "none"
+before = #WoW.messages
+TC.CheckCurrentInstance()
+H.eq(#WoW.messages, before, "standing outdoors is not an unknown instance")
+
+-- Battlegrounds and arenas report an instanceType, but their names have no
+-- business in a shadow-damage list, so asking for them would be asking for the
+-- wrong thing.
+for _, kind in ipairs({ "pvp", "arena" }) do
+    WoW.instanceName = "Some " .. kind .. " Place"
+    WoW.instanceType = kind
+    before = #WoW.messages
+    TC.CheckCurrentInstance()
+    H.eq(#WoW.messages, before, "a " .. kind .. " instance is not reported as missing")
+end
+
+-- And somebody who has not chosen "by instance" is not warned about a feature
+-- they are not using - nor quietly marked as already told, which would stop the
+-- warning ever appearing once they did turn it on.
+for _, mode in ipairs({ "detect", "always" }) do
+    PriestlyDB.shadowMode = mode
+    WoW.instanceName = "Another Unlisted Dungeon"
+    WoW.instanceType = "party"
+    before = #WoW.messages
+    TC.CheckCurrentInstance()
+    H.eq(#WoW.messages, before, "'" .. mode .. "' mode does not warn about the instance list")
+end
+
+PriestlyDB.shadowMode = "instance"
+TC.CheckCurrentInstance()
+H.check(#WoW.messages > before,
+    "and the warning still arrives the first time the mode is actually on")
+
 WoW.instanceType = nil
 
 ------------------------------------------------------------

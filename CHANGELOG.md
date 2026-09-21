@@ -36,6 +36,15 @@ TBC Classic Anniversary is no longer supported; v1.0.6 remains available for tha
   configure the others.
 
 ### Changed
+- **The instance list is Forever's content**, not Vanilla's: the three raids — The Barrow Deeps
+  (10), Hyjal Summit (20) and Onyxia's Lair (40) — and all twenty-eight dungeons, ordered by level.
+  That includes Forever's nine new ones, from Hall of Thanes at 13 up to Shaper's Terrace at 60.
+  They are listed but unchecked, because nothing is known about their encounters yet and the
+  tooltip says so rather than inventing detail. The Vanilla raids beyond Onyxia are gone; they are
+  not in the game.
+- Multi-wing instances are one entry each. Scarlet Monastery, Maraudon, Dire Maul, Stratholme and
+  Blackrock Spire report a single name to addons however you enter them, so one row is what the
+  game actually exposes.
 - The TBC instance list is gone; the options panel is now **Settings | Instances**. An existing
   Priestly profile is migrated automatically: your settings are kept, TBC-only entries are dropped.
 - The main frame now survives being closed during combat the same way the popover already did.

@@ -229,7 +229,26 @@ Priestly therefore declares `PriestlyDB` as `SavedVariablesPerCharacter` (#7). T
 for a client bug rather than a design decision; #9 tracks revisiting it once the client loads
 account-wide variables, and records what moving back would involve.
 
-## 12. Still open
+## 12. Instances
+
+Measured with `/pprobe here`, standing inside:
+
+| Instance | `GetInstanceInfo()` name | `instanceMapID` | type | players |
+|---|---|---|---|---|
+| Ruins of Lordaeron | `Ruins of Lordaeron` | **2999** | `party` | 5 |
+
+`GetRealZoneText()` and `GetZoneText()` both agree with the instance name here, and
+`GetSubZoneText()` is empty.
+
+Two things follow. The name matches the list exactly, so that key is confirmed. And the map ID is a
+real number for the first time — 2999 is well outside the Vanilla range, which is expected for
+Forever's own content and is why hardcoding Classic IDs would not have worked either. Issue #12
+covers matching on it.
+
+The encounter journal is not a usable source on this client: `EJ_GetNumTiers()` returns **0** while
+`EJ_GetInstanceByIndex` works. Anything enumerating tiers first finds nothing.
+
+## 13. Still open
 
 - **Clicking in combat.** Casting works out of combat on both self and another player.
 - **`INSTANCE_DB` names** against real `GetInstanceInfo()` output, once those zones are reachable.
