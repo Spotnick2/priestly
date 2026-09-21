@@ -137,20 +137,33 @@ function WoW.DefineSpell(spellID, name)
     WoW.spells[spellID] = { name = name, iconID = 100000 + spellID }
 end
 
--- Run pending C_Timer callbacks. With `maxDelay`, only those scheduled to
--- fire within it - which is how a test says "this much time passed" and
--- catches a callback that fires too early. Without it, everything runs, which
--- is what most tests want.
-function WoW.flushTimers(maxDelay)
+-- Run pending C_Timer callbacks.
+--
+-- With `advance`, move the clock forward by that many seconds and run only
+-- what comes due, oldest first - which is how a test says "this much time
+-- passed", catches a callback that fires too early, and lets a timer from an
+-- earlier action still be pending while a later one is measured. Without it,
+-- everything runs, which is what most tests want.
+function WoW.flushTimers(advance)
+    local target = advance and (WoW.time + advance) or nil
     local pending = WoW.timers
     WoW.timers = {}
+
+    if not target then
+        for _, t in ipairs(pending) do t.fn() end
+        return
+    end
+
+    table.sort(pending, function(a, b) return a.at < b.at end)
     for _, t in ipairs(pending) do
-        if maxDelay == nil or t.delay <= maxDelay then
+        if t.at <= target then
+            WoW.time = t.at          -- callbacks see the time they ran at
             t.fn()
         else
-            WoW.timers[#WoW.timers + 1] = t   -- still waiting
+            WoW.timers[#WoW.timers + 1] = t
         end
     end
+    WoW.time = target
 end
 
 ------------------------------------------------------------
@@ -312,8 +325,11 @@ Settings = {
 }
 
 C_Timer = {
+    -- Scheduled against the virtual clock, not by raw delay: two callbacks can
+    -- share a delay and still come due at different moments, which is the only
+    -- way to model a timer left over from an earlier action.
     After = function(delay, fn)
-        WoW.timers[#WoW.timers + 1] = { delay = tonumber(delay) or 0, fn = fn }
+        WoW.timers[#WoW.timers + 1] = { at = WoW.time + (tonumber(delay) or 0), fn = fn }
     end,
     NewTimer  = function() return { Cancel = function() end } end,
     NewTicker = function() return { Cancel = function() end } end,
