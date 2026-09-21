@@ -226,7 +226,12 @@ and is invisible from this side.
    that moved — under its own heading. People read release notes to find out what broke.
 3. Commit the changelog, then tag: `git tag v2.0.0-beta1 && git push --tags`.
 4. The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
-   Release.
+   Release. **This is a distribution channel, not a stability claim.** CurseForge defaults every
+   user to the Release channel, so an Alpha or Beta file is not offered for install or update
+   unless they deliberately opt in - which almost nobody does. Tag `beta` only when you want the
+   build held back from the people who already have the addon. The fact that the *game client* is
+   in beta is not a reason: say that in the release notes, where players read it, and ship a
+   Release so they can actually get it.
 
 ## Validation
 
