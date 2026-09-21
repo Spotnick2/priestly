@@ -28,27 +28,18 @@ local DEFAULTS = {
 -- { "Instance Name", "category", defaultEnabled, "Tooltip: boss encounters" }
 -- Instance names must match GetInstanceInfo() return values.
 
--- Forever is Vanilla content, so this is the whole instance list. The TBC
--- database that used to live here was dead content on this client and is gone.
 -- What is reachable on Forever, not what existed in Vanilla. The legacy raids
 -- beyond Onyxia's Lair are not listed because they are not in the game.
 --
 -- Dungeons are ordered by level, which is how a player thinks about them.
 -- Entries marked NEW are Forever's own content: nothing is known about their
--- encounters yet, so they carry an honest tooltip rather than an invented one.
---
--- CAUTION: these names are the keys matched against GetInstanceInfo(), and an
--- unverified name fails silently - the mode simply never fires. The Vanilla
--- names come from the previous list and the new ones from the in-game dungeon
--- list; none have been confirmed against GetInstanceInfo() yet, because none of
--- these zones are reachable at the current beta cap. `/pprobe here` inside an
--- instance prints the string to use. See issue #12 for matching on map ID
--- instead, which would not have this problem at all.
--- What is reachable on Forever, not what existed in Vanilla.
---
--- Dungeons are ordered by level, which is how a player thinks about them.
--- Entries marked NEW are Forever's own content: nothing is known about their
 -- encounters, so they carry an honest tooltip rather than an invented one.
+--
+-- A checked instance describes the INSTANCE, not the player: whether its bosses
+-- deal meaningful shadow damage. It says nothing about whether the buff is
+-- available, because ActiveDefs already refuses to build a row for a spell the
+-- priest has not learned - so checking a level 22 dungeon costs a level 22
+-- priest nothing, and is simply correct for the level 60 one running it.
 --
 -- MULTI-WING INSTANCES ARE ONE ENTRY. Scarlet Monastery, Maraudon, Dire Maul,
 -- Stratholme and Blackrock Spire each have several entrances, but
@@ -57,7 +48,11 @@ local DEFAULTS = {
 --
 -- CAUTION: these names are the keys matched against GetInstanceInfo(), and a
 -- name that is wrong fails silently - the mode simply never fires. None are
--- confirmed, because none of these zones are reachable at the current beta cap.
+-- confirmed yet. The two lowest new dungeons ARE reachable at the current cap,
+-- so those two can and should be measured; the rest cannot be until the cap
+-- rises. Blizzard's own roster writes "The Hall of Thanes" and "Alcaz Prison",
+-- which is what is used here - but the forum roster is not the client, and
+-- only GetInstanceInfo() settles it.
 -- Note the apostrophes are ASCII ('), not typographic - a detail that costs
 -- nothing to get right and everything to get wrong. `/pprobe here` inside an
 -- instance prints the exact string. Issue #12 covers matching on map ID
@@ -75,10 +70,9 @@ local INSTANCE_DB = {
       "40 player. Primarily Fire damage (Breath, Fireball)." },
 
     -- ── Dungeons, by level ───────────────────────────────────────────
-    { "Ragefire Chasm",  "Dungeons", false,
-      "Levels 13-18. Jergosh the Invoker casts Shadow Bolt, but Shadow Protection is not "
-      .. "learnable at this level." },
-    { "Hall of Thanes",  "Dungeons", false,
+    { "Ragefire Chasm",  "Dungeons", true,
+      "Levels 13-18. Jergosh the Invoker casts Shadow Bolt and Curse of Weakness." },
+    { "The Hall of Thanes", "Dungeons", false,
       "Levels 13-18. NEW in Forever. Encounters are not catalogued yet." },
     { "Ruins of Lordaeron", "Dungeons", false,
       "Levels 15-20. NEW in Forever. Encounters are not catalogued yet." },
@@ -86,9 +80,9 @@ local INSTANCE_DB = {
       "Levels 15-25. Primarily Nature and poison damage." },
     { "The Deadmines",   "Dungeons", false,
       "Levels 18-23. Primarily physical and Fire damage." },
-    { "Shadowfang Keep", "Dungeons", false,
-      "Levels 22-30. Arugal casts Shadow Bolt and Void Bolt, but Shadow Protection is barely "
-      .. "learnable at this level." },
+    { "Shadowfang Keep", "Dungeons", true,
+      "Levels 22-30. Arugal (Shadow Bolt, Void Bolt), Wolf Master Nandos, and shadow casters "
+      .. "throughout." },
     { "The Stockade",    "Dungeons", false,
       "Levels 22-30. Primarily physical damage." },
     { "Excavation Site: Wetlands", "Dungeons", false,
@@ -97,7 +91,7 @@ local INSTANCE_DB = {
       "Levels 24-32. Twilight Lord Kelris casts Mind Blast; the rest is Nature and Frost." },
     { "City of Dalaran", "Dungeons", false,
       "Levels 28-33. NEW in Forever. Encounters are not catalogued yet." },
-    { "Scarlet Monastery", "Dungeons", false,
+    { "Scarlet Monastery", "Dungeons", true,
       "Levels 28-45, all four wings. Bloodmage Thalnos (Shadow Bolt) in the Graveyard; the "
       .. "Armory and Cathedral are physical. One entry because GetInstanceInfo() reports every "
       .. "wing under the same name." },
@@ -109,16 +103,16 @@ local INSTANCE_DB = {
       "Levels 35-40. NEW in Forever. Encounters are not catalogued yet." },
     { "Krol'Dok Stronghold", "Dungeons", false,
       "Levels 40-45. NEW in Forever. Encounters are not catalogued yet." },
-    { "Razorfen Downs",  "Dungeons", false,
+    { "Razorfen Downs",  "Dungeons", true,
       "Levels 40-50. Amnennar the Coldbringer deals Shadow and Frost damage; the rest is Nature." },
     { "Uldaman",         "Dungeons", false,
       "Levels 42-52. Primarily physical, Nature and Arcane damage." },
-    { "Zul'Farrak",      "Dungeons", false,
+    { "Zul'Farrak",      "Dungeons", true,
       "Levels 44-54. Witch Doctor Zum'rah casts Shadow Bolt; the rest is Nature and physical." },
     { "Maraudon",        "Dungeons", false,
       "Levels 45-57, all entrances. Princess Theradras has a Shadow component; the rest is "
       .. "Nature. One entry: GetInstanceInfo() does not distinguish the entrances." },
-    { "Alcaz Island Prison", "Dungeons", false,
+    { "Alcaz Prison",    "Dungeons", false,
       "Levels 48-53. NEW in Forever. Encounters are not catalogued yet." },
     { "The Temple of Atal'Hakkar", "Dungeons", true,
       "Levels 50-60. Shade of Eranikus (Shadow Bolt Volley), Jammal'an the Prophet (Shadow "
@@ -501,7 +495,8 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
         "Hover an instance name for encounter details. " ..
         "Instances are pre-checked when their bosses deal significant shadow damage - or, for " ..
         "Forever's own raids, because nothing is known about them yet and a raid is where " ..
-        "missing the buff costs the most.|r")
+        "missing the buff costs the most. " ..
+        "Either way the row only appears once you have learned Shadow Protection.|r")
     iy.v = iy.v - (TextHeight(desc, 32) + 10)
 
     -- Group by category

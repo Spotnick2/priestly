@@ -477,8 +477,21 @@ function P.journal()
         return
     end
 
-    local okTiers, numTiers = pcall(EJ_GetNumTiers)
-    numTiers = (okTiers and numTiers) or 1
+    -- Measured on this client: EJ_GetNumTiers() returns 0 while
+    -- EJ_GetInstanceByIndex works fine. `(ok and n) or 1` leaves numTiers at 0
+    -- because ZERO IS TRUTHY in Lua, `for tier = 1, 0` never runs, and the
+    -- probe silently records nothing - the exact trap AGENTS.md documents, in
+    -- the tool built to answer a question that matters.
+    local okTiers, reported = pcall(EJ_GetNumTiers)
+    local numTiers = 1
+    local implicitTier = true
+    if okTiers and type(reported) == "number" and reported >= 1 then
+        numTiers = reported
+        implicitTier = false
+    end
+    rec("tiersReported", tostring(okTiers and reported or "error"))
+    rec("tiersEnumerated", tostring(numTiers) ..
+        (implicitTier and " (no tiers; listing whatever is current)" or ""))
 
     for tier = 1, numTiers do
         local tierName = tier
@@ -486,8 +499,11 @@ function P.journal()
             local ok, nm = pcall(EJ_GetTierInfo, tier)
             if ok and nm then tierName = nm end
         end
-        local selected = EJ_SelectTier and pcall(EJ_SelectTier, tier)
-        if numTiers > 1 and not selected then
+        -- With no tiers to choose from there is nothing to select, and
+        -- demanding a selection would throw away the listing that does work.
+        local selected = implicitTier
+            or (EJ_SelectTier and pcall(EJ_SelectTier, tier))
+        if not implicitTier and numTiers > 1 and not selected then
             rec("tier" .. tostring(tierName) .. ".WARNING",
                 "EJ_SelectTier failed - the instances below may be another tier's")
             say("  |cffff4444could not select tier " .. tostring(tierName) ..
