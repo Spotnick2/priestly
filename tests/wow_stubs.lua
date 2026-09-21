@@ -199,6 +199,8 @@ local function makeFrame(name)
     -- undefined frame:IsFoo() would silently answer "yes" forever.
     f.IsMouseOver = function(self) return WoW.mouseOver[self] == true end
     f.SetClampedToScreen = function(self, v) self._clamped = v return self end
+    f.StartMoving = function(self) self._moving = true return self end
+    f.StopMovingOrSizing = function(self) self._moving = false return self end
     f.IsVisible = function(self) return self._shown end
     f.IsMouseEnabled = function(self) return true end
     f.RegisterEvent = function(self, ev)

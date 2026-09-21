@@ -328,4 +328,40 @@ for _, prow in ipairs(T.popRows()) do
 end
 H.eq(live, 1, "the popover follows the rebuild instead of listing a departed member")
 
+------------------------------------------------------------
+-- Locking the frame
+--
+-- The drag handler is gated rather than unregistered, so that toggling the
+-- lock never touches frame registration - g_Main parents the secure row
+-- buttons, and anything structural would have to wait out combat.
+------------------------------------------------------------
+
+-- Through runScript, like every other handler here: a raw _scripts call turns
+-- a throw into a dead run instead of one reported failure.
+PriestlyDB.lockFrame = false
+runScript(drag, "OnDragStart")
+H.check(T.mainFrame()._moving, "unlocked, the header drags the window")
+runScript(drag, "OnDragStop")
+
+PriestlyDB.lockFrame = true
+T.mainFrame()._moving = false
+runScript(drag, "OnDragStart")
+H.check(not T.mainFrame()._moving, "locked, dragging the header does nothing")
+
+-- Locking mid-drag must not strand the frame on the cursor, and must not
+-- overwrite the saved position with wherever the mouse happened to be.
+PriestlyDB.lockFrame = false
+PriestlyDB.pos = nil
+runScript(drag, "OnDragStart")
+PriestlyDB.lockFrame = true
+runScript(drag, "OnDragStop")
+H.check(not T.mainFrame()._moving, "a drag interrupted by the lock still stops")
+H.check(PriestlyDB.pos == nil, "and does not save a position it was not allowed to move to")
+
+-- A locked window can still be recovered: the lock must not trap it offscreen.
+PriestlyDB.pos = { point = "CENTER", relPoint = "CENTER", x = 9999, y = 9999 }
+SlashCmdList["PRIESTLY"]("reset")
+H.check(PriestlyDB.pos == nil, "/priestly reset works while locked")
+PriestlyDB.lockFrame = false
+
 H.done("test_frames")

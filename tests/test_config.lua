@@ -273,4 +273,24 @@ H.eq(Priestly_PopoverSide(), "auto", "an older PriestlyDB falls back to auto")
 Priestly_EnsureDefaults()
 H.eq(PriestlyDB.popoverSide, "auto", "and EnsureDefaults backfills the key")
 
+------------------------------------------------------------
+-- Frame lock
+------------------------------------------------------------
+
+PriestlyDB = nil
+Priestly_EnsureDefaults()
+H.eq(PriestlyDB.lockFrame, false, "unlocked by default - the window has always been draggable")
+H.eq(Priestly_FrameLocked(), false, "and the helper agrees")
+
+PriestlyDB.lockFrame = true
+H.eq(Priestly_FrameLocked(), true, "locking is reported")
+
+-- A PriestlyDB from before this setting existed must read as unlocked, not as
+-- a locked window somebody cannot move and has no reason to look for a
+-- setting about.
+PriestlyDB.lockFrame = nil
+H.eq(Priestly_FrameLocked(), false, "an older PriestlyDB is unlocked")
+Priestly_EnsureDefaults()
+H.eq(PriestlyDB.lockFrame, false, "and EnsureDefaults backfills it")
+
 H.done("test_config")
