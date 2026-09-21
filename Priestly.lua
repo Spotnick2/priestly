@@ -915,7 +915,7 @@ InitUI = function()
         local r = CreateFrame("Button", "PriestlyRow"..i, g_Main, "SecureActionButtonTemplate")
         r:SetSize(ROW_W, ROW_H)
         r:EnableMouse(true)
-        r:RegisterForClicks("LeftButtonDown", "RightButtonDown")
+        r:RegisterForClicks(API.ClickEdges())
 
         r.bg = r:CreateTexture(nil, "BACKGROUND")
         r.bg:SetAllPoints()
@@ -990,7 +990,7 @@ InitUI = function()
         pr:SetPoint("TOPLEFT", g_Pop, "TOPLEFT",
             5, -(POP_HDR_H + 5) - (i - 1) * (POP_ROW_H + 2))
         pr:EnableMouse(true)
-        pr:RegisterForClicks("LeftButtonDown", "RightButtonDown")
+        pr:RegisterForClicks(API.ClickEdges())
         pr:SetFrameLevel(202)  -- above g_Pop's level 200
 
         pr.bg = pr:CreateTexture(nil, "BACKGROUND")

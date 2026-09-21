@@ -418,6 +418,42 @@ function API.ClientBuild()
     return ok and tostring(build) or "?"
 end
 
+-- ─── click registration ────────────────────────────────────────────────
+-- Register BOTH mouse edges. The client decides which one acts.
+--
+-- Read Blizzard_FrameXML/SecureTemplates.lua before changing this. The secure
+-- handler computes, on every click:
+--
+--     useOnKeyDown = <the button's "useOnKeyDown" attribute>
+--                    or GetCVarBool("ActionButtonUseKeyDown")     -- we set no
+--                                                                 -- attribute
+--     clickAction  = (down and useOnKeyDown) or (not down and not useOnKeyDown)
+--
+-- which is `down == useOnKeyDown`. So of the two edges, **exactly one ever
+-- performs the action** - the client gates it, not us. Registering both is one
+-- cast, and it is right whatever the CVar says and whenever it changes.
+--
+-- Registering only one edge is what made rows dead for anyone whose client
+-- acts on release (AdvancedInterfaceOptions and MiniPressRelease both flip that
+-- CVar): the handler rejects the edge we asked for, and nothing happens. No
+-- cast, no error.
+--
+-- The obvious worry is that both edges means two casts and two reagents. It
+-- does not, here, for two separate reasons - and the second one is the one to
+-- re-check if this ever misbehaves:
+--
+--   1. `clickAction` above admits exactly one edge.
+--   2. The other edge can still reach the press-and-hold release path when
+--      GetCVarBool("ActionButtonUseKeyHeldSpell") is on. That path looks up
+--      the **"typerelease"** attribute, not "type", and Priestly never sets
+--      one - so it resolves to no action and casts nothing. Setting
+--      "typerelease" on these buttons WOULD double-cast.
+
+-- The RegisterForClicks event names to register a row button with.
+function API.ClickEdges()
+    return "LeftButtonDown", "RightButtonDown", "LeftButtonUp", "RightButtonUp"
+end
+
 -- ─── test seam ───────────────────────────────────────────────────────────────
 -- Harmless in game; the unit tests reach the file-locals through it.
 

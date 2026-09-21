@@ -71,6 +71,7 @@ Load order from `Priestly.toc`:
 | `UnitKey(unit)` / `UnitDisplayName(unit, fallback)` | `UnitGUID` / `UnitName` |
 | `RegisterEvents(frame, ...)` | bare `RegisterEvent` (throws on unknown names here) |
 | `ClientBuild()` | `select(2, GetBuildInfo())` |
+| `ClickEdges()` → the four `RegisterForClicks` names | — (both edges; the client picks) |
 | `CountItem(itemID)` — whole carried inventory, reagent bag included | `GetItemCount` / the `GetContainerNumSlots` walk |
 | `AddonVersion(addonName)` | `GetAddOnMetadata` |
 | `IsMouseOver(frame)` | `MouseIsOver` (absent on this client) |
@@ -164,6 +165,23 @@ player while the attribute still names that token, so a click can land on the wr
 no way out: attributes cannot be rewritten under lockdown, and an insecure `PreClick` cannot cancel
 a secure action. Parking the affected rows would need the same forbidden writes. It corrects itself
 on `PLAYER_REGEN_ENABLED`.
+
+**Row buttons register BOTH mouse edges.** `API.ClickEdges()` returns all four names and nothing
+re-registers later. The client's secure handler performs the action when `down == useOnKeyDown`
+(`useOnKeyDown` = the button's attribute, or `GetCVarBool("ActionButtonUseKeyDown")` when unset, and
+Priestly sets no attribute), so **exactly one edge ever acts** — the gating is the client's, not
+ours. Registering a single edge is what made rows dead for anyone whose client acts on release.
+
+Do not "fix" this back to one edge, and do not add a `CVAR_UPDATE` handler to chase the setting:
+`RegisterForClicks` is protected under lockdown, so a single-edge design goes dead for the rest of
+any fight the CVar changes during, and there is nothing it could do about it.
+
+Measured with `/pprobe click`: one cast per click on all three of no-attribute, forced-keydown and
+forced-keyup. The reason it does not double-cast is worth knowing before touching these buttons. Two things have
+to hold: `down == useOnKeyDown` admits one edge, **and** the press-and-hold release path that the
+other edge can reach (when `ActionButtonUseKeyHeldSpell` is on) looks up the **`typerelease`**
+attribute rather than `type`, which Priestly never sets. **Setting `typerelease` on a row button
+would double-cast and consume two reagents.**
 
 Secure *snippets* are broken on this client (`loadstring_untainted` is missing, so
 `SecureHandlerWrapScript`, `_onstate-*` and state drivers throw). Priestly uses none of them — plain

@@ -137,10 +137,20 @@ function WoW.DefineSpell(spellID, name)
     WoW.spells[spellID] = { name = name, iconID = 100000 + spellID }
 end
 
-function WoW.flushTimers()
+-- Run pending C_Timer callbacks. With `maxDelay`, only those scheduled to
+-- fire within it - which is how a test says "this much time passed" and
+-- catches a callback that fires too early. Without it, everything runs, which
+-- is what most tests want.
+function WoW.flushTimers(maxDelay)
     local pending = WoW.timers
     WoW.timers = {}
-    for _, fn in ipairs(pending) do fn() end
+    for _, t in ipairs(pending) do
+        if maxDelay == nil or t.delay <= maxDelay then
+            t.fn()
+        else
+            WoW.timers[#WoW.timers + 1] = t   -- still waiting
+        end
+    end
 end
 
 ------------------------------------------------------------
@@ -163,6 +173,7 @@ local function makeFrame(name)
         end
         return self
     end
+    f.RegisterForClicks = function(self, ...) self._clicks = { ... } return self end
     f.SetAttribute = function(self, k, v) self._attr[k] = v return self end
     f.GetAttribute = function(self, k) return self._attr[k] end
     f.Show = function(self) self._shown = true return self end
@@ -301,7 +312,9 @@ Settings = {
 }
 
 C_Timer = {
-    After = function(_, fn) WoW.timers[#WoW.timers + 1] = fn end,
+    After = function(delay, fn)
+        WoW.timers[#WoW.timers + 1] = { delay = tonumber(delay) or 0, fn = fn }
+    end,
     NewTimer  = function() return { Cancel = function() end } end,
     NewTicker = function() return { Cancel = function() end } end,
 }
@@ -615,12 +628,17 @@ local KNOWN_ABSENT = {
     GetAddOnMetadata = true, InterfaceOptions_AddCategory = true,
     InterfaceOptionsFrame_OpenToCategory = true,
     loadstring_untainted = true, SecureHandlerWrapScript = true,
+    -- The probe records whether these exist; the addon no longer needs them,
+    -- because the secure handler does the keydown/keyup gating itself.
+    C_CVar = true, GetCVarBool = true, GetCVar = true,
     -- Globals the probe deliberately tests for the presence of.
     C_EncounterJournal = true, EJ_GetNumTiers = true, EJ_SelectTier = true,
     EJ_GetTierInfo = true, EJ_GetInstanceByIndex = true,
     -- The probe's own saved variables, which start nil like any others.
     PriestlyProbePersist = true, PriestlyProbeChar = true,
-    PriestlyProbeCopyFrame = true,
+    PriestlyProbeCopyFrame = true, PriestlyProbeBench = true,
+    PriestlyProbeBenchA = true, PriestlyProbeBenchB = true,
+    PriestlyProbeBenchC = true,
     -- Addon-owned globals that legitimately start out nil.
     PriestlyDB = true, PriestlyProbeDB = true,
     Priestly_ScheduleRefresh = true, Priestly_ForceRebuild = true,

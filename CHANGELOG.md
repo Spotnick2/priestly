@@ -1,5 +1,16 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Fixed
+- **Single click does nothing for some people.** The buff rows only responded to the mouse button
+  going *down*. If you run AdvancedInterfaceOptions, MiniPressRelease or anything else that sets
+  actions to fire on release, every row was a dead button - no cast, no error, nothing. Rows now
+  listen for press *and* release, and the game picks the one your settings call for, so they work
+  whichever way you have it set and keep working if you change it mid-session.
+
+  This is still one cast per click, not two.
+
 ## v2.0.0 - 2026-09-20
 
 **Priestly Forever** - a port to World of Warcraft: Forever 1.60.1 (Interface 16001).

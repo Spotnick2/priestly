@@ -62,6 +62,7 @@ local EVENTS = {
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
     "BAG_UPDATE", "SPELLS_CHANGED",
     "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD",
+    "CVAR_UPDATE",
     "CHARACTER_POINTS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
 }
 
@@ -409,7 +410,11 @@ local function BuildSecureButton()
     b:RegisterForDrag("MiddleButton")
     b:SetScript("OnDragStart", function(s) s:StartMoving() end)
     b:SetScript("OnDragStop", function(s) s:StopMovingOrSizing() end)
-    b:RegisterForClicks("LeftButtonDown", "RightButtonDown")
+    -- Both edges, matching what Priestly's rows register. With Down only this
+    -- button is dead on a release-click client - so it would fail the very
+    -- check it exists to support, and look like the addon was broken.
+    b:RegisterForClicks("LeftButtonDown", "RightButtonDown",
+                        "LeftButtonUp", "RightButtonUp")
 
     local bg = b:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
@@ -455,7 +460,40 @@ function P.secure()
     rec("InCombatLockdown", try(InCombatLockdown))
     local ok, err = pcall(BuildSecureButton)
     rec("buildButton", ok and "OK" or ("ERROR: " .. tostring(err)))
+
+    -- Recorded for reference only. Priestly registers BOTH mouse edges and
+    -- lets the client's secure handler pick: it performs the action when
+    -- `down == useOnKeyDown`, so exactly one edge ever fires. What these CVars
+    -- say no longer changes what the addon does.
+    rec("C_CVar", tostring(C_CVar ~= nil))
+    rec("C_CVar.GetCVarBool", tostring(C_CVar ~= nil and C_CVar.GetCVarBool ~= nil))
+    rec("GetCVarBool_global", tostring(_G.GetCVarBool ~= nil))
+    rec("C_CVar.GetCVar", tostring(C_CVar ~= nil and C_CVar.GetCVar ~= nil))
+    rec("GetCVar_global", tostring(_G.GetCVar ~= nil))
+    local getStr = (C_CVar and C_CVar.GetCVar) or _G.GetCVar
+    if getStr then
+        rec("ActionButtonUseKeyDown_str", try(getStr, "ActionButtonUseKeyDown"))
+    end
+    local getBool = (C_CVar and C_CVar.GetCVarBool) or _G.GetCVarBool
+    if getBool then
+        local gotIt, value = pcall(getBool, "ActionButtonUseKeyDown")
+        rec("ActionButtonUseKeyDown", gotIt
+            and (tostring(value) .. " (" .. type(value) .. ")")
+            or ("THROWS: " .. tostring(value)))
+    else
+        say("  |cffffff00no CVar API here - which no longer matters:|r")
+        say("  |cffffff00the rows register both edges and the client picks one.|r")
+    end
+
+    -- The other edge can still reach the press-and-hold release path, which
+    -- looks up "typerelease" - an attribute Priestly never sets, so it casts
+    -- nothing. This records whether that path is even live here.
+    if getBool then
+        rec("ActionButtonUseKeyHeldSpell", try(getBool, "ActionButtonUseKeyHeldSpell"))
+    end
+
     rec("MANUAL", "did the click cast? out of combat / in combat - record by hand")
+    rec("MANUAL_edge", "use /pprobe click - it tests both edges without changing a setting")
     dumpSection("secure")
 end
 
@@ -548,6 +586,147 @@ function P.here()
     say("  and instanceMapID is what issue #12 wants instead")
 end
 
+-- ─── click-edge test bench ──────────────────────────────────────────
+-- Answers the two questions the addon's click registration rests on, WITHOUT
+-- changing any client setting.
+--
+-- The secure handler performs the action when `down == useOnKeyDown`, where
+-- useOnKeyDown is the button's own **attribute** if it has one and only falls
+-- back to GetCVarBool("ActionButtonUseKeyDown") when it does not. So setting
+-- that attribute on a test button simulates a client configured the other way,
+-- for that button alone. No /console, nothing to remember to set back.
+--
+--   A  no attribute     - follows the CVar. This is what Priestly's rows do.
+--   B  useOnKeyDown=true  - forces the keydown branch.
+--   C  useOnKeyDown=false - forces the keyup branch: what the people who
+--                           reported "single click does nothing" have.
+--
+-- All three register BOTH edges, exactly as the rows do. Casts are counted
+-- from UNIT_SPELLCAST_SENT, which fires whether or not the cast lands, so the
+-- count is dispatches and not outcomes.
+--
+-- Expected on a healthy client: every button reports exactly 1.
+--   0 on C  -> the keyup branch does not work here and the fix is wrong.
+--   2 anywhere -> one click is casting twice, and reagents are being burned.
+
+local g_bench, g_benchCount, g_benchWho, g_benchAt = nil, 0, nil, 0
+local g_benchFrame
+
+local function BenchReport()
+    if not g_benchWho then return end
+    local n, who = g_benchCount, g_benchWho
+    g_benchWho = nil
+    local colour = (n == 1) and "|cff55ff55" or "|cffff4444"
+    say(string.format("  %s%s: %d cast(s) sent for that click|r", colour, who, n))
+    rec("click." .. who, tostring(n))
+    if n == 0 then
+        say("    |cffff4444that branch does not dispatch on this client|r")
+    elseif n > 1 then
+        say("    |cffff4444DOUBLE CAST - two reagents per click|r")
+    end
+end
+
+local function MakeBenchButton(parent, key, label, y, useOnKeyDown)
+    local b = CreateFrame("Button", "PriestlyProbeBench" .. key, parent,
+        "SecureActionButtonTemplate")
+    b:SetSize(250, 30)
+    b:SetPoint("TOP", parent, "TOP", 0, y)
+    b:EnableMouse(true)
+    -- Both edges, as Priestly's rows do.
+    b:RegisterForClicks("LeftButtonDown", "RightButtonDown",
+                        "LeftButtonUp", "RightButtonUp")
+
+    local bg = b:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.12, 0.12, 0.24, 0.95)
+    local txt = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    txt:SetPoint("CENTER")
+    txt:SetText(label)
+
+    b:SetAttribute("type1", "spell")
+    b:SetAttribute("spell1", "Power Word: Fortitude")
+    b:SetAttribute("unit1", "player")
+    if useOnKeyDown ~= nil then b:SetAttribute("useOnKeyDown", useOnKeyDown) end
+
+    -- PreClick fires on BOTH edges now, so one physical click arrives as two
+    -- calls: press, then release.
+    --
+    -- Report after the RELEASE, never on a timer from the press. A forced-keyup
+    -- button casts on release, so a fixed window from the press closes first
+    -- on any click held longer than that - and the bench reports 0, which reads
+    -- as "this branch is dead on this client" about a button that works
+    -- perfectly. That is the one wrong answer this tool must not give, since
+    -- it would argue for reverting a correct fix.
+    --
+    -- `down` says which edge when the client passes it. When it does not, a
+    -- call arriving while a click is still open is the release.
+    b:SetScript("PreClick", function(_, _, down)
+        local isPress = (down == true) or (down == nil and g_benchWho == nil)
+        if isPress then
+            BenchReport()   -- flush anything still open
+            g_benchAt, g_benchCount, g_benchWho = GetTime(), 0, key
+            -- Safety net for a client that only ever delivers one edge, so the
+            -- bench says something rather than nothing. Long enough that no
+            -- ordinary click, however deliberate, can trip it.
+            C_Timer.After(10, BenchReport)
+        else
+            -- Released. Give the release-edge cast a moment to be sent.
+            C_Timer.After(0.3, BenchReport)
+        end
+    end)
+    return b
+end
+
+local function BuildBench()
+    if g_bench then g_bench:Show() return end
+    if InCombatLockdown() then
+        say("|cffff4444can't build the bench in combat|r")
+        return
+    end
+
+    g_benchFrame = CreateFrame("Frame")
+    local ok = pcall(g_benchFrame.RegisterEvent, g_benchFrame, "UNIT_SPELLCAST_SENT")
+    rec("UNIT_SPELLCAST_SENT", ok and "OK" or "THROWS - counts will all read 0")
+    g_benchFrame:SetScript("OnEvent", function(_, _, unit)
+        if unit == "player" and g_benchWho then
+            g_benchCount = g_benchCount + 1
+        end
+    end)
+
+    local f = CreateFrame("Frame", "PriestlyProbeBench", UIParent)
+    f:SetSize(266, 150)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, -60)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", function(s) s:StartMoving() end)
+    f:SetScript("OnDragStop", function(s) s:StopMovingOrSizing() end)
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.85)
+
+    local hdr = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hdr:SetPoint("TOP", f, "TOP", 0, -8)
+    hdr:SetText("click each once - drag to move")
+
+    MakeBenchButton(f, "A", "A  follows your setting", -30, nil)
+    MakeBenchButton(f, "B", "B  forced keydown",        -64, true)
+    MakeBenchButton(f, "C", "C  forced keyup",          -98, false)
+
+    g_bench = f
+end
+
+function P.click()
+    head("click")
+    local okBuild, err = pcall(BuildBench)
+    rec("buildBench", okBuild and "OK" or ("ERROR: " .. tostring(err)))
+    if not okBuild then return end
+    say("  click |cffffffffA|r, |cffffffffB|r and |cffffffffC|r once each, left button.")
+    say("  |cff55ff55each should report exactly 1 cast|r.")
+    say("  |cffffff00C is the one that matters|r - it is the setting the people who")
+    say("  reported dead clicks are running, simulated without changing yours.")
+end
+
 -- ─── copy window ─────────────────────────────────────────────────────────────
 -- The beta's chat frame cannot be copied from, so the whole dump also goes
 -- into a selectable EditBox: click in it, Ctrl+A, Ctrl+C.
@@ -629,6 +808,7 @@ SlashCmdList["PPROBE"] = function(msg)
         say("|cffffff00/pprobe text|r opens a window you can select and copy from.")
         say("done. |cffffff00/reload|r also writes it to WTF\\Account\\<id>\\SavedVariables\\PriestlyProbe.lua")
         say("then run |cffffffff/pprobe secure|r for the click-cast test button")
+        say("and |cffffffff/pprobe click|r to check both mouse edges dispatch once each")
     elseif P[cmd] then
         local ok, err = pcall(P[cmd])
         if not ok then say("|cffff4444ERROR: " .. tostring(err) .. "|r") end

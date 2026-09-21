@@ -237,4 +237,29 @@ H.check(API.AurasAreSecret() == false, "auras readable out of combat")
 WoW.secret = true
 H.check(API.AurasAreSecret() == true, "secrecy is reported when the client says so")
 
+------------------------------------------------------------
+-- Which mouse edges the secure buttons register for
+--
+-- Both of them, always. The client's own secure handler computes
+-- `down == useOnKeyDown` and performs the action on exactly one edge, so
+-- registering both is one cast and is correct whatever ActionButtonUseKeyDown
+-- says. Registering one and guessing wrong is a button that does nothing.
+------------------------------------------------------------
+
+local edges = { API.ClickEdges() }
+H.eq(#edges, 4, "four names: both buttons, both edges")
+
+local seen = {}
+for _, e in ipairs(edges) do seen[e] = true end
+for _, want in ipairs({ "LeftButtonDown", "RightButtonDown",
+                        "LeftButtonUp", "RightButtonUp" }) do
+    H.check(seen[want], "registers " .. want)
+end
+
+-- No CVar is consulted. The whole point of registering both edges is that the
+-- answer stops mattering to us - including mid-combat, when RegisterForClicks
+-- is protected and we could not act on a change anyway.
+H.check(Priestly._testCompat.cvarBool == nil,
+    "the CVar plumbing is gone, not merely unused")
+
 H.done("test_compat")

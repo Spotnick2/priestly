@@ -160,4 +160,54 @@ H.eq(#active, 2, "one row per buff")
 H.eq(active[1]:GetAttribute("spell1"), "Power Word: Fortitude", "first row is Fortitude")
 H.eq(active[2]:GetAttribute("spell1"), "Divine Spirit", "second row is Spirit")
 
+------------------------------------------------------------
+-- Both mouse edges, on every button in both pools
+--
+-- "Single click does nothing" was this: the rows were registered for the
+-- mouse button going DOWN only. The client's secure handler performs the
+-- action when `down == useOnKeyDown`, and useOnKeyDown follows the
+-- ActionButtonUseKeyDown CVar - so on a client set to act on release the
+-- handler rejected the only edge we had asked for. No cast, no error.
+--
+-- Registering both edges hands the choice back to the handler, which takes
+-- exactly one of them. It cannot fall out of step with the CVar, including
+-- mid-fight when RegisterForClicks is protected and we could not re-register
+-- even if we noticed.
+------------------------------------------------------------
+
+local function clicksOf(button)
+    local set = {}
+    for _, e in ipairs(button._clicks or {}) do set[e] = true end
+    return set
+end
+
+setup({ "FORT_SINGLE" })
+
+local EXPECTED = { "LeftButtonDown", "RightButtonDown", "LeftButtonUp", "RightButtonUp" }
+
+local function assertBothEdges(button, what)
+    local set = clicksOf(button)
+    H.eq(#(button._clicks or {}), 4, what .. " registers four click events")
+    for _, e in ipairs(EXPECTED) do
+        H.check(set[e], what .. " registers " .. e)
+    end
+end
+
+assertBothEdges(T.rows()[1], "the first row")
+assertBothEdges(T.rows()[#T.rows()], "the last row in the pool")
+assertBothEdges(T.popRows()[1], "the first popover row")
+assertBothEdges(T.popRows()[#T.popRows()], "the last popover row")
+
+-- Nothing re-registers later, so there is no combat-deferral hole to test and
+-- no CVAR_UPDATE handler to keep in step. Guard that it stays that way: a
+-- future edit that reintroduces conditional registration has to come back here
+-- and read why it was removed.
+H.check(WoW.events[T.eventFrame()].CVAR_UPDATE == nil,
+    "no CVAR_UPDATE handler - the registration is unconditional")
+
+WoW.inCombat = true
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+WoW.inCombat = false
+assertBothEdges(T.rows()[1], "after a combat cycle the first row still")
+
 H.done("test_clicks")

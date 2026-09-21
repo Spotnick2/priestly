@@ -33,11 +33,63 @@ design holds.
 > Still to confirm: clicking in combat, where `PreClick` cannot re-target and the click has to use
 > the pre-combat wiring.
 
+### Which mouse edge to register for — **both**, and the client picks
+
+Read from Forever 1.60.1 (69913) FrameXML, `SecureTemplates.lua` — `SecureActionButton_OnClick`:
+
+```lua
+useOnKeyDown = <button's "useOnKeyDown" attribute> or GetCVarBool("ActionButtonUseKeyDown")
+clickAction  = (down and useOnKeyDown) or (not down and not useOnKeyDown)
+```
+
+`clickAction` is `down == useOnKeyDown`, so **of the two mouse edges exactly one ever performs the
+action**, and which one follows the CVar. That explains both halves of the CurseForge report:
+
+- Registering only `*ButtonDown`, as the addon did through v2.0.0, is dead on any client set to act
+  on release — AdvancedInterfaceOptions and MiniPressRelease both flip that CVar. The handler
+  rejects the only edge we asked for. No cast, no error.
+- Registering **both** edges is one cast, not two, because the handler admits one. This is the fix
+  suggested on CurseForge, and it is correct here.
+
+**Measured in game with `/pprobe click`,** three secure buttons all registering both edges, casts
+counted from `UNIT_SPELLCAST_SENT`:
+
+| Button | `useOnKeyDown` attribute | Casts per click |
+|---|---|---|
+| A | none — follows the CVar | **1** |
+| B | `true` — forces the keydown branch | **1** |
+| C | `false` — forces the keyup branch | **1** |
+
+So the keyup branch **does** dispatch here — the fix works for the people who reported dead clicks —
+and registering both edges is **one cast**, not two. Confirmed, not reasoned.
+
+**That it does not double-cast rests on two things, not one.** The edge the handler rejects can
+still reach the press-and-hold release path when `ActionButtonUseKeyHeldSpell` is on. That path
+resolves its action from the **`typerelease`** attribute, not `type`, and Priestly sets no
+`typerelease` — so it finds no action and casts nothing. The measurement above confirms the outcome;
+it does not make `typerelease` safe to set. **Setting one would double-cast and burn two reagents.**
+
+Following the CVar with a single edge was tried and rejected: `RegisterForClicks` is protected under
+combat lockdown, so a CVar change mid-fight leaves the rows on an edge the handler now refuses, with
+no way to re-register until combat ends. Both edges has no such state, so `C_CVar`, `GetCVarBool`,
+`GetCVar` and `CVAR_UPDATE` are all recorded by the probe for reference and consumed by nothing.
+
+One thing is still unread, and it no longer matters. `SecureActionButton_OnClick` also takes
+`isKeyPress` / `isSecureAction` and forces `useOnKeyDown = false` for what it calls a secure mouse
+press, which would pin mouse clicks to the Up edge regardless of attribute or CVar. The bench above
+does not discriminate — with both edges registered every branch yields exactly one dispatch, which
+is precisely why it is safe either way. Registering both edges is correct under every reading of
+that code, so the question is archived rather than open.
+
 ## 2. Events — all 16 register, none throw
 
 Including `ACTIVE_TALENT_GROUP_CHANGED`, which was the one to distrust (no working Forever addon in
 the local sample registers it). `PLAYER_SPECIALIZATION_CHANGED` and `CHARACTER_POINTS_CHANGED` also
 register.
+
+**`CVAR_UPDATE` is the 17th and is not yet measured.** It is in the probe's list for reference. The
+addon does not register it: see section 1 — registering both mouse edges removes the reason to
+watch the CVar at all.
 
 Registration still goes through `API.RegisterEvents`: it costs nothing, and it means a future event
 rename is reported instead of silently killing a handler.
@@ -251,4 +303,6 @@ The encounter journal is not a usable source on this client: `EJ_GetNumTiers()` 
 ## 13. Still open
 
 - **Clicking in combat.** Casting works out of combat on both self and another player.
+- **`ActionButtonUseKeyHeldSpell`**, and whether a live mouse click is CVar-gated — see the end of
+  section 1. `/pprobe secure`.
 - **`INSTANCE_DB` names** against real `GetInstanceInfo()` output, once those zones are reachable.
