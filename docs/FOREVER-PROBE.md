@@ -225,7 +225,9 @@ Layout on disk, which may be related:
 - that folder name, `Karuzo-Elegia`, has exactly the shape of Retail's `<Name>-<Realm>`, because
   Forever characters have a surname
 
-Priestly therefore declares `PriestlyDB` as `SavedVariablesPerCharacter` (#7).
+Priestly therefore declares `PriestlyDB` as `SavedVariablesPerCharacter` (#7). That is a workaround
+for a client bug rather than a design decision; #9 tracks revisiting it once the client loads
+account-wide variables, and records what moving back would involve.
 
 ## 12. Still open
 

@@ -90,6 +90,12 @@ reads them back, so every session starts from defaults. Per-character storage do
 on disk looks perfectly correct) and the cost is every setting silently resetting. The trade is that
 settings are no longer shared between characters.
 
+This is a workaround for a client bug, tracked in **issue #9** for revisiting once the client loads
+account-wide variables. Moving back is not just reverting the TOC line: by then people will have
+configured characters, and seeding the account-wide table from them is what stops every setting
+resetting a second time. Keep `Tools/PriestlyProbe` until #9 closes — `/pprobe sv` is how the client
+gets re-tested.
+
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `shadowInstances`,
 `learnedDurations`, `flavor`, `visible`, `pos`. `learnedDurations` is keyed by **spell name**,

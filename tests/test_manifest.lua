@@ -54,6 +54,12 @@ H.eq(directive("Interface"), "16001",
 -- again would silently stop every setting from persisting, and the file on
 -- disk would still look perfectly correct - which is why this is asserted
 -- rather than left to be noticed.
+--
+-- This is a workaround for a client bug, not a permanent design decision:
+-- issue #9 tracks revisiting it once account-wide variables load again. If you
+-- are here because you are changing this back, read #9 first - existing
+-- per-character settings need seeding across, or everyone's configuration
+-- resets a second time.
 ------------------------------------------------------------
 
 H.eq(directive("SavedVariablesPerCharacter"), "PriestlyDB",
