@@ -114,11 +114,11 @@ local function instBox(instName)
     return "PriestlyInst_PriestlyInstanceContainer_" .. instName:gsub("%W", "")
 end
 
-local box = _G[instBox("Shadowfang Keep")]
+local box = _G[instBox("Scholomance")]
 H.check(box ~= nil, "each instance gets a checkbox")
 box:SetChecked(false)
-click(instBox("Shadowfang Keep"))
-H.eq(PriestlyDB.shadowInstances["Shadowfang Keep"], false, "unchecking one saves it")
+click(instBox("Scholomance"))
+H.eq(PriestlyDB.shadowInstances["Scholomance"], false, "unchecking one saves it")
 
 -- Two instances from different categories must not share a global name: the
 -- suffix used to be a per-category index, so The Barrow Deeps (Raids #1) and
@@ -144,8 +144,8 @@ local function runHandler(name, script, ...)
     H.check(ok, name .. " " .. script .. " ran: " .. tostring(err))
 end
 
-runHandler(instBox("Shadowfang Keep"), "OnEnter")   -- tooltip with encounter notes
-runHandler(instBox("Shadowfang Keep"), "OnLeave")
+runHandler(instBox("Scholomance"), "OnEnter")   -- tooltip with encounter notes
+runHandler(instBox("Scholomance"), "OnLeave")
 runHandler(instBox("Hyjal Summit"), "OnEnter")
 runHandler(instBox("Hyjal Summit"), "OnLeave")
 runHandler("PriestlyAlphaSlider", "OnShow")
@@ -161,10 +161,10 @@ WoW.flushTimers()                                -- the OnShow hook defers its w
 ------------------------------------------------------------
 
 PriestlyDB.shadowMode = "instance"
-WoW.instanceName = "Shadowfang Keep"
+WoW.instanceName = "Scholomance"
 WoW.instanceType = "party"
 
-queued(function() click(instBox("Shadowfang Keep")) end, "ticking one instance")
+queued(function() click(instBox("Scholomance")) end, "ticking one instance")
 
 queued(function() click("PriestlyInstanceContainerAll") end, "Select All")
 for _, entry in ipairs(TC.INSTANCE_DB) do
@@ -176,7 +176,7 @@ queued(function() click("PriestlyInstanceContainerNone") end, "Deselect All")
 H.check(TC.inShadowInstance() == false, "nothing is a shadow instance now")
 
 queued(function() click("PriestlyInstanceContainerDefaults") end, "Reset Defaults")
-H.eq(PriestlyDB.shadowInstances["Shadowfang Keep"], true, "Reset Defaults restored the default")
+H.eq(PriestlyDB.shadowInstances["Scholomance"], true, "Reset Defaults restored the default")
 H.eq(PriestlyDB.shadowInstances["Onyxia's Lair"], false, "...including the unchecked ones")
 H.check(TC.inShadowInstance() == true, "and the detector caught up again")
 

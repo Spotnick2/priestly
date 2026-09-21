@@ -44,6 +44,24 @@ local DEFAULTS = {
 -- these zones are reachable at the current beta cap. `/pprobe here` inside an
 -- instance prints the string to use. See issue #12 for matching on map ID
 -- instead, which would not have this problem at all.
+-- What is reachable on Forever, not what existed in Vanilla.
+--
+-- Dungeons are ordered by level, which is how a player thinks about them.
+-- Entries marked NEW are Forever's own content: nothing is known about their
+-- encounters, so they carry an honest tooltip rather than an invented one.
+--
+-- MULTI-WING INSTANCES ARE ONE ENTRY. Scarlet Monastery, Maraudon, Dire Maul,
+-- Stratholme and Blackrock Spire each have several entrances, but
+-- GetInstanceInfo() reports one name for all of them - so a key per wing would
+-- give several that never match anything.
+--
+-- CAUTION: these names are the keys matched against GetInstanceInfo(), and a
+-- name that is wrong fails silently - the mode simply never fires. None are
+-- confirmed, because none of these zones are reachable at the current beta cap.
+-- Note the apostrophes are ASCII ('), not typographic - a detail that costs
+-- nothing to get right and everything to get wrong. `/pprobe here` inside an
+-- instance prints the exact string. Issue #12 covers matching on map ID
+-- instead, which is both verifiable and locale-proof.
 local INSTANCE_DB = {
     -- ── Raids, by size ───────────────────────────────────────────────
     { "The Barrow Deeps", "Raids", true,
@@ -58,8 +76,8 @@ local INSTANCE_DB = {
 
     -- ── Dungeons, by level ───────────────────────────────────────────
     { "Ragefire Chasm",  "Dungeons", false,
-      "Levels 13-18. Jergosh the Invoker casts Shadow Bolt and Curse of Weakness, but Shadow "
-      .. "Protection is not learnable at this level." },
+      "Levels 13-18. Jergosh the Invoker casts Shadow Bolt, but Shadow Protection is not "
+      .. "learnable at this level." },
     { "Hall of Thanes",  "Dungeons", false,
       "Levels 13-18. NEW in Forever. Encounters are not catalogued yet." },
     { "Ruins of Lordaeron", "Dungeons", false,
@@ -68,27 +86,60 @@ local INSTANCE_DB = {
       "Levels 15-25. Primarily Nature and poison damage." },
     { "The Deadmines",   "Dungeons", false,
       "Levels 18-23. Primarily physical and Fire damage." },
-    { "Shadowfang Keep", "Dungeons", true,
-      "Levels 22-30. Arugal (Shadow Bolt, Void Bolt), Wolf Master Nandos, and shadow casters "
-      .. "throughout." },
+    { "Shadowfang Keep", "Dungeons", false,
+      "Levels 22-30. Arugal casts Shadow Bolt and Void Bolt, but Shadow Protection is barely "
+      .. "learnable at this level." },
     { "The Stockade",    "Dungeons", false,
       "Levels 22-30. Primarily physical damage." },
     { "Excavation Site: Wetlands", "Dungeons", false,
       "Levels 24-29. NEW in Forever. Encounters are not catalogued yet." },
     { "Blackfathom Deeps", "Dungeons", false,
-      "Levels 24-32. Twilight Lord Kelris casts Mind Blast and Sleep; the rest is Nature and "
-      .. "Frost." },
+      "Levels 24-32. Twilight Lord Kelris casts Mind Blast; the rest is Nature and Frost." },
     { "City of Dalaran", "Dungeons", false,
       "Levels 28-33. NEW in Forever. Encounters are not catalogued yet." },
-    { "Scarlet Monastery", "Dungeons", true,
-      "Levels 28-42, all wings. Bloodmage Thalnos (Shadow Bolt, Shadow Shield) in the Graveyard. "
-      .. "One entry because GetInstanceInfo() reports every wing as \"Scarlet Monastery\"." },
+    { "Scarlet Monastery", "Dungeons", false,
+      "Levels 28-45, all four wings. Bloodmage Thalnos (Shadow Bolt) in the Graveyard; the "
+      .. "Armory and Cathedral are physical. One entry because GetInstanceInfo() reports every "
+      .. "wing under the same name." },
     { "Gnomeregan",      "Dungeons", false,
       "Levels 29-38. Primarily Nature, Fire and mechanical damage." },
     { "Razorfen Kraul",  "Dungeons", false,
       "Levels 30-40. Primarily Nature and poison damage." },
     { "The Drowned City", "Dungeons", false,
       "Levels 35-40. NEW in Forever. Encounters are not catalogued yet." },
+    { "Krol'Dok Stronghold", "Dungeons", false,
+      "Levels 40-45. NEW in Forever. Encounters are not catalogued yet." },
+    { "Razorfen Downs",  "Dungeons", false,
+      "Levels 40-50. Amnennar the Coldbringer deals Shadow and Frost damage; the rest is Nature." },
+    { "Uldaman",         "Dungeons", false,
+      "Levels 42-52. Primarily physical, Nature and Arcane damage." },
+    { "Zul'Farrak",      "Dungeons", false,
+      "Levels 44-54. Witch Doctor Zum'rah casts Shadow Bolt; the rest is Nature and physical." },
+    { "Maraudon",        "Dungeons", false,
+      "Levels 45-57, all entrances. Princess Theradras has a Shadow component; the rest is "
+      .. "Nature. One entry: GetInstanceInfo() does not distinguish the entrances." },
+    { "Alcaz Island Prison", "Dungeons", false,
+      "Levels 48-53. NEW in Forever. Encounters are not catalogued yet." },
+    { "The Temple of Atal'Hakkar", "Dungeons", true,
+      "Levels 50-60. Shade of Eranikus (Shadow Bolt Volley), Jammal'an the Prophet (Shadow "
+      .. "Bolt). Known to players as the Sunken Temple." },
+    { "Blackrock Depths", "Dungeons", false,
+      "Levels 52-60. Ambassador Flamelash and scattered shadow casters. Generally not required." },
+    { "Blackrock Spire", "Dungeons", false,
+      "Levels 55-60, Lower and Upper. Some shadow casters, generally not required. One entry "
+      .. "because both halves share an instance name." },
+    { "Blackmaw Hold",   "Dungeons", false,
+      "Levels 55-60. NEW in Forever. Encounters are not catalogued yet." },
+    { "Dire Maul",       "Dungeons", true,
+      "Levels 58-60, all wings. Immol'thar (Shadow Bolt, Portal of Immol'thar); the West wing "
+      .. "warlocks cast Shadow throughout." },
+    { "Scholomance",     "Dungeons", true,
+      "Levels 58-60. Darkmaster Gandling, Rattlegore, and heavy shadow trash throughout." },
+    { "Stratholme",      "Dungeons", true,
+      "Levels 58-60, both sides. Baron Rivendare (Shadow Bolt), Baroness Anastari (Shadow Bolt), "
+      .. "undead shadow casters throughout." },
+    { "Shaper's Terrace", "Dungeons", false,
+      "Levels 58-60. NEW in Forever. Encounters are not catalogued yet." },
 }
 
 -- ─── Ensure defaults ────────────────────────────────────────────────────────

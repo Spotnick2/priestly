@@ -30,7 +30,7 @@ for _, entry in ipairs(TC.INSTANCE_DB) do
     if PriestlyDB.shadowInstances[entry[1]] ~= nil then seeded = seeded + 1 end
 end
 H.eq(seeded, #TC.INSTANCE_DB, "every instance gets a saved default")
-H.eq(PriestlyDB.shadowInstances["Shadowfang Keep"], true, "heavy-shadow instances start checked")
+H.eq(PriestlyDB.shadowInstances["Scholomance"], true, "heavy-shadow instances start checked")
 H.eq(PriestlyDB.shadowInstances["Onyxia's Lair"], false, "fire raids do not")
 
 ------------------------------------------------------------
@@ -47,7 +47,7 @@ PriestlyDB = {
         ["Karazhan"]        = true,     -- TBC content: cannot occur here
         ["Black Temple"]    = true,
         ["Naxxramas"]       = true,     -- Vanilla, but not in Forever either
-        ["Shadowfang Keep"] = false,    -- reachable, and the user unchecked it
+        ["Scholomance"]     = false,    -- reachable, and the user unchecked it
     },
     learnedDurations = { build = "old", fort = 1800 },
 }
@@ -62,7 +62,7 @@ H.check(PriestlyDB.shadowInstances["Karazhan"] == nil, "TBC instances are droppe
 H.check(PriestlyDB.shadowInstances["Black Temple"] == nil, "all of them")
 H.check(PriestlyDB.shadowInstances["Naxxramas"] == nil,
     "and Vanilla raids that Forever does not have")
-H.eq(PriestlyDB.shadowInstances["Shadowfang Keep"], false,
+H.eq(PriestlyDB.shadowInstances["Scholomance"], false,
     "an instance the user unchecked stays unchecked - not reset to the default")
 H.eq(PriestlyDB.shadowInstances["Hyjal Summit"], true, "new instances are backfilled")
 H.check(PriestlyDB.learnedDurations == nil or PriestlyDB.learnedDurations.fort == nil,
@@ -142,8 +142,8 @@ H.check(Priestly_ShouldShowShadow(groups, { 1 }) == true, "somebody has it")
 H.check(Priestly_ShouldShowShadow(nil, nil) == false, "'detect' with no roster is false")
 
 PriestlyDB.shadowMode = "instance"
-WoW.instanceName = "Shadowfang Keep"
-PriestlyDB.shadowInstances["Shadowfang Keep"] = true
+WoW.instanceName = "Scholomance"
+PriestlyDB.shadowInstances["Scholomance"] = true
 TC.CheckCurrentInstance()
 H.check(Priestly_ShouldShowShadow(nil, nil) == true, "in a checked instance")
 H.check(TC.inShadowInstance() == true, "and the detector agrees")
@@ -167,9 +167,9 @@ TC.CheckCurrentInstance()
 H.check(TC.inShadowInstance() == false,
     "a continent name with instanceType 'none' is not an instance")
 
-WoW.instanceName = "Shadowfang Keep"
+WoW.instanceName = "Scholomance"
 WoW.instanceType = "party"
-PriestlyDB.shadowInstances["Shadowfang Keep"] = true
+PriestlyDB.shadowInstances["Scholomance"] = true
 TC.CheckCurrentInstance()
 H.check(TC.inShadowInstance() == true, "...but a real instance still counts")
 WoW.instanceType = nil
