@@ -1,15 +1,18 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.1 - 2026-09-20
 
 ### Fixed
-- **Single click does nothing for some people.** The buff rows only responded to the mouse button
-  going *down*. If you run AdvancedInterfaceOptions, MiniPressRelease or anything else that sets
-  actions to fire on release, every row was a dead button - no cast, no error, nothing. Rows now
-  listen for press *and* release, and the game picks the one your settings call for, so they work
-  whichever way you have it set and keep working if you change it mid-session.
+- **Clicking a buff row did nothing at all, for some people.** If you use AdvancedInterfaceOptions,
+  MiniPressRelease, or anything else that makes your buttons fire when you *release* the mouse
+  rather than when you press it, every row in Priestly was dead - no cast, no error message,
+  nothing to suggest the addon had even noticed. The rows now work whichever way you have that set,
+  and keep working if you change it without reloading.
 
-  This is still one cast per click, not two.
+  Still one cast per click, so this costs you no extra reagents.
+
+  Thanks to **Jaybeoh** on CurseForge for the report, and for working out what the two addons had in
+  common - that was the whole answer.
 
 ## v2.0.0 - 2026-09-20
 
