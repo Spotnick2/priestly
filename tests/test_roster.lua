@@ -110,4 +110,63 @@ local API = Priestly.API
 H.check(API.UnitKey("raid1") ~= API.UnitKey("raid2"),
     "same first name, different GUID - never key a cache on the name")
 
+------------------------------------------------------------
+-- The worst roster the addon can produce must still fit
+--
+-- Rows and headers are allocated once, so the pool has to cover a full raid
+-- with a pet on every member. Splitting pets into popover-sized buckets (the
+-- fix for pets past the eighth being uncountable) pushed the group count from
+-- 9 to 13, past the old pool - and UpdateUI does not truncate gracefully, it
+-- just stops emitting rows. Pets sort last, so pets are what vanished.
+------------------------------------------------------------
+
+setup()
+WoW.inRaid = true
+WoW.groupMembers = 40
+for i = 1, 40 do
+    local nm = "Raider" .. i .. " Sur"
+    WoW.raidRoster[i] = { name = nm, subgroup = math.ceil(i / 5) }
+    WoW.SetUnit("raid" .. i, { name = nm, guid = "R" .. i, class = "HUNTER" })
+    WoW.SetUnit("raidpet" .. i, { name = "Pet" .. i, guid = "PET" .. i })
+end
+H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE", "SHADOW_SINGLE" })
+T.RefreshSpellData()
+PriestlyDB.shadowMode = "always"          -- all three buffs get a row
+
+groups, ord = T.GatherGroups()
+H.eq(#ord, 13, "8 subgroups plus 5 pet buckets")
+
+T.UpdateUI()
+
+-- Every unit in the roster has to appear in some row, or it is invisible and
+-- unbuffable no matter what GatherGroups produced.
+local seen = {}
+local activeRows = 0
+for _, r in ipairs(T.rows()) do
+    if r._active then
+        activeRows = activeRows + 1
+        for _, m in ipairs(r._members or {}) do seen[m.unit] = true end
+    end
+end
+
+H.eq(activeRows, 39, "13 groups x 3 buffs, all of them rendered")
+
+local missingRaiders, missingPets = 0, 0
+for i = 1, 40 do
+    if not seen["raid" .. i] then missingRaiders = missingRaiders + 1 end
+    if not seen["raidpet" .. i] then missingPets = missingPets + 1 end
+end
+H.eq(missingRaiders, 0, "every raider is on screen")
+H.eq(missingPets, 0, "and so is every pet - not just the first bucket")
+
+-- The same roster with pets off must still fit, and must not waste rows.
+PriestlyDB.trackPets = false
+T.UpdateUI()
+activeRows = 0
+for _, r in ipairs(T.rows()) do
+    if r._active then activeRows = activeRows + 1 end
+end
+H.eq(activeRows, 24, "8 subgroups x 3 buffs with pet tracking off")
+PriestlyDB.trackPets = true
+
 H.done("test_roster")

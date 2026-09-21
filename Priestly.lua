@@ -42,10 +42,19 @@ local POP_W      = 236
 local POP_ROW_H  = 22
 local POP_HDR_H  = 24
 
-local MAX_GROUPS  = 9
+-- The row and header pools are allocated once, so they have to cover the worst
+-- roster the addon can actually produce. Pets are split into popover-sized
+-- buckets (see GatherGroups), and a full raid can field one pet per raider - so
+-- the bucket count is part of this arithmetic, not an afterthought. Getting it
+-- wrong does not truncate gracefully: UpdateUI simply stops emitting rows, and
+-- since pets sort last they are what disappears.
+local MAX_MEMBERS   = 8                                   -- popover rows, and so bucket size
+local MAX_RAID      = 40
+local MAX_SUBGROUPS = 8
+local MAX_PET_BUCKETS = math.ceil(MAX_RAID / MAX_MEMBERS) -- 5
+local MAX_GROUPS  = MAX_SUBGROUPS + MAX_PET_BUCKETS       -- 13
 local MAX_DEFS    = 3
-local MAX_ROWS    = MAX_GROUPS * MAX_DEFS   -- 27
-local MAX_MEMBERS = 8
+local MAX_ROWS    = MAX_GROUPS * MAX_DEFS                 -- 39
 
 -- Reagent item IDs
 local HOLY_CANDLE_ID   = 17028   -- rank 1 Prayer of Fortitude
