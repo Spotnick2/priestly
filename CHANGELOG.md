@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.2 - 2026-09-21
 
 ### Fixed
 - **The per-member popover opened off-screen if you kept Priestly on the left.** It always opened to
