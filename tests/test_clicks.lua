@@ -154,6 +154,20 @@ WoW.units.party1.dead = false
 row._scripts.PreClick(row, "LeftButton")
 H.eq(row:GetAttribute("spell1"), "Power Word: Fortitude", "and re-arms")
 
+-- Range is NOT what disarms a row, which is easy to assume and wrong:
+-- PickTarget makes a second pass ignoring range, so an out-of-range member is
+-- still a target. Only an invalid one - dead, offline, gone - gives nil.
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+WoW.range.player  = false
+WoW.range.party1  = false
+WoW.range.party2  = false
+row._scripts.PreClick(row, "RightButton")
+H.eq(row:GetAttribute("spell2"), "Power Word: Fortitude",
+    "everyone out of range keeps the button armed")
+H.check(row:GetAttribute("unit2") ~= nil, "and still aimed at somebody")
+WoW.range.player, WoW.range.party1, WoW.range.party2 = nil, nil, nil
+
 ------------------------------------------------------------
 -- PostClick restores anything PreClick cleared
 ------------------------------------------------------------

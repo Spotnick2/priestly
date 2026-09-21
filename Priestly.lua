@@ -1491,11 +1491,15 @@ UpdateUI = function()
 
                 -- Write the spell from the pick EVERY time, not only when
                 -- clearing it. Setting just the unit left a button that an
-                -- earlier PreClick had disarmed disarmed for good: everyone
-                -- goes out of range, the click clears spell1, someone comes
-                -- back, and the next click writes unit1 over a spell1 that is
-                -- still nil. A dead button, which is the complaint that
-                -- started #17 - and nothing on screen says so.
+                -- earlier PreClick had disarmed disarmed for good: the whole
+                -- group is dead or offline, the click clears spell1, somebody
+                -- comes back, and the next click writes unit1 over a spell1
+                -- that is still nil. A dead button, which is the complaint
+                -- that started #17 - and nothing on screen says so.
+                --
+                -- Range is NOT a trigger: PickTarget makes a second pass that
+                -- ignores range, so out-of-range members still return a unit.
+                -- Only an invalid one - dead, offline, gone - gives nil.
                 if btn == "LeftButton" then
                     if not self._primary then
                         self:SetAttribute("spell1", nil)
