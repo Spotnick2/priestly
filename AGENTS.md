@@ -132,7 +132,7 @@ Load order from `Priestly.toc`:
 | `ItemIcon(itemID)` | `GetItemIcon` |
 | `ItemInfo(itemID)` → name, r, g, b (quality colour), or nil on a cache miss after requesting a load | `GameTooltip:SetItemByID` — **no item setter exists on `GameTooltip` here**; wraps `C_Item.GetItemInfo`, `IsItemDataCachedByID`, `RequestLoadItemDataByID`, `GetItemQualityColor` |
 | `UnitKey(unit)` / `UnitDisplayName(unit, fallback)` | `UnitGUID` / `UnitName` |
-| `RegisterEvents(frame, ...)` → ok, list of rejected names. Priestly calls `Priestly.RegisterEvents`, which prints them | bare `RegisterEvent` (throws on unknown names here) |
+| `RegisterEventsReported(frame, owner, report, ...)` → ok, list of rejected names; calls `report` with them. Priestly calls `Priestly.RegisterEvents`, which passes a reporter that prints them | bare `RegisterEvent` (throws on unknown names here) |
 | `ClientBuild()` | `select(2, GetBuildInfo())` |
 | `ClickEdges()` → the four `RegisterForClicks` names | — (both edges; the client picks) |
 | `CountItem(itemID)` — whole carried inventory, reagent bag included | `GetItemCount` / the `GetContainerNumSlots` walk |
@@ -232,10 +232,11 @@ not by buff id: the single and group forms of one buff share an id and do not sh
   `Tools/PriestlyProbe` to find out what it actually does.
 - Measured behaviour for all of this is in `docs/FOREVER-PROBE.md`; re-probe with
   `Tools/PriestlyProbe` rather than assuming.
-- `RegisterEvent` **throws** on an unknown event name. Go through **`Priestly.RegisterEvents`**,
-  never `API.RegisterEvents`: the library's version returns the rejected names and prints nothing,
-  so called directly with the return value ignored, a renamed event leaves a handler silently dead.
-  `tests/test_bridge.lua` fails on a direct call.
+- `RegisterEvent` **throws** on an unknown event name, and is declared to return
+  `registered:bool`, so `false` is a refusal too. Go through **`Priestly.RegisterEvents`**, never the
+  library's `API.RegisterEvents*` or a bare `frame:RegisterEvent`. The wrapper passes Priestly's chat
+  reporter to `API.RegisterEventsReported`, so every rejection is printed and recorded in
+  `Priestly.eventFailures`. `tests/test_bridge.lua` fails on any other registration.
 - Never copy a library function into a local (`local F = API.F`). `API` is shared with every addon
   that embeds LibGroupBuffs and a newer copy upgrades it in place; a copy keeps the old version.
   Call through `API`, or wrap: `local function F(...) return API.F(...) end`. Also enforced by

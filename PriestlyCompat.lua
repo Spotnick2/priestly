@@ -18,11 +18,12 @@ Priestly = Priestly or {}
 -- Is the library here, and did its compat layer load to the end? ClickEdges is
 -- the last function Compat.lua defines, so a file that threw partway through
 -- is caught here rather than as a nil call somewhere far from the cause.
+-- RegisterEventsReported arrived in r3, so an older copy is refused too.
 local lib = LibStub and LibStub("LibGroupBuffs-1.0", true)
 local problem
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
-elseif not (type(lib.API) == "table" and type(lib.API.RegisterEvents) == "function"
+elseif not (type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
             and type(lib.API.ClickEdges) == "function") then
     problem = "the LibGroupBuffs-1.0 library failed to load completely"
 end
@@ -43,25 +44,27 @@ end
 Priestly.API = lib.API
 
 -- Priestly's own record of the events this client rejected, for
--- `/dump Priestly.eventFailures`. The library's API.eventFailures is shared by
--- every addon that embeds it, so it cannot say which addon asked.
+-- `/dump Priestly.eventFailures`. The library also keeps it, as
+-- API.eventFailuresByOwner.Priestly; this copy is the short name to type.
 Priestly.eventFailures = Priestly.eventFailures or {}
 
--- Event registration, with the failures reported. Priestly code must use this,
--- never API.RegisterEvents directly (tests/test_bridge.lua enforces it): the
--- library returns the rejected names rather than printing them, because a
--- library has no business writing to another addon's chat frame, and a caller
--- that ignores the return value gets a silently dead handler.
-function Priestly.RegisterEvents(frame, ...)
-    local ok, failed = lib.API.RegisterEvents(frame, ...)
-    if not ok and failed then
-        for _, ev in ipairs(failed) do
-            Priestly.eventFailures[ev] = lib.API.eventFailures and lib.API.eventFailures[ev] or true
-        end
-        if DEFAULT_CHAT_FRAME then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666unsupported events skipped:|r "
-                .. table.concat(failed, ", "))
-        end
+-- How Priestly tells the player. The library never prints - it has no
+-- business writing to another addon's chat frame - so it calls this with the
+-- names the client rejected, whether it threw or returned false.
+local function ReportRejected(failed)
+    local mine = lib.API.eventFailuresByOwner and lib.API.eventFailuresByOwner.Priestly or {}
+    for _, ev in ipairs(failed) do
+        Priestly.eventFailures[ev] = mine[ev] or true
     end
-    return ok, failed
+    if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666unsupported events skipped:|r "
+            .. table.concat(failed, ", "))
+    end
+end
+
+-- Event registration, with the failures reported. Priestly code must use this,
+-- never the library's registration directly (tests/test_bridge.lua enforces
+-- it), so the reporter is never left out.
+function Priestly.RegisterEvents(frame, ...)
+    return lib.API.RegisterEventsReported(frame, "Priestly", ReportRejected, ...)
 end
