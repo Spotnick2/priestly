@@ -459,6 +459,70 @@ function P.secure()
     dumpSection("secure")
 end
 
+-- ─── encounter journal ───────────────────────────────────────────────────────
+-- Where the instance list comes from. The names have to match what
+-- GetInstanceInfo() returns when you actually zone in, so they are read from
+-- the client rather than transcribed from a website - Forever adds dungeons
+-- and raids that exist in no Vanilla list.
+
+function P.journal()
+    head("journal")
+
+    rec("EJ_GetNumTiers", try(EJ_GetNumTiers))
+    rec("EJ_GetInstanceByIndex", tostring(EJ_GetInstanceByIndex ~= nil))
+    rec("C_EncounterJournal", tostring(C_EncounterJournal ~= nil))
+
+    if not EJ_GetInstanceByIndex then
+        say("  |cffff4444no encounter journal on this client|r")
+        return
+    end
+
+    local okTiers, numTiers = pcall(EJ_GetNumTiers)
+    numTiers = (okTiers and numTiers) or 1
+
+    for tier = 1, numTiers do
+        local tierName = tier
+        if EJ_GetTierInfo then
+            local ok, nm = pcall(EJ_GetTierInfo, tier)
+            if ok and nm then tierName = nm end
+        end
+        pcall(EJ_SelectTier, tier)
+
+        for _, isRaid in ipairs({ false, true }) do
+            local kind = isRaid and "raid" or "dungeon"
+            local i, found = 1, 0
+            while i < 60 do
+                local ok, instanceID, name = pcall(EJ_GetInstanceByIndex, i, isRaid)
+                if not ok or not instanceID then break end
+                found = found + 1
+                rec(string.format("tier%s.%s[%d]", tostring(tierName), kind, i),
+                    string.format("id=%s name=%s", tostring(instanceID), tostring(name)))
+                i = i + 1
+            end
+            say(string.format("  tier %s: %d %ss", tostring(tierName), found, kind))
+        end
+    end
+
+    say("  |cffffff00/reload|r then read the journal section off disk")
+end
+
+-- Where am I standing right now? The INSTANCE_DB keys must match this exactly.
+function P.here()
+    head("here")
+    local name, instanceType, difficultyID, difficultyName, maxPlayers,
+          _, _, instanceMapID = GetInstanceInfo()
+    rec("GetInstanceInfo.name", tostring(name))
+    rec("GetInstanceInfo.instanceType", tostring(instanceType))
+    rec("GetInstanceInfo.difficultyName", tostring(difficultyName))
+    rec("GetInstanceInfo.maxPlayers", tostring(maxPlayers))
+    rec("GetInstanceInfo.instanceMapID", tostring(instanceMapID))
+    rec("GetRealZoneText", try(GetRealZoneText))
+    rec("GetZoneText", try(GetZoneText))
+    rec("GetSubZoneText", try(GetSubZoneText))
+    dumpSection("here")
+    say("  |cffffff00run this INSIDE each instance|r - the name above is the key to use")
+end
+
 -- ─── copy window ─────────────────────────────────────────────────────────────
 -- The beta's chat frame cannot be copied from, so the whole dump also goes
 -- into a selectable EditBox: click in it, Ctrl+A, Ctrl+C.
@@ -526,7 +590,7 @@ end
 
 -- ─── driver ──────────────────────────────────────────────────────────────────
 
-local ORDER = { "client", "events", "templates", "spells", "spellbook", "auras", "names", "misc" }
+local ORDER = { "client", "events", "templates", "spells", "spellbook", "auras", "names", "misc", "journal" }
 
 SLASH_PPROBE1 = "/pprobe"
 SlashCmdList["PPROBE"] = function(msg)
@@ -565,7 +629,7 @@ SlashCmdList["PPROBE"] = function(msg)
         if g_btn then g_btn:Hide() end
         if PriestlyProbeCopyFrame then PriestlyProbeCopyFrame:Hide() end
     else
-        say("usage: /pprobe [all|" .. table.concat(ORDER, "|") .. "|secure|sv|text|hide]")
+        say("usage: /pprobe [all|" .. table.concat(ORDER, "|") .. "|secure|sv|here|text|hide]")
     end
 end
 

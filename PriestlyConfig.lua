@@ -30,44 +30,65 @@ local DEFAULTS = {
 
 -- Forever is Vanilla content, so this is the whole instance list. The TBC
 -- database that used to live here was dead content on this client and is gone.
+-- What is reachable on Forever, not what existed in Vanilla. The legacy raids
+-- beyond Onyxia's Lair are not listed because they are not in the game.
+--
+-- Dungeons are ordered by level, which is how a player thinks about them.
+-- Entries marked NEW are Forever's own content: nothing is known about their
+-- encounters yet, so they carry an honest tooltip rather than an invented one.
+--
+-- CAUTION: these names are the keys matched against GetInstanceInfo(), and an
+-- unverified name fails silently - the mode simply never fires. The Vanilla
+-- names come from the previous list and the new ones from the in-game dungeon
+-- list; none have been confirmed against GetInstanceInfo() yet, because none of
+-- these zones are reachable at the current beta cap. `/pprobe here` inside an
+-- instance prints the string to use. See issue #12 for matching on map ID
+-- instead, which would not have this problem at all.
 local INSTANCE_DB = {
-    -- ── Raids ────────────────────────────────────────────────────────
-    { "Naxxramas",               "Raids", true,
-      "Gothik the Harvester (Shadow Bolt), Loatheb (Inevitable Doom), Four Horsemen (Mark of Zeliek), Kel'Thuzad (Shadow Fissure, Frost Blast)." },
-    { "Blackwing Lair",          "Raids", true,
-      "Nefarian (Shadow Flame), Vaelastrasz (Burning Adrenaline has shadow component)." },
-    { "Temple of Ahn'Qiraj",    "Raids", true,
-      "Twin Emperors (Shadow Bolt), C'Thun (Dark Glare), Ouro (Shadow damage on submerge)." },
-    { "Zul'Gurub",               "Raids", true,
-      "High Priest Venoxis (Shadow Bolt Volley), Hakkar (Corrupted Blood, Life Drain)." },
-    { "Ruins of Ahn'Qiraj",     "Raids", false,
-      "Ossirian (Shadow damage component). Generally not required." },
-    { "Molten Core",             "Raids", false,
-      "Primarily Fire damage throughout." },
-    { "Onyxia's Lair",           "Raids", false,
-      "Primarily Fire damage (Breath, Fireball)." },
+    -- ── Raids, by size ───────────────────────────────────────────────
+    { "The Barrow Deeps", "Raids", true,
+      "10 player. NEW in Forever. Encounters are not catalogued yet - pre-checked because a raid "
+      .. "is where missing Shadow Protection costs the most, while an unnecessary row costs "
+      .. "little." },
+    { "Hyjal Summit",    "Raids", true,
+      "20 player. NEW in Forever. Encounters are not catalogued yet - pre-checked for the same "
+      .. "reason. Note this is Forever's own raid, not the TBC one of the same name." },
+    { "Onyxia's Lair",   "Raids", false,
+      "40 player. Primarily Fire damage (Breath, Fireball)." },
 
-    -- ── Dungeons ─────────────────────────────────────────────────────
-    { "Scholomance",             "Dungeons", true,
-      "Darkmaster Gandling (Shadow damage), Rattlegore, heavy shadow trash throughout." },
-    { "Stratholme",              "Dungeons", true,
-      "Baron Rivendare (Shadow Bolt), Baroness Anastari (Shadow Bolt), undead shadow casters." },
-    { "Dire Maul",               "Dungeons", true,
-      "Immol'thar (Shadow Bolt, Portal of Immol'thar). West wing warlocks cast shadow." },
-    { "The Temple of Atal'Hakkar","Dungeons", true,
-      "Shade of Eranikus (Shadow Bolt Volley), Jammal'an the Prophet (Shadow Bolt)." },
-    { "Upper Blackrock Spire",   "Dungeons", false,
-      "Some shadow casters. Generally not required." },
-    { "Lower Blackrock Spire",   "Dungeons", false,
-      "Some shadow casters. Generally not required." },
-    { "Blackrock Depths",        "Dungeons", false,
-      "Ambassador Flamelash (shadow), scattered shadow casters. Generally not required." },
-    { "Maraudon",                "Dungeons", false,
-      "Princess Theradras (shadow component). Low-level instance." },
-    { "Razorfen Downs",          "Dungeons", false,
-      "Amnennar the Coldbringer (shadow/frost). Low-level instance." },
-    { "Shadowfang Keep",         "Dungeons", false,
-      "Arugal (Shadow Bolt, Void Bolt). Low-level instance." },
+    -- ── Dungeons, by level ───────────────────────────────────────────
+    { "Ragefire Chasm",  "Dungeons", false,
+      "Levels 13-18. Jergosh the Invoker casts Shadow Bolt and Curse of Weakness, but Shadow "
+      .. "Protection is not learnable at this level." },
+    { "Hall of Thanes",  "Dungeons", false,
+      "Levels 13-18. NEW in Forever. Encounters are not catalogued yet." },
+    { "Ruins of Lordaeron", "Dungeons", false,
+      "Levels 15-20. NEW in Forever. Encounters are not catalogued yet." },
+    { "Wailing Caverns", "Dungeons", false,
+      "Levels 15-25. Primarily Nature and poison damage." },
+    { "The Deadmines",   "Dungeons", false,
+      "Levels 18-23. Primarily physical and Fire damage." },
+    { "Shadowfang Keep", "Dungeons", true,
+      "Levels 22-30. Arugal (Shadow Bolt, Void Bolt), Wolf Master Nandos, and shadow casters "
+      .. "throughout." },
+    { "The Stockade",    "Dungeons", false,
+      "Levels 22-30. Primarily physical damage." },
+    { "Excavation Site: Wetlands", "Dungeons", false,
+      "Levels 24-29. NEW in Forever. Encounters are not catalogued yet." },
+    { "Blackfathom Deeps", "Dungeons", false,
+      "Levels 24-32. Twilight Lord Kelris casts Mind Blast and Sleep; the rest is Nature and "
+      .. "Frost." },
+    { "City of Dalaran", "Dungeons", false,
+      "Levels 28-33. NEW in Forever. Encounters are not catalogued yet." },
+    { "Scarlet Monastery", "Dungeons", true,
+      "Levels 28-42, all wings. Bloodmage Thalnos (Shadow Bolt, Shadow Shield) in the Graveyard. "
+      .. "One entry because GetInstanceInfo() reports every wing as \"Scarlet Monastery\"." },
+    { "Gnomeregan",      "Dungeons", false,
+      "Levels 29-38. Primarily Nature, Fire and mechanical damage." },
+    { "Razorfen Kraul",  "Dungeons", false,
+      "Levels 30-40. Primarily Nature and poison damage." },
+    { "The Drowned City", "Dungeons", false,
+      "Levels 35-40. NEW in Forever. Encounters are not catalogued yet." },
 }
 
 -- ─── Ensure defaults ────────────────────────────────────────────────────────
@@ -94,17 +115,19 @@ function Priestly_EnsureDefaults()
         PriestlyDB.shadowInstances = {}
     end
 
-    -- One-time migration off the TBC line: a PriestlyDB saved by v1.x carries
-    -- Karazhan, Black Temple and the rest, none of which can occur here. Drop
-    -- every key this build does not know about, then backfill new ones.
     if PriestlyDB.flavor ~= FLAVOR then
-        local known = {}
-        for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
-        for name in pairs(PriestlyDB.shadowInstances) do
-            if not known[name] then PriestlyDB.shadowInstances[name] = nil end
-        end
         PriestlyDB.learnedDurations = nil   -- TBC durations mean nothing here
         PriestlyDB.flavor = FLAVOR
+    end
+
+    -- Drop saved entries for instances this build does not list. That covers
+    -- the TBC leftovers a v1.x profile carries, and it keeps working as the
+    -- list changes through the beta - which it will, so this cannot be a
+    -- one-time migration guarded by the flavor marker.
+    local known = {}
+    for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
+    for name in pairs(PriestlyDB.shadowInstances) do
+        if not known[name] then PriestlyDB.shadowInstances[name] = nil end
     end
 
     -- Backfill instances added since this profile was written

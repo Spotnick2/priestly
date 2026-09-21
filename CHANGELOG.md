@@ -36,6 +36,11 @@ TBC Classic Anniversary is no longer supported; v1.0.6 remains available for tha
   configure the others.
 
 ### Changed
+- **The instance list is Forever's content**, not Vanilla's: the three raids — The Barrow Deeps
+  (10), Hyjal Summit (20) and Onyxia's Lair (40) — and the dungeons that exist, ordered by level.
+  The Vanilla raids beyond Onyxia are gone because they are not in the game. Forever's own dungeons
+  are listed but unchecked: nothing is known about their encounters yet, and the tooltip says so
+  rather than inventing detail.
 - The TBC instance list is gone; the options panel is now **Settings | Instances**. An existing
   Priestly profile is migrated automatically: your settings are kept, TBC-only entries are dropped.
 - The main frame now survives being closed during combat the same way the popover already did.

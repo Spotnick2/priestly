@@ -122,11 +122,11 @@ WoW.SetAura("party1", "Prayer of Shadow Protection", 600, 300)
 H.eq(ids(T.ActiveDefs(groups, { 1 })), "fort,shadow", "the Prayer form counts too")
 
 PriestlyDB.shadowMode = "instance"
-WoW.instanceName = "Stratholme"
-PriestlyDB.shadowInstances["Stratholme"] = true
+WoW.instanceName = "Shadowfang Keep"
+PriestlyDB.shadowInstances["Shadowfang Keep"] = true
 TC.CheckCurrentInstance()
 H.eq(ids(T.ActiveDefs({}, {})), "fort,shadow", "'instance' shows it in a checked instance")
-PriestlyDB.shadowInstances["Stratholme"] = false
+PriestlyDB.shadowInstances["Shadowfang Keep"] = false
 TC.CheckCurrentInstance()
 H.eq(ids(T.ActiveDefs({}, {})), "fort", "and hides it in an unchecked one")
 

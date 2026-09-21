@@ -30,8 +30,8 @@ for _, entry in ipairs(TC.INSTANCE_DB) do
     if PriestlyDB.shadowInstances[entry[1]] ~= nil then seeded = seeded + 1 end
 end
 H.eq(seeded, #TC.INSTANCE_DB, "every instance gets a saved default")
-H.eq(PriestlyDB.shadowInstances["Scholomance"], true, "heavy-shadow instances start checked")
-H.eq(PriestlyDB.shadowInstances["Molten Core"], false, "fire raids do not")
+H.eq(PriestlyDB.shadowInstances["Shadowfang Keep"], true, "heavy-shadow instances start checked")
+H.eq(PriestlyDB.shadowInstances["Onyxia's Lair"], false, "fire raids do not")
 
 ------------------------------------------------------------
 -- Migration from a TBC-era profile
@@ -46,8 +46,8 @@ PriestlyDB = {
     shadowInstances = {
         ["Karazhan"]        = true,     -- TBC content: cannot occur here
         ["Black Temple"]    = true,
-        ["Shadow Labyrinth"] = true,
-        ["Scholomance"]     = false,    -- Vanilla, and the user unchecked it
+        ["Naxxramas"]       = true,     -- Vanilla, but not in Forever either
+        ["Shadowfang Keep"] = false,    -- reachable, and the user unchecked it
     },
     learnedDurations = { build = "old", fort = 1800 },
 }
@@ -60,18 +60,19 @@ H.eq(PriestlyDB.visible, false, "...and the window state")
 
 H.check(PriestlyDB.shadowInstances["Karazhan"] == nil, "TBC instances are dropped")
 H.check(PriestlyDB.shadowInstances["Black Temple"] == nil, "all of them")
-H.check(PriestlyDB.shadowInstances["Shadow Labyrinth"] == nil, "dungeons too")
-H.eq(PriestlyDB.shadowInstances["Scholomance"], false,
-    "a Vanilla instance the user unchecked stays unchecked - not reset to the default")
-H.eq(PriestlyDB.shadowInstances["Naxxramas"], true, "new instances are backfilled")
+H.check(PriestlyDB.shadowInstances["Naxxramas"] == nil,
+    "and Vanilla raids that Forever does not have")
+H.eq(PriestlyDB.shadowInstances["Shadowfang Keep"], false,
+    "an instance the user unchecked stays unchecked - not reset to the default")
+H.eq(PriestlyDB.shadowInstances["Hyjal Summit"], true, "new instances are backfilled")
 H.check(PriestlyDB.learnedDurations == nil or PriestlyDB.learnedDurations.fort == nil,
     "durations learned on the TBC client are thrown away")
 H.eq(PriestlyDB.flavor, TC.FLAVOR, "the marker means this only happens once")
 
 -- Running it again must not undo the user's choices.
-PriestlyDB.shadowInstances["Naxxramas"] = false
+PriestlyDB.shadowInstances["Hyjal Summit"] = false
 Priestly_EnsureDefaults()
-H.eq(PriestlyDB.shadowInstances["Naxxramas"], false,
+H.eq(PriestlyDB.shadowInstances["Hyjal Summit"], false,
     "a second run does not re-apply defaults over user choices")
 
 ------------------------------------------------------------
@@ -131,13 +132,13 @@ H.check(Priestly_ShouldShowShadow(groups, { 1 }) == true, "somebody has it")
 H.check(Priestly_ShouldShowShadow(nil, nil) == false, "'detect' with no roster is false")
 
 PriestlyDB.shadowMode = "instance"
-WoW.instanceName = "Scholomance"
-PriestlyDB.shadowInstances["Scholomance"] = true
+WoW.instanceName = "Shadowfang Keep"
+PriestlyDB.shadowInstances["Shadowfang Keep"] = true
 TC.CheckCurrentInstance()
 H.check(Priestly_ShouldShowShadow(nil, nil) == true, "in a checked instance")
 H.check(TC.inShadowInstance() == true, "and the detector agrees")
 
-WoW.instanceName = "Molten Core"
+WoW.instanceName = "Onyxia's Lair"
 TC.CheckCurrentInstance()
 H.check(Priestly_ShouldShowShadow(nil, nil) == false, "in an unchecked instance")
 
@@ -156,9 +157,9 @@ TC.CheckCurrentInstance()
 H.check(TC.inShadowInstance() == false,
     "a continent name with instanceType 'none' is not an instance")
 
-WoW.instanceName = "Scholomance"
+WoW.instanceName = "Shadowfang Keep"
 WoW.instanceType = "party"
-PriestlyDB.shadowInstances["Scholomance"] = true
+PriestlyDB.shadowInstances["Shadowfang Keep"] = true
 TC.CheckCurrentInstance()
 H.check(TC.inShadowInstance() == true, "...but a real instance still counts")
 WoW.instanceType = nil
