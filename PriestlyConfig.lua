@@ -27,6 +27,42 @@ local DEFAULTS = {
 --   learnedDurations  -- [spellName] = seconds, scoped to a client build
 --   flavor            -- migration marker
 
+-- ─── One write path for PriestlyDB ─────────────────────────────────────────────
+--
+-- Nothing an addon writes survives a real client restart on this build -
+-- account-wide and per-character SavedVariables, and CVars too (issue #9,
+-- docs/FOREVER-PROBE.md section 11). The fix is Blizzard's. Until it lands,
+-- every settings change goes through here anyway, so that whatever the fix
+-- needs - a migration, a validation pass, a different store - lands in one
+-- place instead of in each handler.
+--
+-- Priestly_OnConfigChanged is empty on purpose. It fires once per instance
+-- during Select All, so whatever fills it later must be cheap, or debounce.
+--
+-- The contract, enforced by a source scan in tests/test_config_seam.lua: no
+-- file writes PriestlyDB directly except inside a `config-owner` region -
+-- the code that creates the table, seeds defaults, runs migrations and keeps
+-- the learned-duration cache. Everything else calls one of the setters below.
+
+-- config-owner: begin
+function Priestly_OnConfigChanged(key)
+end
+
+function Priestly_SetConfig(key, value)
+    if not PriestlyDB then PriestlyDB = {} end
+    PriestlyDB[key] = value
+    Priestly_OnConfigChanged(key)
+end
+
+-- One entry of the Shadow Protection instance list.
+function Priestly_SetShadowInstance(name, tracked)
+    if not PriestlyDB then PriestlyDB = {} end
+    if not PriestlyDB.shadowInstances then PriestlyDB.shadowInstances = {} end
+    PriestlyDB.shadowInstances[name] = tracked
+    Priestly_OnConfigChanged("shadowInstances")
+end
+-- config-owner: end
+
 -- ─── Instance databases ─────────────────────────────────────────────────────
 -- { "Instance Name", "category", defaultEnabled, "Tooltip: boss encounters" }
 -- Instance names must match GetInstanceInfo() return values.
@@ -152,6 +188,7 @@ local FLAVOR = "forever"
 -- duration does not call GetBuildInfo for every member of every group.
 local g_Build
 
+-- config-owner: begin
 function Priestly_EnsureDefaults()
     if not PriestlyDB then PriestlyDB = {} end
     -- A client build can only change across a restart, which means a fresh
@@ -196,6 +233,7 @@ function Priestly_EnsureDefaults()
 
     PriestlyDB.shadowBosses = nil  -- migration
 end
+-- config-owner: end
 
 -- ─── Learned buff durations ─────────────────────────────────────────────────
 --
@@ -205,6 +243,7 @@ end
 -- ever saw" would survive a duration nerf and quietly mis-colour every bar -
 -- and the whole table is discarded when the client build changes.
 
+-- config-owner: begin
 local function DurationStore()
     if not PriestlyDB then return nil end
     if not g_Build then g_Build = (API and API.ClientBuild()) or "?" end
@@ -224,7 +263,11 @@ function Priestly_LearnDuration(spellName, seconds)
     -- actually changed.
     if store[spellName] == seconds then return end
     store[spellName] = seconds
+    -- A write through a local alias, which the source scan cannot see, so it
+    -- reports by hand.
+    Priestly_OnConfigChanged("learnedDurations")
 end
+-- config-owner: end
 
 function Priestly_GetLearnedDuration(spellName)
     if not spellName then return nil end
@@ -344,16 +387,100 @@ function Priestly_ShowSolo()
     return PriestlyDB and PriestlyDB.showSolo == true
 end
 
+-- ─── Has Blizzard fixed it? ────────────────────────────────────────────────────
+--
+-- PriestlyDB.svLoadCheck is written every session and is deliberately NOT in
+-- DEFAULTS, so EnsureDefaults can never recreate it. It can only be there at
+-- login if the client really read the SavedVariables file - which makes its
+-- presence proof that the loader works, on whichever build fixed it. It needs
+-- no working store, because it IS the test for one. (tests/test_config.lua
+-- asserts it stays out of DEFAULTS: adding it there would silently switch the
+-- detector off.)
+--
+-- Only announced on a genuine initial login. A /reload proves nothing: this
+-- client has been seen keeping settings across /reload and still losing them
+-- on a real restart, so announcing then would be the very false positive the
+-- check exists to avoid. The marker is rewritten on every UI load regardless,
+-- so a session that reloaded part-way still leaves one for the next login.
+--
+-- Residual limit: logging out to character select and back in is an initial
+-- login inside the same process, so the message asks for a full exit to
+-- confirm.
+--
+-- Same shape as AltStable's (PR #33 there). Candidate for the shared core.
+
+local function CurrentBuild()
+    local ok, _, build = pcall(GetBuildInfo)
+    return ok and build and tostring(build) or nil
+end
+
+-- config-owner: begin
+local function CheckSavedVariablesLoad(announce)
+    if not PriestlyDB then PriestlyDB = {} end
+    local previous = PriestlyDB.svLoadCheck
+
+    if announce and type(previous) == "table" and previous.stamp and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "|cff99ddff[Priestly]|r |cff55ff55Settings were remembered this session|r "
+            .. "(saved " .. tostring(previous.stamp) .. " on build " .. tostring(previous.build)
+            .. ", now " .. tostring(CurrentBuild()) .. "). The client bug looks fixed - "
+            .. "confirm with a full exit and relaunch, not /reload.")
+    end
+
+    PriestlyDB.svLoadCheck = {
+        stamp = (type(date) == "function" and date("%Y-%m-%d %H:%M:%S")) or "?",
+        build = CurrentBuild(),
+    }
+end
+-- config-owner: end
+
+-- PLAYER_LOGIN fires on /reload too and cannot tell the two apart.
+-- PLAYER_ENTERING_WORLD can: on 1.60.1.69913 it carries (isInitialLogin,
+-- isReloadingUi), checked against the API dump. It also fires on every zone
+-- change with both false, which is ignored.
+function Priestly_HandleEnteringWorld(isInitialLogin, isReloadingUi)
+    if not (isInitialLogin or isReloadingUi) then return end
+    CheckSavedVariablesLoad(isInitialLogin and not isReloadingUi)
+end
+
+-- ─── Which build were the findings measured on? ─────────────────────────────────
+--
+-- docs/FOREVER-PROBE.md and the API dump were measured on one client build,
+-- and the beta updates without announcement. The build lives in the SOURCE -
+-- the one thing that survives a restart here - and a mismatch says so at
+-- every login until someone re-measures and bumps it. A stored build could
+-- never fire: the build only changes across a restart, which is exactly when a
+-- stored value is lost.
+
+local MEASURED_ON_BUILD = "69913"
+
+function Priestly_CheckClientBuild()
+    local build = CurrentBuild()
+    -- An unreadable build is not evidence of a new one; stay quiet.
+    if not build or build == MEASURED_ON_BUILD then return end
+    if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "|cff99ddff[Priestly]|r |cffffcc00This is client build " .. build
+            .. "|r; Priestly's notes were measured on " .. MEASURED_ON_BUILD
+            .. ". Treat them as unverified until re-measured: /pprobe, and a full-exit "
+            .. "check of saved settings. Then bump MEASURED_ON_BUILD in PriestlyConfig.lua.")
+    end
+end
+
 -- ─── Instance detection events ──────────────────────────────────────────────
 
 local detectFrame = CreateFrame("Frame", "PriestlyInstanceDetector")
 API.RegisterEvents(detectFrame,
     "PLAYER_LOGIN", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD")
-detectFrame:SetScript("OnEvent", function(self, event)
+detectFrame:SetScript("OnEvent", function(self, event, isInitialLogin, isReloadingUi)
     if event == "PLAYER_LOGIN" then
         Priestly_EnsureDefaults()
+        Priestly_CheckClientBuild()
         CheckCurrentInstance()
     else
+        if event == "PLAYER_ENTERING_WORLD" then
+            Priestly_HandleEnteringWorld(isInitialLogin, isReloadingUi)
+        end
         CheckCurrentInstance()
         if Priestly_ScheduleRefresh then Priestly_ScheduleRefresh() end
     end
@@ -464,7 +591,7 @@ local function MakeCheckbox(parent, yRef, label, dbKey, onChange)
     cb:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, yRef.v)
     cb:SetChecked(PriestlyDB[dbKey] ~= false)
     cb:SetScript("OnClick", function(self)
-        PriestlyDB[dbKey] = self:GetChecked() and true or false
+        Priestly_SetConfig(dbKey, self:GetChecked() and true or false)
         if onChange then onChange(self:GetChecked()) end
         RefreshShadowRow()
     end)
@@ -599,7 +726,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
             icb._instName = instName
 
             icb:SetScript("OnClick", function(self)
-                PriestlyDB.shadowInstances[self._instName] = self:GetChecked() and true or false
+                Priestly_SetShadowInstance(self._instName, self:GetChecked() and true or false)
                 CheckCurrentInstance()
                 RefreshShadowRow()
             end)
@@ -634,7 +761,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     btnAll:SetText("Select All")
     btnAll:SetScript("OnClick", function()
         for _, entry in ipairs(instanceDB) do
-            PriestlyDB.shadowInstances[entry[1]] = true
+            Priestly_SetShadowInstance(entry[1], true)
         end
         for _, cb in ipairs(allCheckboxes) do cb:SetChecked(true) end
         CheckCurrentInstance()
@@ -647,7 +774,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     btnNone:SetText("Deselect All")
     btnNone:SetScript("OnClick", function()
         for _, entry in ipairs(instanceDB) do
-            PriestlyDB.shadowInstances[entry[1]] = false
+            Priestly_SetShadowInstance(entry[1], false)
         end
         for _, cb in ipairs(allCheckboxes) do cb:SetChecked(false) end
         CheckCurrentInstance()
@@ -660,7 +787,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     btnDefaults:SetText("Reset Defaults")
     btnDefaults:SetScript("OnClick", function()
         for _, entry in ipairs(instanceDB) do
-            PriestlyDB.shadowInstances[entry[1]] = entry[3]
+            Priestly_SetShadowInstance(entry[1], entry[3])
         end
         for _, cb in ipairs(allCheckboxes) do
             if cb._instName then
@@ -806,7 +933,7 @@ local function BuildPanel(panel)
         { key = "detect",   label = "Show when detected on a group member" },
         { key = "instance", label = "Show by instance (configure in the |cff99ddffInstances|r tab)" },
     }, PriestlyDB.shadowMode, function(key)
-        PriestlyDB.shadowMode = key
+        Priestly_SetConfig("shadowMode", key)
         CheckCurrentInstance()
         if Priestly_ForceRebuild then Priestly_ForceRebuild() end
     end)
@@ -898,7 +1025,7 @@ local function BuildPanel(panel)
 
     alphaSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value * 20 + 0.5) / 20
-        PriestlyDB.frameAlpha = value
+        Priestly_SetConfig("frameAlpha", value)
         alphaVal:SetText(string.format("%d%%", value * 100))
         UpdateFill()
         if Priestly_ApplyAlpha then Priestly_ApplyAlpha() end
@@ -935,7 +1062,7 @@ local function BuildPanel(panel)
         { key = "left",  label = "Always on the left" },
         { key = "right", label = "Always on the right" },
     }, Priestly_PopoverSide(), function(key)
-        PriestlyDB.popoverSide = key
+        Priestly_SetConfig("popoverSide", key)
         -- The side is chosen fresh every time the popover opens, so the next
         -- hover would pick this up on its own. The rebuild is for the popover
         -- that is open right now: UpdateUI re-anchors it, so the change shows
@@ -1005,4 +1132,5 @@ Priestly._testConfig = {
     DurationStore = DurationStore,
     CheckCurrentInstance = CheckCurrentInstance,
     inShadowInstance = function() return g_InShadowInstance end,
+    MEASURED_ON_BUILD = MEASURED_ON_BUILD,
 }

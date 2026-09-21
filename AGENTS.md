@@ -90,7 +90,19 @@ Load order from `Priestly.toc`:
 `PriestlyConfig.lua` exposes: `Priestly_EnsureDefaults`, `Priestly_ShowSolo`, `Priestly_TrackPets`,
 `Priestly_IsBuffEnabled`, `Priestly_ShouldShowShadow`, `Priestly_GetFrameAlpha`,
 `Priestly_OpenConfig`, `Priestly_LearnDuration`, `Priestly_GetLearnedDuration`,
-`Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`.
+`Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`, and the write path:
+`Priestly_SetConfig(key, value)`, `Priestly_SetShadowInstance(name, tracked)`,
+`Priestly_OnConfigChanged(key)`. Plus `Priestly_HandleEnteringWorld` and `Priestly_CheckClientBuild`,
+which the config's event frame calls.
+
+**Every write to `PriestlyDB` goes through `Priestly_SetConfig` or `Priestly_SetShadowInstance`.**
+The only exceptions are inside `-- config-owner: begin/end` regions in `PriestlyConfig.lua`: the
+setters themselves, `EnsureDefaults`, the learned-duration cache and the load check.
+`tests/test_config_seam.lua` scans the source and fails on any other write, and counts the owner
+regions so a new one has to be added on purpose. `Priestly_OnConfigChanged` is empty today; it is
+the one place the SavedVariables fix, or a migration, will land. It fires once per instance during
+Select All, so anything put in it must be cheap. This seam, `svLoadCheck` and the build watch match
+AltStable's and are candidates for the shared core (#3).
 
 `Priestly.lua` exposes: `Priestly_ScheduleRefresh`, `Priestly_ForceRebuild`,
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
@@ -244,7 +256,7 @@ Adding a buff:
 
 Adding a config option:
 
-1. Add the default to `DEFAULTS`.
+1. Add the default to `DEFAULTS`, and write it only through `Priestly_SetConfig`.
 2. Add the widget in the relevant tab (use `MakeCheckButton` / `SafeFrame`, never a raw
    `CreateFrame` with a template that might not exist).
 3. Expose a `Priestly_*` helper if `Priestly.lua` needs it.
@@ -254,6 +266,12 @@ Adding a config option:
 Changing patch compatibility:
 
 - Update only `## Interface:` in `Priestly.toc` unless Lua API changes are required.
+- A new client build is announced at every login until `MEASURED_ON_BUILD` in `PriestlyConfig.lua`
+  is bumped. Bump it only after re-measuring: `/apidump`, `/pprobe`, and a full-exit check of saved
+  settings. Bumping it without re-measuring silences the one reminder that the notes are stale.
+- **`svLoadCheck` must never be added to `DEFAULTS`.** It detects Blizzard's SavedVariables fix by
+  being written every session and never defaulted; a default would recreate it every login and the
+  check could never fire. `tests/test_config_seam.lua` asserts this.
 - Keep `@project-version@`; the packager replaces it. `Tools/deploy.ps1` rewrites it to `dev` in the
   deployed copy only — never in the repo copy.
 
