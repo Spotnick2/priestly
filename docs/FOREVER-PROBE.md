@@ -283,29 +283,24 @@ the user before it was believed.
 
 Verify persistence by **counting launches inside the addon**, never by reading the file.
 
-### CVars DO persist — measured
+### CVars do not persist — the earlier "measured" result was a `/reload` artefact
 
-`/pprobe cvar`, same launch-counting shape, across three sessions:
+An earlier version of this section reported `/pprobe cvar` counting 1 → 2 → 3 and concluded CVars
+were a working store. **Every one of those readings was taken across `/reload`**, which keeps the
+client process alive — a CVar set last session is still in memory and reads back as though it had
+persisted.
 
-```
-session 1   not present at load; registered now   before=0  now=1
-session 2   arrived at load, value 2              before=2  now=3
-```
+After a **full client exit** on this build, the client rewrote `Config.wtf` and both
+`config-cache.wtf` files without the addon's CVar, and `GetCVar` returned `nil` on relaunch.
+Measured in AltStable (PR #33 there). Nothing an addon writes survives a real restart.
 
-The counter survives `/reload`. Note the second line: `GetCVar` returned the value **before** the
-probe registered anything, so the client loads it from `Config.wtf` independently of
-`RegisterCVar`. `AreCVarsLoaded()` was already true at login.
+The SavedVariables result in the section above still stands: SavedVariables are re-read from disk on
+`/reload`, so "nothing loads even across `/reload`" is a valid negative. The rule that follows:
+**`/reload` can prove something is broken, never that it works.** Confirm any persistence claim with
+a full exit and relaunch.
 
-`GetCVarInfo` reports `isStoredServerAccount=false, isStoredServerCharacter=false` — purely
-client-local, so a CVar will not follow the player to another machine.
-
-**Read before registering.** `RegisterCVar(name, default)` takes a default value, so registering
-first can overwrite the value you are trying to read back — and the test would then report "does
-not persist" about a store that works. A persisted CVar is readable before you touch it.
-
-This is a usable settings store while SavedVariables are broken. Tracked in **issue #32**; see it
-for what still needs measuring (value length limits, how many CVars can be registered, and whether
-quotes or newlines survive the `SET name "value"` format of `Config.wtf`).
+`/pprobe cvar` is kept, but its "CVars DO persist" line only means "survived a `/reload`", and should
+be read that way.
 
 ## 12. Instances
 

@@ -907,7 +907,10 @@ SlashCmdList["PPROBE"] = function(msg)
             say("  |cffff4444Nothing read back yet.|r /reload and run this again -")
             say("  if it still says 0, CVars do not persist either.")
         else
-            say("  |cff55ff55CVars DO persist|r - a usable store for settings.")
+            -- Only across /reload, which keeps the client process alive. A full
+            -- client exit loses addon CVars on this build (AltStable PR #33).
+            say("  |cffffcc00Survived a /reload|r - which proves nothing: the process stayed")
+            say("  alive. Only a full client exit and relaunch tests real persistence.")
         end
 
     elseif cmd == "text" or cmd == "copy" then
