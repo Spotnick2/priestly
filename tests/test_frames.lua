@@ -360,9 +360,23 @@ H.check(PriestlyDB.pos == nil, "and does not save a position it was not allowed 
 
 -- A locked window can still be recovered: the lock must not trap it offscreen.
 PriestlyDB.pos = { point = "CENTER", relPoint = "CENTER", x = 9999, y = 9999 }
+local msgBefore = #WoW.messages
 SlashCmdList["PRIESTLY"]("reset")
 H.check(PriestlyDB.pos == nil, "/priestly reset works while locked")
+
+-- ...but say so, because the window is now centred AND still locked. Dragging
+-- it does nothing and every reload puts it back, which reads exactly like the
+-- position not being saved - and was reported as that.
+local said = table.concat(WoW.messages, " ", msgBefore + 1, #WoW.messages)
+H.check(said:find("locked"), "and says the window is still locked: " .. said)
+H.check(said:find("config") or said:find("Lock frame"),
+    "pointing at the setting that undoes it: " .. said)
+
 PriestlyDB.lockFrame = false
+msgBefore = #WoW.messages
+SlashCmdList["PRIESTLY"]("reset")
+said = table.concat(WoW.messages, " ", msgBefore + 1, #WoW.messages)
+H.check(not said:find("locked"), "unlocked, it does not nag: " .. said)
 
 ------------------------------------------------------------
 -- Row hover handlers

@@ -1857,6 +1857,16 @@ SlashCmdList["PRIESTLY"] = function(msg)
             g_Main:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
         end
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Window position reset.")
+        -- Reset deliberately ignores the lock, so a locked window dragged
+        -- somewhere unreachable can always be recovered. The trap is what
+        -- comes next: the window is now centred AND still locked, so dragging
+        -- it anywhere does nothing and every reload puts it back here. Without
+        -- this line that reads exactly like "the position is not saved".
+        if Priestly_FrameLocked() then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cff99ddff[Priestly]|r |cffffcc00The window is locked|r - untick " ..
+                "|cffffffffLock frame position|r in |cffffffff/priestly config|r to move it.")
+        end
 
     elseif cmd == "hide" or cmd == "close" then
         CloseUI(true)
