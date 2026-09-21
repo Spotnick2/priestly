@@ -85,12 +85,24 @@ Load order from `Priestly.toc`:
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
 Protection aura names, which the config's "detect" mode reads).
 
-**`PriestlyDB` is `SavedVariablesPerCharacter`, not account-wide.** Measured on build
-1.60.1.69913 by two independent probes: this client writes account-wide SavedVariables but never
-reads them back, so every session starts from defaults. Per-character storage does load. Do not
-"fix" the TOC back — `tests/test_manifest.lua` asserts it, because the failure is invisible (the file
-on disk looks perfectly correct) and the cost is every setting silently resetting. The trade is that
-settings are no longer shared between characters.
+**NO SavedVariables load back on this client — per-character included.** Re-measured on build
+1.60.1.69913 (2026-09-21 01:14) with two independent instruments: `/pprobe sv` reports
+`launches=0` before every session on *both* the account-wide and per-character tables, and
+Priestly's own `pos` sits on disk while `PriestlyDB.pos` is nil in the next session.
+
+An earlier pass concluded per-character storage worked. **That was wrong**, and the way it was wrong
+is the thing to learn from: it was verified by reading the saved file, which looks perfectly
+populated either way, because `Priestly_EnsureDefaults` rewrites every `DEFAULTS` key each session.
+Only a key that is *not* in `DEFAULTS` can expose the failure — `pos` is the only one, and it is
+the only thing that ever went missing. Both this file and the porting guide already warned against
+exactly that verification method.
+
+**Never verify persistence by reading the SV file or diffing it against `.bak`.** Count launches
+inside the addon, or check a key that defaults to nil.
+
+`SavedVariablesPerCharacter` stays in the TOC for now: it is no worse than account-wide, and it is
+where settings will land if the client is fixed. `tests/test_manifest.lua` asserts it. But do not
+write code that depends on any setting surviving a `/reload` — tracked in **issue #9**.
 
 This is a workaround for a client bug, tracked in **issue #9** for revisiting once the client loads
 account-wide variables. Moving back is not just reverting the TOC line: by then people will have
