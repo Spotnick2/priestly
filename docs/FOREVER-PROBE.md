@@ -283,6 +283,30 @@ the user before it was believed.
 
 Verify persistence by **counting launches inside the addon**, never by reading the file.
 
+### CVars DO persist — measured
+
+`/pprobe cvar`, same launch-counting shape, across three sessions:
+
+```
+session 1   not present at load; registered now   before=0  now=1
+session 2   arrived at load, value 2              before=2  now=3
+```
+
+The counter survives `/reload`. Note the second line: `GetCVar` returned the value **before** the
+probe registered anything, so the client loads it from `Config.wtf` independently of
+`RegisterCVar`. `AreCVarsLoaded()` was already true at login.
+
+`GetCVarInfo` reports `isStoredServerAccount=false, isStoredServerCharacter=false` — purely
+client-local, so a CVar will not follow the player to another machine.
+
+**Read before registering.** `RegisterCVar(name, default)` takes a default value, so registering
+first can overwrite the value you are trying to read back — and the test would then report "does
+not persist" about a store that works. A persisted CVar is readable before you touch it.
+
+This is a usable settings store while SavedVariables are broken. Tracked in **issue #32**; see it
+for what still needs measuring (value length limits, how many CVars can be registered, and whether
+quotes or newlines survive the `SET name "value"` format of `Config.wtf`).
+
 ## 12. Instances
 
 Measured with `/pprobe here`, standing inside:
