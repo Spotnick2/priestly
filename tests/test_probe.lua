@@ -122,16 +122,57 @@ H.eq(_G.PriestlyProbeBenchB:GetAttribute("useOnKeyDown"), true, "and B forces th
 H.check(_G.PriestlyProbeBenchA:GetAttribute("useOnKeyDown") == nil,
     "while A sets none and follows the client")
 
--- One physical click: PreClick on press, a cast, PreClick again on release.
--- The second must not reset the count, or every reading is a half-click.
-bench._scripts.PreClick(bench)
-WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
-bench._scripts.PreClick(bench)
+-- Everything said since message n. Note the guard: table.concat(t, sep, i)
+-- defaults j to #t, so with nothing new i > j and it quietly returns the LAST
+-- OLD message - which reads as a fresh report that never happened.
+local function reportSince(n)
+    if #WoW.messages <= n then return "" end
+    return table.concat(WoW.messages, " | ", n + 1, #WoW.messages)
+end
+
+-- One physical click on a keydown-acting button: press, cast, release.
+-- The release must not reset the count, or every reading is a half-click.
 local before = #WoW.messages
+bench._scripts.PreClick(bench, "LeftButton", true)
+WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
+bench._scripts.PreClick(bench, "LeftButton", false)
 WoW.flushTimers()
-local said = table.concat(WoW.messages, " | ", math.min(before + 1, #WoW.messages))
+local said = reportSince(before)
 H.check(said:find("1 cast"), "reports exactly one cast, got: " .. said)
 H.check(not said:find("DOUBLE"), "and does not cry double-cast for a single one")
+
+------------------------------------------------------------
+-- A HELD click on the forced-keyup button
+--
+-- C casts on release. Anything that reports on a timer started at the press
+-- closes the window first on a click held longer than it, and reports 0 -
+-- which reads as "the keyup branch is dead on this client" about a button
+-- working perfectly. That is the one wrong answer this bench must never give,
+-- because it argues for reverting a correct fix.
+------------------------------------------------------------
+
+before = #WoW.messages
+bench._scripts.PreClick(bench, "LeftButton", true)      -- pressed, and held
+WoW.flushTimers(1.0)                                    -- a second goes by
+H.eq(reportSince(before), "", "nothing is reported while the button is still held")
+
+WoW.dispatch("UNIT_SPELLCAST_SENT", "player")           -- the release-edge cast
+bench._scripts.PreClick(bench, "LeftButton", false)     -- released at last
+WoW.flushTimers()
+said = reportSince(before)
+H.check(said:find("1 cast"), "the held click still counts its cast, got: " .. said)
+
+------------------------------------------------------------
+-- A client that does not pass `down` to PreClick
+------------------------------------------------------------
+
+before = #WoW.messages
+bench._scripts.PreClick(bench)                          -- press
+WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
+bench._scripts.PreClick(bench)                          -- release
+WoW.flushTimers()
+said = reportSince(before)
+H.check(said:find("1 cast"), "the edge is inferred when the client stays quiet, got: " .. said)
 
 H.check(pcall(slash, ""), "/pprobe with no argument runs everything")
 

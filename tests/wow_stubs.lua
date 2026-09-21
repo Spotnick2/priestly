@@ -137,10 +137,20 @@ function WoW.DefineSpell(spellID, name)
     WoW.spells[spellID] = { name = name, iconID = 100000 + spellID }
 end
 
-function WoW.flushTimers()
+-- Run pending C_Timer callbacks. With `maxDelay`, only those scheduled to
+-- fire within it - which is how a test says "this much time passed" and
+-- catches a callback that fires too early. Without it, everything runs, which
+-- is what most tests want.
+function WoW.flushTimers(maxDelay)
     local pending = WoW.timers
     WoW.timers = {}
-    for _, fn in ipairs(pending) do fn() end
+    for _, t in ipairs(pending) do
+        if maxDelay == nil or t.delay <= maxDelay then
+            t.fn()
+        else
+            WoW.timers[#WoW.timers + 1] = t   -- still waiting
+        end
+    end
 end
 
 ------------------------------------------------------------
@@ -302,7 +312,9 @@ Settings = {
 }
 
 C_Timer = {
-    After = function(_, fn) WoW.timers[#WoW.timers + 1] = fn end,
+    After = function(delay, fn)
+        WoW.timers[#WoW.timers + 1] = { delay = tonumber(delay) or 0, fn = fn }
+    end,
     NewTimer  = function() return { Cancel = function() end } end,
     NewTicker = function() return { Cancel = function() end } end,
 }

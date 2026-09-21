@@ -648,16 +648,31 @@ local function MakeBenchButton(parent, key, label, y, useOnKeyDown)
     b:SetAttribute("unit1", "player")
     if useOnKeyDown ~= nil then b:SetAttribute("useOnKeyDown", useOnKeyDown) end
 
-    -- PreClick fires on BOTH edges, so the press and the release of one
-    -- physical click arrive as two calls. Debounce on time rather than on the
-    -- edge: older clients do not pass `down` to PreClick, and a probe that
-    -- quietly measured half a click would be worse than no probe.
-    b:SetScript("PreClick", function()
-        local now = GetTime()
-        if now - g_benchAt < 0.6 then return end
-        BenchReport()
-        g_benchAt, g_benchCount, g_benchWho = now, 0, key
-        C_Timer.After(0.5, BenchReport)
+    -- PreClick fires on BOTH edges now, so one physical click arrives as two
+    -- calls: press, then release.
+    --
+    -- Report after the RELEASE, never on a timer from the press. A forced-keyup
+    -- button casts on release, so a fixed window from the press closes first
+    -- on any click held longer than that - and the bench reports 0, which reads
+    -- as "this branch is dead on this client" about a button that works
+    -- perfectly. That is the one wrong answer this tool must not give, since
+    -- it would argue for reverting a correct fix.
+    --
+    -- `down` says which edge when the client passes it. When it does not, a
+    -- call arriving while a click is still open is the release.
+    b:SetScript("PreClick", function(_, _, down)
+        local isPress = (down == true) or (down == nil and g_benchWho == nil)
+        if isPress then
+            BenchReport()   -- flush anything still open
+            g_benchAt, g_benchCount, g_benchWho = GetTime(), 0, key
+            -- Safety net for a client that only ever delivers one edge, so the
+            -- bench says something rather than nothing. Long enough that no
+            -- ordinary click, however deliberate, can trip it.
+            C_Timer.After(10, BenchReport)
+        else
+            -- Released. Give the release-edge cast a moment to be sent.
+            C_Timer.After(0.3, BenchReport)
+        end
     end)
     return b
 end
