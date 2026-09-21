@@ -611,8 +611,18 @@ end
 
 local g_bench, g_benchCount, g_benchWho, g_benchAt = nil, 0, nil, 0
 local g_benchFrame
+-- Every click gets a number, and a delayed callback carries the number of the
+-- click that scheduled it. Without that, a watchdog left over from an earlier
+-- click reports against whatever is being measured NOW - closing a later
+-- measurement before its cast arrives and printing "that branch does not
+-- dispatch" about a healthy button. Timers cannot be cancelled here, so they
+-- have to be able to recognise that they are stale.
+local g_benchSeq = 0
 
-local function BenchReport()
+-- `seq` is the click this callback was scheduled for. Omit it to report
+-- whatever is open right now, which is what the press-time flush wants.
+local function BenchReport(seq)
+    if seq and seq ~= g_benchSeq then return end
     if not g_benchWho then return end
     local n, who = g_benchCount, g_benchWho
     g_benchWho = nil
@@ -663,15 +673,19 @@ local function MakeBenchButton(parent, key, label, y, useOnKeyDown)
     b:SetScript("PreClick", function(_, _, down)
         local isPress = (down == true) or (down == nil and g_benchWho == nil)
         if isPress then
-            BenchReport()   -- flush anything still open
+            BenchReport()   -- flush anything still open, before the seq moves
+            g_benchSeq = g_benchSeq + 1
             g_benchAt, g_benchCount, g_benchWho = GetTime(), 0, key
             -- Safety net for a client that only ever delivers one edge, so the
             -- bench says something rather than nothing. Long enough that no
-            -- ordinary click, however deliberate, can trip it.
-            C_Timer.After(10, BenchReport)
+            -- ordinary click, however deliberate, can trip it - and scoped to
+            -- this click, so it cannot close a later one.
+            local mine = g_benchSeq
+            C_Timer.After(10, function() BenchReport(mine) end)
         else
             -- Released. Give the release-edge cast a moment to be sent.
-            C_Timer.After(0.3, BenchReport)
+            local mine = g_benchSeq
+            C_Timer.After(0.3, function() BenchReport(mine) end)
         end
     end)
     return b

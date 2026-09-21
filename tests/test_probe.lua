@@ -163,6 +163,45 @@ said = reportSince(before)
 H.check(said:find("1 cast"), "the held click still counts its cast, got: " .. said)
 
 ------------------------------------------------------------
+-- A leftover timer from an EARLIER click must not close a later one
+--
+-- Each click leaves a 10s watchdog queued. Report the click on release and
+-- that watchdog outlives it, still pending while the next button is being
+-- measured. Firing it then reports the NEW click's count - zero, because its
+-- cast has not arrived yet - and clears the measurement, so the real cast is
+-- counted into nothing.
+--
+-- The earlier tests drain every timer after each click, which is exactly why
+-- they could not see this: they disposed of the watchdog before the overlap
+-- could happen. This one deliberately leaves it pending.
+------------------------------------------------------------
+
+local benchA = _G.PriestlyProbeBenchA
+before = #WoW.messages
+benchA._scripts.PreClick(benchA, "LeftButton", true)
+WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
+benchA._scripts.PreClick(benchA, "LeftButton", false)
+WoW.flushTimers(0.5)          -- the release report only; A's watchdog stays queued
+said = reportSince(before)
+H.check(said:find("A: 1 cast"), "A reports its own click, got: " .. said)
+
+-- Nearly ten seconds pass, so A's watchdog is about to come due...
+WoW.flushTimers(9.3)
+-- ...and C is clicked right before it does.
+before = #WoW.messages
+bench._scripts.PreClick(bench, "LeftButton", true)
+WoW.flushTimers(0.3)          -- A's stale watchdog fires in here
+H.eq(reportSince(before), "", "A's leftover timer does not report against C")
+
+WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
+bench._scripts.PreClick(bench, "LeftButton", false)
+WoW.flushTimers()
+said = reportSince(before)
+H.check(said:find("C: 1 cast"), "C still counts its own cast, got: " .. said)
+H.check(not said:find("does not dispatch"),
+    "and is never declared dead by someone else's timer")
+
+------------------------------------------------------------
 -- A client that does not pass `down` to PreClick
 ------------------------------------------------------------
 
