@@ -18,6 +18,16 @@ appears incorrect.
   is warranted, and honor explicit approval to use the current model for that review without asking
   again. Do not silently switch models or effort. Follow the user's cost policy.
 - Preserve unrelated local edits during reviews.
+- **Check API claims against the measured API dump, not memory.** `C:/Projects/References/` holds
+  `forever-api-<build>.md` — the full API surface dumped from the live client: documented functions
+  with signatures and `optional` markers, events with payloads, enums, the `_G` walk, every `C_*`
+  namespace, and widget methods per type (the only place those are listed). Use the newest file and
+  check that the build in its header matches the client in question; the file name changes when it
+  is regenerated. Retail and Classic knowledge is wrong here often enough that "this API exists" or
+  "this method takes these arguments" must be checked there before it is stated in a finding.
+- The dump says what **exists**, not what **works**. Behaviour — combat secrecy, SavedVariables not
+  loading, `GetInstanceInfo` returning the continent — is in `docs/FOREVER-PROBE.md`, measured in
+  game. Read both before arguing from how an API behaves on other clients.
 
 ## What This Repository Is
 
@@ -131,7 +141,10 @@ not by buff id: the single and group forms of one buff share an id and do not sh
   normally sits. Use `API.UnitDisplayName` (`GetUnitName(unit, false)`).
 - **`GetInstanceInfo()` returns the continent outdoors**, not an empty string — gate on
   `instanceType ~= "none"`.
-- **Ask the client before assuming an API exists: `/api`.** Forever ships
+- **Before assuming an API exists, grep the dump:** the newest
+  `C:/Projects/References/forever-api-<build>.md`. It covers what `/api` does and more — the `_G`
+  walk and per-type widget methods, which `/api` does not list.
+- **Or ask the client directly: `/api`.** Forever ships
   `Blizzard_APIDocumentation`, so the game will give you the declared signature - argument names in
   order, which are optional, return values, event payloads. `/api search <name>` (Lua patterns
   work), `/api system list`, `/api <system> list`. Systems drop the `C_` prefix, so `C_UnitAuras` is
@@ -300,7 +313,7 @@ nothing executed the handler and a no-op looks like success.
 
 So for anything built on a widget method: **execute the handler AND assert what it produced.**
 A test that only checks the handler ran would have passed against the broken call. Check the
-method against `C:/Projects/References/forever-api-1.60.1.69913.md` before relying on it - the
+method against the newest `C:/Projects/References/forever-api-<build>.md` before relying on it - the
 widget-method section is the only place that lists them.
 
 In game:
