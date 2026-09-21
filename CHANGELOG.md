@@ -1,5 +1,14 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Added
+- **Lock frame position** in Options - Appearance. Stops the window being dragged by its header, so
+  it cannot be nudged out of place by a stray click mid-fight. `/priestly reset` still recentres it,
+  so a locked window can always be recovered.
+
+  Thanks to **Warbullio** on CurseForge for the request.
+
 ## v2.0.2 - 2026-09-21
 
 ### Fixed

@@ -16,6 +16,7 @@ local DEFAULTS = {
     trackPets       = true,
     frameAlpha      = 0.96,
     popoverSide     = "auto",     -- "auto" | "left" | "right"
+    lockFrame       = false,
 }
 
 -- Deliberately NOT in DEFAULTS: a nil value creates no key, so the pairs()
@@ -318,6 +319,13 @@ end
 
 function Priestly_GetFrameAlpha()
     return PriestlyDB and PriestlyDB.frameAlpha or 0.96
+end
+
+-- True when the window must not be dragged. Checked in the drag handler
+-- rather than by unregistering the drag, which keeps this clear of the secure
+-- frame rules and safe to toggle in combat.
+function Priestly_FrameLocked()
+    return PriestlyDB and PriestlyDB.lockFrame == true
 end
 
 -- "auto" | "left" | "right". Auto means "wherever there is room", decided
@@ -896,6 +904,12 @@ local function BuildPanel(panel)
     y.v = y.v - 40
     MakeDesc(settingsChild, y,
         "Controls the background opacity of the main Priestly frame and popover.", 4)
+
+    y.v = y.v - 6
+    MakeCheckbox(settingsChild, y, "Lock frame position", "lockFrame")
+    MakeDesc(settingsChild, y,
+        "Stops the window being dragged by the header. |cff999999/priestly reset|r still recentres "
+        .. "it, so a locked window can always be recovered.")
 
     y.v = y.v - 10
     local sideLabel = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")

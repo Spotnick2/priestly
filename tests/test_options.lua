@@ -88,6 +88,17 @@ H.check(_G["PriestlyRB_always"]:GetChecked() == false,
     "selecting one radio clears the others")
 H.check(_G["PriestlyRB_instance"]:GetChecked() == true, "and checks itself")
 
+-- Lock frame. The client toggles a checkbox before OnClick fires, so the test
+-- does too - firing the handler alone just re-reads whatever state it was in.
+local lockBox = _G["PriestlyCB_lockFrame"]
+H.check(lockBox ~= nil, "the lock checkbox was created")
+lockBox:SetChecked(true)
+click("PriestlyCB_lockFrame")
+H.eq(PriestlyDB.lockFrame, true, "ticking it locks the frame")
+lockBox:SetChecked(false)
+click("PriestlyCB_lockFrame")
+H.eq(PriestlyDB.lockFrame, false, "and clearing it unlocks again")
+
 -- Popover side radios
 for _, side in ipairs({ "left", "right", "auto" }) do
     click("PriestlyRB_" .. side)

@@ -891,10 +891,20 @@ InitUI = function()
     drag:SetHeight(HDR_H)
     drag:EnableMouse(true)
     drag:RegisterForDrag("LeftButton")
-    drag:SetScript("OnDragStart", function() g_Main:StartMoving() end)
+    -- Gated rather than unregistered: leaving RegisterForDrag in place keeps
+    -- this clear of the secure-frame rules, so the lock can be toggled in
+    -- combat like any other setting.
+    drag:SetScript("OnDragStart", function()
+        if Priestly_FrameLocked() then return end
+        g_Main:StartMoving()
+    end)
     g_Main.dragHandle = drag
     drag:SetScript("OnDragStop",  function()
-        g_Main:StopMovingOrSizing(); g_Moved = true
+        -- Locking mid-drag would otherwise leave the frame stuck to the cursor:
+        -- StopMovingOrSizing is harmless on a frame that was never moving.
+        g_Main:StopMovingOrSizing()
+        if Priestly_FrameLocked() then return end
+        g_Moved = true
         -- Save position
         if PriestlyDB then
             local point, _, relPoint, x, y = g_Main:GetPoint()
