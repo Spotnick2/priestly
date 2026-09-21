@@ -48,7 +48,13 @@ $env:LIBGROUPBUFFS = $Library
 $pinMatch = Select-String -Path (Join-Path $RepoRoot ".pkgmeta") -Pattern '^\s*tag:\s*(\S+)' |
     Select-Object -First 1
 $pinned = if ($pinMatch) { $pinMatch.Matches[0].Groups[1].Value } else { "NOTHING" }
-$revision = (git -C $Library describe --tags --always --dirty 2>$null)
+# No git, or a library that is not a git checkout (a downloaded zip), must
+# not stop a test run for a line that only prints.
+$revision = try {
+    $r = git -C $Library describe --tags --always --dirty 2>$null
+    if ($LASTEXITCODE -eq 0 -and $r) { $r } else { "not a git checkout" }
+} catch { "git not available" }
+$global:LASTEXITCODE = 0
 Write-Host "LibGroupBuffs: $Library @ $revision (release pins $pinned)" -ForegroundColor DarkGray
 
 # Run from the repo root so the tests can dofile('tests/...') and
@@ -61,9 +67,11 @@ try {
     # there would show up as a confusing load failure inside every test.
     $luac = Join-Path (Split-Path -Parent $Lua) "luac.exe"
     if (Test-Path $luac) {
-        $libFiles = Select-String -Path $LibraryXml -Pattern '<Script\s+file="([^"]+)"' -AllMatches |
-            ForEach-Object { $_.Matches } |
-            ForEach-Object { Join-Path $Library $_.Groups[1].Value.Replace([char]92, [char]47) }
+        # The library's files come from tests/libfiles.lua, the one reader of
+        # its XML that the harness, deploy.ps1 and CI also use.
+        $libFiles = & $Lua (Join-Path $PSScriptRoot "libfiles.lua") $Library load
+        if ($LASTEXITCODE -ne 0) { Write-Host "LibGroupBuffs file list FAILED" -ForegroundColor Red; exit 1 }
+        $libFiles = $libFiles | ForEach-Object { Join-Path $Library $_ }
         & $luac -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua @libFiles
         if ($LASTEXITCODE -ne 0) {
             Write-Host "luac -p FAILED" -ForegroundColor Red

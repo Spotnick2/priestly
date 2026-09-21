@@ -417,8 +417,9 @@ function InCombatLockdown() return WoW.inCombat end
 -- is what let a call to it survive into a shipped build.
 function strtrim(s) return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
 -- A string.match alias the client defines. LibStub.lua uses it; confirmed in
--- the global-functions section of the API dump.
-function strmatch(s, pattern) return string.match(s, pattern) end
+-- the global-functions section of the API dump. The alias itself, so the
+-- optional `init` argument behaves as it does on the client.
+strmatch = string.match
 
 function date(fmt) return "2026-09-20 00:00:00" end
 

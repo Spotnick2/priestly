@@ -199,7 +199,14 @@ not by buff id: the single and group forms of one buff share an id and do not sh
   `Tools/PriestlyProbe` to find out what it actually does.
 - Measured behaviour for all of this is in `docs/FOREVER-PROBE.md`; re-probe with
   `Tools/PriestlyProbe` rather than assuming.
-- `RegisterEvent` **throws** on an unknown event name. Go through `API.RegisterEvents`.
+- `RegisterEvent` **throws** on an unknown event name. Go through **`Priestly.RegisterEvents`**,
+  never `API.RegisterEvents`: the library's version returns the rejected names and prints nothing,
+  so called directly with the return value ignored, a renamed event leaves a handler silently dead.
+  `tests/test_bridge.lua` fails on a direct call.
+- Never copy a library function into a local (`local F = API.F`). `API` is shared with every addon
+  that embeds LibGroupBuffs and a newer copy upgrades it in place; a copy keeps the old version.
+  Call through `API`, or wrap: `local function F(...) return API.F(...) end`. Also enforced by
+  `tests/test_bridge.lua`.
 - `ReloadUI()` is protected — use the `/reload` slash command.
 - Errors are off by default (`/console scriptErrors 1`) and stop being delivered after 100 in a
   session.
@@ -345,6 +352,11 @@ and is invisible from this side.
    build held back from the people who already have the addon. The fact that the *game client* is
    in beta is not a reason: say that in the release notes, where players read it, and ship a
    Release so they can actually get it.
+5. **Check the published zip carries LibGroupBuffs.** CI proves the BigWigs packager embeds it,
+   but releases are built by CurseForge's own packager from the tag webhook, which CI cannot run.
+   Download the file CurseForge published and check `Priestly/Libs/LibGroupBuffs-1.0/` is there,
+   for example with `lua tests/libfiles.lua <unzipped>/Priestly/Libs/LibGroupBuffs-1.0 ship`. A
+   zip without it is an addon that does not start, for everyone who updates.
 
 ## Validation
 
@@ -362,7 +374,11 @@ before a release.
 deliberate: the stub is the list of APIs verified present on this client, so it has to model the
 client's *absences* too. Defining something there that Forever does not actually have is how a call
 to `MouseIsOver` — removed on this client — survived into a build and surfaced only as a Lua error
-on mouseover in game. Confirm a new global with `Tools/PriestlyProbe` before stubbing it.
+on mouseover in game. Before stubbing a new global, confirm it exists in the newest
+`C:/Projects/References/forever-api-<build>.md`, and stub it with the client's exact signature
+(`strmatch = string.match`, not a two-argument wrapper). If what matters is how it *behaves* rather
+than whether it exists, measure that with `Tools/PriestlyProbe`: the dump says what exists, not
+what works.
 
 `tests/test_frames.lua` exists to *execute* every script handler and event the addon installs,
 rather than to assert behaviour: strict globals only catch what actually runs. A new handler belongs

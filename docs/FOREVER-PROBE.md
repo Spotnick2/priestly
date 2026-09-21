@@ -96,8 +96,10 @@ register.
 addon does not register it: see section 1 — registering both mouse edges removes the reason to
 watch the CVar at all.
 
-Registration still goes through `API.RegisterEvents`: it costs nothing, and it means a future event
-rename is reported instead of silently killing a handler.
+Registration still goes through `Priestly.RegisterEvents`, which reports rejected names in chat: it
+costs nothing, and it means a future event rename is reported instead of silently killing a handler.
+(`API.RegisterEvents` in LibGroupBuffs only returns the rejected names, since a library must not
+print into another addon's chat frame; called directly, the report is lost.)
 
 ## 3. Templates — all 14 present, none throw
 

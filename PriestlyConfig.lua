@@ -6,6 +6,11 @@
 local ADDON_NAME = "Priestly"
 local API = Priestly.API
 
+-- PriestlyCompat.lua has already said in chat why Priestly cannot start if the
+-- shared library is missing. Stop here rather than building half an addon and
+-- failing further down, far from the cause.
+if not API then return end
+
 -- ─── Default configuration ──────────────────────────────────────────────────
 
 local DEFAULTS = {

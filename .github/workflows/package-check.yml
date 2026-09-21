@@ -33,10 +33,12 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq lua5.1
+          # tests/libfiles.lua is the one reader of the library's XML; the
+          # harness, run.ps1 and deploy.ps1 use it too.
           lib=../LibGroupBuffs
+          files=$(lua5.1 tests/libfiles.lua "$lib" load) || exit 1
           luac5.1 -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua \
-            $(sed -e 's/<!--.*-->//' "$lib/LibGroupBuffs-1.0.xml" \
-              | grep -o 'file="[^"]*"' | cut -d'"' -f2 | tr '\\' '/' | sed "s|^|$lib/|")
+            $(printf '%s\n' $files | sed "s|^|$lib/|")
 
       - name: Unit tests
         env:
@@ -53,20 +55,21 @@ jobs:
           args: -d
 
       # Local tests read the library from a sibling checkout, so they cannot
-      # prove the release carries it. Check the zip itself: every file the
-      # packaged library XML lists must be inside, at the path the TOC loads.
+      # prove a package carries it. Unpack the zip and resolve the library from
+      # inside it with the same reader: it fails, naming the file, if anything
+      # the packaged XML lists is absent at the path the TOC loads.
+      #
+      # This is the BigWigs packager's zip. Releases are built by CurseForge's
+      # own packager from the tag webhook, which CI cannot run - so the
+      # published file is checked by hand after each release (AGENTS.md,
+      # Releasing).
       - name: The package embeds the library
         run: |
           zip=$(ls .release/*.zip | head -1)
-          unzip -Z1 "$zip" > contents.txt
-          base=Priestly/Libs/LibGroupBuffs-1.0
-          grep -qx "$base/LibGroupBuffs-1.0.xml" contents.txt \
-            || { echo "missing $base/LibGroupBuffs-1.0.xml"; exit 1; }
-          unzip -p "$zip" "$base/LibGroupBuffs-1.0.xml" | sed -e 's/<!--.*-->//' \
-            | grep -o 'file="[^"]*"' | cut -d'"' -f2 | tr '\\' '/' | while read -r f; do
-              grep -qx "$base/$f" contents.txt || { echo "missing $base/$f"; exit 1; }
-              echo "packaged $base/$f"
-            done
+          rm -rf unpacked && mkdir unpacked && unzip -q "$zip" -d unpacked
+          lua5.1 tests/libfiles.lua unpacked/Priestly/Libs/LibGroupBuffs-1.0 ship \
+            | sed 's|^|packaged Priestly/Libs/LibGroupBuffs-1.0/|'
+          test "${PIPESTATUS[0]}" -eq 0
 
       # .release is a hidden directory, and upload-artifact@v4 skips hidden
       # content by default - without include-hidden-files the upload finds

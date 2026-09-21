@@ -96,15 +96,7 @@ H.eq(#entries, 4, "and nothing else loads")
 -- the release zip is missing the library while every local check passes.
 ------------------------------------------------------------
 
-local function readText(path)
-    local fh = io.open(path, "rb")
-    if not fh then return "" end
-    local text = fh:read("*a")
-    fh:close()
-    return (text:gsub("\r\n", "\n"))
-end
-
-local pkgmeta = readText(".pkgmeta")
+local pkgmeta = H.readFile(".pkgmeta") or ""
 local external = pkgmeta:match("externals:%s*\n%s+([^\n:]+):")
 H.eq(external, "Libs/LibGroupBuffs-1.0", ".pkgmeta embeds the library at Libs/LibGroupBuffs-1.0")
 H.eq(external and (external:gsub("/", "\\") .. "\\LibGroupBuffs-1.0.xml"), LIB_XML,
@@ -116,7 +108,7 @@ H.check(tag ~= nil and tag:match("^r%d+$") ~= nil,
     "pinned to a library tag, so a release cannot change under its own source: " .. tostring(tag))
 
 local libIgnored = false
-for line in (readText(".gitignore") .. "\n"):gmatch("([^\n]*)\n") do
+for line in ((H.readFile(".gitignore") or "") .. "\n"):gmatch("([^\n]*)\n") do
     if line == "Libs/" then libIgnored = true end
 end
 H.check(libIgnored, "and Libs/ is git-ignored, so no vendored copy can creep back in")

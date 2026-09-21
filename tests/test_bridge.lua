@@ -14,11 +14,14 @@ dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 local T, TC, API = H.loadAddon()
 
-local function ReadFile(path)
-    local f = assert(io.open(path, "rb"))
-    local s = f:read("*a")
-    f:close()
-    return s
+-- Every Lua file the TOC loads, and each one's source with comments removed.
+local SOURCES = {}
+for _, file in ipairs(H.tocFiles()) do
+    local code = {}
+    for line in (H.readFile(file) .. "\n"):gmatch("([^\n]*)\n") do
+        code[#code + 1] = (line:gsub("%-%-.*$", ""))
+    end
+    SOURCES[file] = code
 end
 
 ------------------------------------------------------------
@@ -38,16 +41,58 @@ H.check(API == lib.API, "Priestly.API is the library's API table itself")
 ------------------------------------------------------------
 
 local used = {}
-for _, file in ipairs({ "Priestly.lua", "PriestlyConfig.lua" }) do
-    for name in ReadFile(file):gmatch("API%.([%a_][%w_]*)") do used[name] = true end
+for file, lines in pairs(SOURCES) do
+    for _, code in ipairs(lines) do
+        for name in code:gmatch("%f[%w_]API%.([%a_][%w_]*)") do used[name] = file end
+    end
 end
 local count = 0
-for name in pairs(used) do
+for name, file in pairs(used) do
     count = count + 1
-    H.check(type(API[name]) == "function",
-        "Priestly calls API." .. name .. ", so the library must provide it")
+    if name ~= "eventFailures" then
+        H.check(type(API[name]) == "function",
+            file .. " calls API." .. name .. ", so the library must provide it")
+    end
 end
 H.check(count >= 10, "the scan found Priestly's API calls: " .. count)
+
+------------------------------------------------------------
+-- No library function is copied into a local
+--
+-- API is the table LibGroupBuffs shares with every addon that embeds it, and
+-- a newer copy loading later upgrades it in place. `local F = API.F` taken at
+-- load time would keep running the old version beside the new one. Call
+-- through API, or wrap: `local function F(...) return API.F(...) end`.
+------------------------------------------------------------
+
+local captures = {}
+for file, lines in pairs(SOURCES) do
+    for n, code in ipairs(lines) do
+        if code:find("=%s*API%.[%a_][%w_]*%s*$") or code:find("=%s*API%.[%a_][%w_]*%s*;") then
+            captures[#captures + 1] = file .. ":" .. n .. "  " .. code
+        end
+    end
+end
+H.eq(#captures, 0, "no file copies a library function into a local: " .. table.concat(captures, " | "))
+
+------------------------------------------------------------
+-- Events are registered only through Priestly.RegisterEvents
+--
+-- API.RegisterEvents returns the names this client rejected and prints
+-- nothing. Called directly with the return value ignored - the natural way to
+-- write it - a renamed event leaves a handler silently dead.
+------------------------------------------------------------
+
+local direct = {}
+for file, lines in pairs(SOURCES) do
+    for n, code in ipairs(lines) do
+        -- PriestlyCompat.lua is the wrapper itself, the one allowed caller.
+        if file ~= "PriestlyCompat.lua" and code:find("%f[%w_]API%.RegisterEvents%s*%(") then
+            direct[#direct + 1] = file .. ":" .. n .. "  " .. code
+        end
+    end
+end
+H.eq(#direct, 0, "nothing calls API.RegisterEvents directly: " .. table.concat(direct, " | "))
 
 ------------------------------------------------------------
 -- Rejected events are reported in chat
@@ -72,6 +117,8 @@ H.check(WoW.events[f].UNIT_PET == true, "the good event still registered")
 H.eq(failed and failed[1], "NOT_A_REAL_EVENT", "the caller gets the rejected name")
 local said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("NOT_A_REAL_EVENT", 1, true), "and it is printed, not silent: " .. said)
+H.check(Priestly.eventFailures.NOT_A_REAL_EVENT ~= nil,
+    "and recorded in Priestly's own table - the library's is shared by every addon")
 
 ------------------------------------------------------------
 -- A missing library stops loading, with a message that says why
@@ -79,11 +126,48 @@ H.check(said:find("NOT_A_REAL_EVENT", 1, true), "and it is printed, not silent: 
 -- No fallback copy: running on a stale duplicate is the drift this removes.
 ------------------------------------------------------------
 
-local savedLibStub = LibStub
-LibStub = nil
-local loaded, err = pcall(dofile, "PriestlyCompat.lua")
+local savedLibStub, savedPriestly = LibStub, Priestly
+
+local function loadWithout(libStubValue)
+    LibStub = libStubValue
+    Priestly = nil
+    local before = #WoW.messages
+    local loaded, err = pcall(dofile, "PriestlyCompat.lua")
+    local chat = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+    return loaded, tostring(err), chat
+end
+
+local loaded, err, chat = loadWithout(nil)
 H.check(not loaded, "PriestlyCompat refuses to load without the library")
-H.check(tostring(err):find("LibGroupBuffs-1.0", 1, true), "naming it: " .. tostring(err))
-LibStub = savedLibStub
+H.check(err:find("Libs\\LibGroupBuffs-1.0", 1, true),
+    "the error names the real folder, backslash intact: " .. err)
+-- Lua errors are hidden by default on this client, so the error alone would
+-- leave a player looking at an addon that silently does nothing.
+H.check(chat:find("cannot start", 1, true) and chat:find("missing", 1, true),
+    "and a player is told in chat, where they will see it: " .. chat)
+
+-- A library that threw partway through its compat layer: registered, but
+-- without the functions defined after the error.
+local halfLoaded = setmetatable({}, { __call = function()
+    return { API = { RegisterEvents = function() return true end } }
+end })
+loaded, err, chat = loadWithout(halfLoaded)
+H.check(not loaded, "a library that failed to load completely is refused too")
+H.check(chat:find("completely", 1, true), "and reported as that, not as missing: " .. chat)
+
+-- The other two files stop before building anything, so a missing library is
+-- one message rather than a cascade of errors and half-made frames.
+Priestly = {}
+local frames = 0
+local realCreateFrame = CreateFrame
+CreateFrame = function(...) frames = frames + 1 return realCreateFrame(...) end
+for _, file in ipairs({ "PriestlyConfig.lua", "Priestly.lua" }) do
+    local ok, why = pcall(dofile, file)
+    H.check(ok, file .. " returns quietly when Priestly.API is missing: " .. tostring(why))
+end
+H.eq(frames, 0, "and creates no frames")
+CreateFrame = realCreateFrame
+
+LibStub, Priestly = savedLibStub, savedPriestly
 
 H.done("test_bridge")

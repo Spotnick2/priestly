@@ -25,7 +25,8 @@ param(
     [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns",
     [switch]$Probe,
     [switch]$ProbeOnly,
-    [string]$Library = ""
+    [string]$Library = "",
+    [string]$Lua = "C:\Program Files (x86)\Lua\5.1\lua.exe"
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,24 +39,21 @@ if (-not (Test-Path $AddOnsPath)) {
     exit 1
 }
 
-# The library's runtime files, read from its own XML, each checked to exist
-# before anything is copied. Returns relative paths with forward slashes.
+# Every file the library needs in the addon folder - its XMLs and its Lua -
+# from tests/libfiles.lua, the one reader of its XML that the test harness,
+# run.ps1 and CI also use. It fails, naming the file, if anything listed is
+# missing, so nothing is copied until the whole library has been found.
 function Get-LibraryFiles {
     param([string]$Root)
-    $xml = Join-Path $Root "LibGroupBuffs-1.0.xml"
-    if (-not (Test-Path $xml)) {
-        throw ("LibGroupBuffs-1.0 not found at $Root. Clone https://github.com/Spotnick2/LibGroupBuffs " +
-            "next to this repository, or pass -Library.")
+    if (-not (Test-Path $Lua)) {
+        throw "Lua 5.1 not found at $Lua (pass -Lua <path>); deploy reads the library's file list with it."
     }
-    $text = [regex]::Replace((Get-Content -LiteralPath $xml -Raw), '<!--.*?-->', '', 'Singleline')
-    $files = @("LibGroupBuffs-1.0.xml") + ([regex]::Matches($text, '<Script\s+file="([^"]+)"') |
-        ForEach-Object { $_.Groups[1].Value.Replace([char]92, [char]47) })
-    foreach ($f in $files) {
-        if (-not (Test-Path (Join-Path $Root $f))) {
-            throw "LibGroupBuffs-1.0.xml lists $f, which is not in $Root"
-        }
+    $files = & $Lua (Join-Path $RepoRoot "tests\libfiles.lua") $Root ship 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw ("$files. Clone https://github.com/Spotnick2/LibGroupBuffs next to this repository, " +
+            "or pass -Library.")
     }
-    return $files
+    return @($files)
 }
 
 function Copy-AddonFile {
@@ -80,7 +78,12 @@ function Deploy-Priestly {
     if (-not $libRoot) { $libRoot = Join-Path (Split-Path -Parent $RepoRoot) "LibGroupBuffs" }
     $libFiles = Get-LibraryFiles -Root $libRoot
     $libRoot = (Resolve-Path $libRoot).Path
-    $revision = (git -C $libRoot describe --tags --always --dirty 2>$null)
+    # Informational: no git, or a library that is not a checkout, must not
+    # stop a deploy.
+    $revision = try {
+        $r = git -C $libRoot describe --tags --always --dirty 2>$null
+        if ($LASTEXITCODE -eq 0 -and $r) { $r } else { "not a git checkout" }
+    } catch { "git not available" }
 
     Write-Host "Deploying Priestly -> $dest" -ForegroundColor Cyan
     if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
