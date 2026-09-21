@@ -307,8 +307,8 @@ The SavedVariables result in the section above still stands: SavedVariables are 
 **`/reload` can prove something is broken, never that it works.** Confirm any persistence claim with
 a full exit and relaunch.
 
-`/pprobe cvar` is kept, but its "CVars DO persist" line only means "survived a `/reload`", and should
-be read that way.
+`/pprobe cvar` is kept. When a value comes back it now reports only that it survived a `/reload`,
+and says a full exit is needed to test real persistence - it no longer claims CVars persist.
 
 ## 12. Instances
 

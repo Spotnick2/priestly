@@ -48,22 +48,20 @@ H.eq(directive("Interface"), "16001",
 ------------------------------------------------------------
 -- Settings storage
 --
--- Measured on build 1.60.1.69913: this client writes SavedVariables but never
--- reads ACCOUNT-WIDE ones back, so every session starts from defaults.
--- SavedVariablesPerCharacter does load. Declaring PriestlyDB account-wide
--- again would silently stop every setting from persisting, and the file on
--- disk would still look perfectly correct - which is why this is asserted
--- rather than left to be noticed.
+-- Measured on build 1.60.1.69913: this client writes SavedVariables and never
+-- reads them back - account-wide AND per-character - so every session starts
+-- from defaults. (An earlier note here said per-character storage loads. It
+-- does not; that was concluded from reading the saved file, which always looks
+-- populated because EnsureDefaults rewrites every default each session.)
 --
--- This is a workaround for a client bug, not a permanent design decision:
--- issue #9 tracks revisiting it once account-wide variables load again. If you
--- are here because you are changing this back, read #9 first - existing
--- per-character settings need seeding across, or everyone's configuration
--- resets a second time.
+-- So this directive does not make settings persist today. It stays because it
+-- is no worse than account-wide, and it is where settings will be read from
+-- once Blizzard fixes the loader. Issue #9 tracks the client fix, #35 the
+-- preparation for it. If you are changing storage, read both first.
 ------------------------------------------------------------
 
 H.eq(directive("SavedVariablesPerCharacter"), "PriestlyDB",
-    "PriestlyDB is stored per character, because account-wide storage does not load here")
+    "PriestlyDB is declared per character - no worse than account-wide while neither loads")
 H.check(directive("SavedVariables") == nil,
     "and is not ALSO declared account-wide - one variable cannot live in both")
 

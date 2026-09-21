@@ -6,9 +6,10 @@
 - **Your settings reset every time you reload.** A client bug, affecting every addon rather than
   this one: Forever writes addon settings to disk correctly and never reads them back at login.
   Storing them per character fails the same way as account-wide, so the window position, the lock,
-  the buff toggles and the Shadow Protection list all start fresh each session. Priestly will move
-  its settings somewhere the client does remember; until then this is not something the addon can
-  fix, and it is not worth reporting as a Priestly bug.
+  the buff toggles and the Shadow Protection list all start fresh each session. No addon can work
+  around it - there is nowhere on this client an addon can save to that survives a restart - so
+  this waits on Blizzard's fix, which has been reported. It is not worth reporting as a Priestly
+  bug.
 
 ### Added
 - **`/priestly pos`** - says where the window is, where it was told to be, and what the addon
