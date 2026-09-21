@@ -930,7 +930,15 @@ InitUI = function()
         -- default next login with nothing on screen to explain it.
         if Priestly_FrameLocked and Priestly_FrameLocked() then return end
         g_Moved = true
-        -- Save position
+        -- Save position.
+        --
+        -- GetPoint reports relativeTo as nil after StopMovingOrSizing, while
+        -- the restore anchors explicitly to UIParent. That looks like a
+        -- mismatch and is not: g_Main is PARENTED to UIParent, and a nil
+        -- relativeTo means "my parent". Measured in game - saved and restored
+        -- values match to the decimal. It would be a real drift for a frame
+        -- parented anywhere else, which is why Blizzard's Edit Mode code
+        -- compensates when it converts nil to UIParent.
         if PriestlyDB then
             local point, _, relPoint, x, y = g_Main:GetPoint()
             PriestlyDB.pos = { point = point, relPoint = relPoint, x = x, y = y }
