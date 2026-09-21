@@ -176,7 +176,8 @@ Do not "fix" this back to one edge, and do not add a `CVAR_UPDATE` handler to ch
 `RegisterForClicks` is protected under lockdown, so a single-edge design goes dead for the rest of
 any fight the CVar changes during, and there is nothing it could do about it.
 
-The reason this does not double-cast is worth knowing before touching these buttons. Two things have
+Measured with `/pprobe click`: one cast per click on all three of no-attribute, forced-keydown and
+forced-keyup. The reason it does not double-cast is worth knowing before touching these buttons. Two things have
 to hold: `down == useOnKeyDown` admits one edge, **and** the press-and-hold release path that the
 other edge can reach (when `ActionButtonUseKeyHeldSpell` is on) looks up the **`typerelease`**
 attribute rather than `type`, which Priestly never sets. **Setting `typerelease` on a row button

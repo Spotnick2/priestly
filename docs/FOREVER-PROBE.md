@@ -51,21 +51,35 @@ action**, and which one follows the CVar. That explains both halves of the Curse
 - Registering **both** edges is one cast, not two, because the handler admits one. This is the fix
   suggested on CurseForge, and it is correct here.
 
-**It does not double-cast, but that rests on two things, not one.** The edge the handler rejects can
+**Measured in game with `/pprobe click`,** three secure buttons all registering both edges, casts
+counted from `UNIT_SPELLCAST_SENT`:
+
+| Button | `useOnKeyDown` attribute | Casts per click |
+|---|---|---|
+| A | none — follows the CVar | **1** |
+| B | `true` — forces the keydown branch | **1** |
+| C | `false` — forces the keyup branch | **1** |
+
+So the keyup branch **does** dispatch here — the fix works for the people who reported dead clicks —
+and registering both edges is **one cast**, not two. Confirmed, not reasoned.
+
+**That it does not double-cast rests on two things, not one.** The edge the handler rejects can
 still reach the press-and-hold release path when `ActionButtonUseKeyHeldSpell` is on. That path
 resolves its action from the **`typerelease`** attribute, not `type`, and Priestly sets no
-`typerelease` — so it finds no action and casts nothing. Setting `typerelease` on a row button
-*would* double-cast and burn two reagents.
+`typerelease` — so it finds no action and casts nothing. The measurement above confirms the outcome;
+it does not make `typerelease` safe to set. **Setting one would double-cast and burn two reagents.**
 
 Following the CVar with a single edge was tried and rejected: `RegisterForClicks` is protected under
 combat lockdown, so a CVar change mid-fight leaves the rows on an edge the handler now refuses, with
 no way to re-register until combat ends. Both edges has no such state, so `C_CVar`, `GetCVarBool`,
 `GetCVar` and `CVAR_UPDATE` are all recorded by the probe for reference and consumed by nothing.
 
-| Still open | |
-|---|---|
-| Does a live mouse click reach the handler as an addon click (CVar-gated) or as a secure mouse press (which forces the Up edge)? | The rows demonstrably cast today with Down-only registration and a default CVar, which says CVar-gated — but it has not been read off the client directly. |
-| `ActionButtonUseKeyHeldSpell` on this client | `/pprobe secure` records it |
+One thing is still unread, and it no longer matters. `SecureActionButton_OnClick` also takes
+`isKeyPress` / `isSecureAction` and forces `useOnKeyDown = false` for what it calls a secure mouse
+press, which would pin mouse clicks to the Up edge regardless of attribute or CVar. The bench above
+does not discriminate — with both edges registered every branch yields exactly one dispatch, which
+is precisely why it is safe either way. Registering both edges is correct under every reading of
+that code, so the question is archived rather than open.
 
 ## 2. Events — all 16 register, none throw
 
