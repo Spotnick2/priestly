@@ -340,6 +340,63 @@ H.eq(WoW.tooltipText(), "", "and leaving hides it")
 H.check(T.popFrame():IsShown(), "without closing the popover")
 
 ------------------------------------------------------------
+-- The hint must name whoever the click will ACTUALLY buff
+--
+-- The wired attributes are only the answer in combat. Out of combat PreClick
+-- calls PickTarget again at click time, so a hover between a rebuild and a
+-- buff falling off named one person while the click buffed another - the hint
+-- lying about the one thing it exists to state.
+------------------------------------------------------------
+
+rows = setup({ "FORT_SINGLE" })
+WoW.SetAura("player", "Power Word: Fortitude", 3600, 3000)
+WoW.SetAura("party1", "Power Word: Fortitude", 3600, 3000)
+WoW.SetAura("party2", "Power Word: Fortitude", 3600, 3000)
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+
+-- Everybody was buffed at rebuild time. Now party1's falls off.
+WoW.ClearAuras("party1")
+hint = hintFor(row)
+H.check(hint:find("Sten Thornbeard"),
+    "the hint re-picks, naming whoever lost the buff since the rebuild: " .. hint)
+
+-- ...and that is the same person the click lands on.
+row._scripts.PreClick(row, "RightButton")
+H.eq(row:GetAttribute("unit2"), "party1", "which is exactly who PreClick retargets to")
+
+-- Range moves without a rebuild too.
+rows = setup({ "FORT_SINGLE" })
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+-- Unset range is UNKNOWN, not in-range, and PickTarget only prefers a
+-- confirmed IN_RANGE - so party2 has to be stated, not left to default.
+WoW.range.player = false
+WoW.range.party1 = false
+WoW.range.party2 = true
+hint = hintFor(row)
+H.check(hint:find("Mirel Dawnsong"),
+    "and it follows range, which never triggers a rebuild: " .. hint)
+WoW.range.player, WoW.range.party1, WoW.range.party2 = nil, nil, nil
+
+-- In combat PreClick cannot rewrite anything, so there the wired attributes
+-- ARE what the click will use and re-picking would be the thing that lies.
+rows = setup({ "FORT_SINGLE" })
+WoW.SetAura("player", "Power Word: Fortitude", 3600, 3000)
+WoW.SetAura("party1", "Power Word: Fortitude", 3600, 3000)
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+local wiredUnit = row:GetAttribute("unit2")
+H.eq(wiredUnit, "party2", "wired at rebuild to the one missing it")
+WoW.inCombat = true
+WoW.SetAura("party2", "Power Word: Fortitude", 3600, 3000)
+WoW.ClearAuras("player")
+hint = hintFor(row)
+H.check(hint:find("Mirel Dawnsong"),
+    "in combat the hint reports the wired target, not a fresh pick: " .. hint)
+WoW.inCombat = false
+
+------------------------------------------------------------
 -- A Prayer on BOTH buttons must not be described as single-target
 --
 -- ClickSpells hands the group spell to both clicks when the priest knows a

@@ -1269,9 +1269,30 @@ local function ShowClickHint(row)
     GameTooltip:SetOwner(row, side)
     GameTooltip:SetText(def.hasGroup and def.grp or def.sngl, 0.62, 0.85, 1.0)
 
-    -- Read from the attributes the buttons were actually wired with, not from
-    -- a second guess at the same logic. A hint that can disagree with the
-    -- click is worse than no hint.
+    -- Resolve each click the way the click itself resolves it.
+    --
+    -- Out of combat the wired attributes are NOT the answer, which is where I
+    -- had this wrong: PreClick calls PickTarget again at click time and can
+    -- retarget, so a hover between a rebuild and a buff falling off would name
+    -- one person while the click buffs another. Range moves without a rebuild
+    -- too. A hint that can disagree with the click is worse than no hint,
+    -- because it gets trusted.
+    --
+    -- In combat PreClick deliberately bails - it cannot write attributes under
+    -- lockdown - so there the wired values ARE what the click will use, and
+    -- re-picking would be the thing that lies.
+    local function resolve(which)
+        if InCombatLockdown() then
+            return row:GetAttribute("spell" .. which), row:GetAttribute("unit" .. which)
+        end
+        local spell = (which == 1) and row._primary or row._secondary
+        if not spell or not row._members then return nil end
+        -- The same call PreClick makes, groupMode argument and all.
+        local unit = PickTarget(row._members, def, (which == 1) and row._groupMode or false)
+        if not unit then return nil end   -- PreClick clears the spell here too
+        return spell, unit
+    end
+
     local function describe(label, spell, unit)
         if not spell then
             GameTooltip:AddLine(label .. "  |cff888888nothing to buff|r", 1, 1, 1)
@@ -1287,8 +1308,8 @@ local function ShowClickHint(row)
         GameTooltip:AddLine(label .. "  |cffffffff" .. spell .. "|r on " .. target, 1, 1, 1)
     end
 
-    describe("|cffaaaaaaLeft|r ", row:GetAttribute("spell1"), row:GetAttribute("unit1"))
-    describe("|cffaaaaaaRight|r", row:GetAttribute("spell2"), row:GetAttribute("unit2"))
+    describe("|cffaaaaaaLeft|r ", resolve(1))
+    describe("|cffaaaaaaRight|r", resolve(2))
     GameTooltip:Show()
 end
 
