@@ -508,7 +508,7 @@ end
 -- ─── Instance detection events ──────────────────────────────────────────────
 
 local detectFrame = CreateFrame("Frame", "PriestlyInstanceDetector")
-API.RegisterEvents(detectFrame,
+Priestly.RegisterEvents(detectFrame,
     "PLAYER_LOGIN", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD")
 detectFrame:SetScript("OnEvent", function(self, event, isInitialLogin, isReloadingUi)
     if event == "PLAYER_LOGIN" then
@@ -1143,7 +1143,7 @@ local function RegisterPanel()
 end
 
 local regFrame = CreateFrame("Frame")
-API.RegisterEvents(regFrame, "PLAYER_LOGIN")
+Priestly.RegisterEvents(regFrame, "PLAYER_LOGIN")
 regFrame:SetScript("OnEvent", function()
     Priestly_EnsureDefaults()
     RegisterPanel()

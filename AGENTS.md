@@ -48,27 +48,46 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 ## Repository Layout
 
 - `Priestly.toc` — addon manifest. Interface version, saved variables, load order.
-- `PriestlyCompat.lua` — **loads first.** All removed/moved APIs live here as `Priestly.API`.
+- `PriestlyCompat.lua` — the bridge to the shared library: exposes its compat layer as
+  `Priestly.API` and reports rejected events in chat. No API code lives here any more.
 - `PriestlyConfig.lua` — options panel, defaults, instance database, exported config helpers.
 - `Priestly.lua` — main UI, buff logic, secure buttons, event handling, slash commands.
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
-- `Tools/deploy.ps1` — deploy to the local Forever AddOns folder.
+- `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, library included.
 - `Tools/PriestlyProbe/` — throwaway in-game API probe. Delete once `docs/FOREVER-PROBE.md` is
   settled.
-- `.github/workflows/` — release (on `v*` tag) and package-check (dry run on PR).
+- `.github/workflows/` — package-check: tests against the pinned library, dry-run package, and a
+  check that the zip embeds the library.
 - `.pkgmeta`, `README.md`, `CHANGELOG.md`, `LICENSE` — packaging and user-facing material.
 
-No embedded libraries, no external dependencies.
+**One dependency: [LibGroupBuffs-1.0](https://github.com/Spotnick2/LibGroupBuffs)**, the shared
+library behind Priestly, Wildly and Magely (issue #3). It is never committed here — `Libs/` is
+git-ignored:
+
+- **Release:** `.pkgmeta` `externals` embeds it at `Libs/LibGroupBuffs-1.0`, **pinned to a tag**
+  (`r<MINOR>`), so a release cannot change underneath its own source.
+- **Development:** check it out **next to this repository**, as `../LibGroupBuffs`. `tests/run.ps1`
+  and `Tools/deploy.ps1` both read it from there (or from `-Library`), print the revision they used,
+  and fail loudly if it is missing. There is no vendored fallback: a stale copy would pass the
+  suite against code that no longer ships.
+- **CI** checks out the pinned tag, not the library's `main`.
+
+To change something in the compat layer: change it in the library (with its tests), merge and tag
+it `r<MINOR>`, then bump the tag in `.pkgmeta`. `tests/test_manifest.lua` checks the TOC path, the
+`.pkgmeta` externals key, the pinned tag and the ignore rule all agree.
 
 ## Architecture
 
 Load order from `Priestly.toc`:
 
-1. `PriestlyCompat.lua` — defines `Priestly.API`. Nothing else may touch a moved API directly.
-2. `PriestlyConfig.lua` — `PriestlyDB` defaults, instance database, `Priestly_*` helper globals.
-3. `Priestly.lua` — UI and event logic; calls the config helpers.
+1. `Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml` — LibStub, then the library's compat layer.
+2. `PriestlyCompat.lua` — sets `Priestly.API` to the library's API table. Nothing else may touch a
+   moved API directly.
+3. `PriestlyConfig.lua` — `PriestlyDB` defaults, instance database, `Priestly_*` helper globals.
+4. `Priestly.lua` — UI and event logic; calls the config helpers.
 
-`Priestly.API` (the only sanctioned route to a changed API):
+`Priestly.API` (the only sanctioned route to a changed API; implemented in LibGroupBuffs'
+`Compat.lua`, and `tests/test_bridge.lua` checks every function Priestly calls exists there):
 
 | Contract | Replaces |
 |---|---|
@@ -80,7 +99,7 @@ Load order from `Priestly.toc`:
 | `ItemIcon(itemID)` | `GetItemIcon` |
 | `ItemInfo(itemID)` → name, r, g, b (quality colour), or nil on a cache miss after requesting a load | `GameTooltip:SetItemByID` — **no item setter exists on `GameTooltip` here**; wraps `C_Item.GetItemInfo`, `IsItemDataCachedByID`, `RequestLoadItemDataByID`, `GetItemQualityColor` |
 | `UnitKey(unit)` / `UnitDisplayName(unit, fallback)` | `UnitGUID` / `UnitName` |
-| `RegisterEvents(frame, ...)` | bare `RegisterEvent` (throws on unknown names here) |
+| `RegisterEvents(frame, ...)` → ok, list of rejected names. Priestly calls `Priestly.RegisterEvents`, which prints them | bare `RegisterEvent` (throws on unknown names here) |
 | `ClientBuild()` | `select(2, GetBuildInfo())` |
 | `ClickEdges()` → the four `RegisterForClicks` names | — (both edges; the client picks) |
 | `CountItem(itemID)` — whole carried inventory, reagent bag included | `GetItemCount` / the `GetContainerNumSlots` walk |
@@ -155,7 +174,8 @@ not by buff id: the single and group forms of one buff share an id and do not sh
 - Target the **Retail/Mainline** API. `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE` here.
 - Keep `## Interface: 16001` in `Priestly.toc` as the source of compatibility. The format is
   `%d%02d%02d`, so 1.60.1 → 16001. `11601` is a transposed-digit bug you will see in the wild.
-- Never add a moved API call outside `PriestlyCompat.lua` — take a file-local alias instead.
+- Never call a moved API directly. Add it to LibGroupBuffs' `Compat.lua` and reach it through
+  `Priestly.API`, taking a file-local alias.
 - Watch the false friends: `C_Item.GetItemIconByID`, **not** `C_Item.GetItemIcon` (that takes an
   ItemLocation); reputation is `C_Reputation`, not `C_CreatureInfo.GetFactionInfo`.
 - **`C_Spell.GetSpellInfo(name)` only resolves spells the player KNOWS.** By ID it always works.
@@ -331,8 +351,12 @@ and is invisible from this side.
 Offline, on every change:
 
 ```powershell
-pwsh tests\run.ps1        # luac -p + all unit tests
+pwsh tests\run.ps1        # luac -p + all unit tests; needs ../LibGroupBuffs checked out
 ```
+
+The first line of output names the library checkout and revision the tests ran against, next to
+the tag a release would ship. They differ while working on both, which is fine; they should match
+before a release.
 
 `tests/wow_stubs.lua` fails the run on the read of **any global it does not stub**. That is
 deliberate: the stub is the list of APIs verified present on this client, so it has to model the

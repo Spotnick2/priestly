@@ -72,19 +72,54 @@ H.check(not tostring(directive("SavedVariables")):find("PriestlyDB", 1, true),
 ------------------------------------------------------------
 -- Load order
 --
--- PriestlyCompat defines Priestly.API, and both other files take file-local
--- aliases from it at load time. If it is not first they get nil.
+-- LibGroupBuffs-1.0 provides the compat layer, and PriestlyCompat exposes it
+-- as Priestly.API; both other files take file-local aliases from it at load
+-- time. Anything out of order and they get nil.
 ------------------------------------------------------------
 
-local files = {}
+local entries = {}
 for _, line in ipairs(toc) do
-    if line:match("%.lua$") and not line:match("^##") then files[#files + 1] = line end
+    if line:match("%.[lx][um][al]$") and not line:match("^##") then entries[#entries + 1] = line end
 end
 
-H.eq(files[1], "PriestlyCompat.lua", "the compat layer loads first")
-H.eq(files[2], "PriestlyConfig.lua", "then the config, which reads Priestly.API at file scope")
-H.eq(files[3], "Priestly.lua", "then the addon proper")
-H.eq(#files, 3, "and nothing else ships")
+local LIB_XML = "Libs\\LibGroupBuffs-1.0\\LibGroupBuffs-1.0.xml"
+H.eq(entries[1], LIB_XML, "the shared library loads first, through its own XML")
+H.eq(entries[2], "PriestlyCompat.lua", "then the bridge that exposes it as Priestly.API")
+H.eq(entries[3], "PriestlyConfig.lua", "then the config, which reads Priestly.API at file scope")
+H.eq(entries[4], "Priestly.lua", "then the addon proper")
+H.eq(#entries, 4, "and nothing else loads")
+
+------------------------------------------------------------
+-- The library is embedded, pinned, and never committed
+--
+-- The TOC path, the .pkgmeta externals key and .gitignore have to agree, or
+-- the release zip is missing the library while every local check passes.
+------------------------------------------------------------
+
+local function readText(path)
+    local fh = io.open(path, "rb")
+    if not fh then return "" end
+    local text = fh:read("*a")
+    fh:close()
+    return (text:gsub("\r\n", "\n"))
+end
+
+local pkgmeta = readText(".pkgmeta")
+local external = pkgmeta:match("externals:%s*\n%s+([^\n:]+):")
+H.eq(external, "Libs/LibGroupBuffs-1.0", ".pkgmeta embeds the library at Libs/LibGroupBuffs-1.0")
+H.eq(external and (external:gsub("/", "\\") .. "\\LibGroupBuffs-1.0.xml"), LIB_XML,
+    "which is exactly where the TOC loads it from")
+H.check(pkgmeta:find("url: https://github.com/Spotnick2/LibGroupBuffs", 1, true) ~= nil,
+    "from the LibGroupBuffs repository")
+local tag = pkgmeta:match("\n%s+tag:%s*(%S+)")
+H.check(tag ~= nil and tag:match("^r%d+$") ~= nil,
+    "pinned to a library tag, so a release cannot change under its own source: " .. tostring(tag))
+
+local libIgnored = false
+for line in (readText(".gitignore") .. "\n"):gmatch("([^\n]*)\n") do
+    if line == "Libs/" then libIgnored = true end
+end
+H.check(libIgnored, "and Libs/ is git-ignored, so no vendored copy can creep back in")
 
 ------------------------------------------------------------
 -- Packaging

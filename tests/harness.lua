@@ -31,10 +31,48 @@ function H.near(a, b, tol, msg)
 end
 
 -- Load the addon in TOC order, once.
+-- Where LibGroupBuffs-1.0 is checked out. tests/run.ps1 sets LIBGROUPBUFFS to
+-- the path it resolved (and prints it); running a test file by hand falls back
+-- to the sibling checkout. There is deliberately no vendored copy to fall back
+-- to: a stale one would make the suite pass against code that no longer ships.
+function H.libraryRoot()
+    return os.getenv("LIBGROUPBUFFS") or "../LibGroupBuffs"
+end
+
+local function readFile(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local s = f:read("*a")
+    f:close()
+    return s
+end
+
+-- Load a file or stop the run, naming it. A test that silently skipped a
+-- missing file is how a load error in the client can pass a green suite.
+local function run(path)
+    local chunk, err = loadfile(path)
+    if not chunk then error("cannot load " .. path .. ": " .. tostring(err), 3) end
+    chunk()
+end
+
+-- Load everything the TOC loads, in its order: the library through its own
+-- XML, exactly as the client reads it, then Priestly's files.
 function H.loadAddon()
-    assert(loadfile("PriestlyCompat.lua"))()
-    assert(loadfile("PriestlyConfig.lua"))()
-    assert(loadfile("Priestly.lua"))()
+    local root = H.libraryRoot()
+    local xml = readFile(root .. "/LibGroupBuffs-1.0.xml")
+    if not xml then
+        error("LibGroupBuffs-1.0 not found at " .. root .. ". Check it out next to this "
+            .. "repository (../LibGroupBuffs) or set LIBGROUPBUFFS to its path.", 2)
+    end
+    xml = xml:gsub("<!%-%-.-%-%->", "")
+    for file in xml:gmatch('<Script%s+file="([^"]+)"') do
+        run(root .. "/" .. file:gsub("\\", "/"))
+    end
+
+    for line in (readFile("Priestly.toc") .. "\n"):gmatch("([^\n]*)\n") do
+        local file = line:match("^%s*([^#%s][^%s]*%.lua)%s*$")
+        if file then run(file) end
+    end
     return Priestly._test, Priestly._testConfig, Priestly.API
 end
 

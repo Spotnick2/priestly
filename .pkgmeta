@@ -2,6 +2,15 @@ package-as: Priestly
 
 enable-nolib-creation: no
 
+# The shared compat layer (and, later, the buff engine and UI). Pinned to a
+# library tag so a Priestly release cannot change underneath its own source.
+# The tag must match what tests/run.ps1 reports; tests/test_manifest.lua checks
+# this path against the TOC.
+externals:
+  Libs/LibGroupBuffs-1.0:
+    url: https://github.com/Spotnick2/LibGroupBuffs
+    tag: r2
+
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown

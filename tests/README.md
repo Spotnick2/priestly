@@ -22,6 +22,13 @@ resolve):
 > `run.ps1` defaults to `C:\Program Files (x86)\Lua\5.1\lua.exe`; override with
 > `-Lua <path>`. It also runs `luac -p` over the shipping files first.
 
+**The tests need LibGroupBuffs-1.0 checked out next to this repository**
+(`../LibGroupBuffs`), because Priestly loads it before its own files. `run.ps1`
+takes `-Library <path>` instead, and prints which checkout and revision it used
+next to the tag a release pins. A single test run by hand reads the
+`LIBGROUPBUFFS` environment variable, or the sibling checkout. There is no
+vendored copy to fall back to, on purpose.
+
 ## How it works
 
 - **`wow_stubs.lua`** — a minimal WoW: Forever API mock: chainable
@@ -32,9 +39,10 @@ resolve):
   surname. Drive it through the exported `WoW` table:
   `WoW.reset()`, `WoW.SetUnit`, `WoW.SetAura`, `WoW.Know`, `WoW.DefineSpell`,
   `WoW.fire`. `dofile("tests/wow_stubs.lua")` **first** in every test.
-- **`harness.lua`** — `check`/`eq`/`near`, `loadAddon()` (loads the three files
-  in TOC order and hands back the test seams) and `TeachSpells{...}` for the
-  common "this priest knows X" setup.
+- **`harness.lua`** — `check`/`eq`/`near`, `loadAddon()` (loads the library
+  through its own XML, then Priestly's files in TOC order, failing on anything
+  missing, and hands back the test seams) and `TeachSpells{...}` for the common
+  "this priest knows X" setup.
 - Internals that are file-local are reached through a **test seam**:
   `Priestly._test` at the end of `Priestly.lua` and `Priestly._testConfig` at
   the end of `PriestlyConfig.lua`. Both are harmless in game.
@@ -44,7 +52,7 @@ resolve):
 
 | File | What it pins down |
 |---|---|
-| `test_compat.lua` | The API adapters: aura structs → `(remaining, duration)`, the `IsSpellInRange` boolean/nil tri-state (the old `== 1` / `== 0` ladder, where `0` is truthy), icon fallbacks, surname-bearing names, GUID identity, and `RegisterEvents` reporting an event name this client throws on. |
+| `test_bridge.lua` | Priestly on top of LibGroupBuffs-1.0: `Priestly.API` is the library's own table, every `API.*` function Priestly calls exists there, rejected events are printed in chat, and a missing library stops loading with a message naming it. The compat adapters' own tests moved to `LibGroupBuffs/tests/test_compat.lua`. |
 | `test_availability.lua` | Which buffs get a row and what each click casts, per spell the priest actually knows — including the level-20 case where no group Prayer exists, and the Divine-Spirit-without-Prayer-of-Spirit case that used to show nothing. |
 | `test_buffs.lua` | `GroupStat` counts, offline handling, the GUID-keyed aura cache surviving a roster reshuffle, combat secrecy (count down from cache, `UNKNOWN` rather than a confident `MISS`), duration learning in both directions with a build reset, `PickTarget`, and `UNIT_AURA` filtering. |
 | `test_clicks.lua` | The secure attributes after a rebuild: what `spell1`/`unit1` are actually set to, that they clear rather than cast on a corpse, that `PreClick` re-aims out of combat and leaves things alone in it, and the popover rows. |

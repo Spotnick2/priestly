@@ -1710,7 +1710,7 @@ end
 -- registration goes through the compat helper, which reports what it skipped
 -- rather than leaving a handler silently dead.
 local evtFrame = CreateFrame("Frame", "PriestlyEvents")
-API.RegisterEvents(evtFrame,
+Priestly.RegisterEvents(evtFrame,
     "PLAYER_LOGIN",
     "READY_CHECK",
     "UNIT_AURA",

@@ -416,6 +416,10 @@ function InCombatLockdown() return WoW.inCombat end
 -- must model the client's absences, not just its presences - defining it here
 -- is what let a call to it survive into a shipped build.
 function strtrim(s) return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
+-- A string.match alias the client defines. LibStub.lua uses it; confirmed in
+-- the global-functions section of the API dump.
+function strmatch(s, pattern) return string.match(s, pattern) end
+
 function date(fmt) return "2026-09-20 00:00:00" end
 
 C_AddOns = {
@@ -729,6 +733,8 @@ local KNOWN_ABSENT = {
     PriestlyProbeBenchC = true,
     -- Addon-owned globals that legitimately start out nil.
     PriestlyDB = true, PriestlyProbeDB = true, PriestlySVCheck = true,
+    -- LibStub.lua looks itself up before it exists.
+    LibStub = true,
     Priestly_ScheduleRefresh = true, Priestly_ForceRebuild = true,
     Priestly_ApplyAlpha = true, Priestly_OnSoloToggle = true,
     Priestly_LearnDuration = true, Priestly_GetLearnedDuration = true,

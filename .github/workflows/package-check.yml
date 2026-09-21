@@ -18,13 +18,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The tests load LibGroupBuffs-1.0 from a checkout next to this one, the
+      # same layout as local development. CI uses the tag .pkgmeta pins - the
+      # library a release would actually ship - not whatever main holds today.
+      - name: Check out LibGroupBuffs at the pinned tag
+        run: |
+          tag=$(awk '$1 == "tag:" { print $2; exit }' .pkgmeta)
+          test -n "$tag" || { echo ".pkgmeta pins no LibGroupBuffs tag"; exit 1; }
+          git clone --quiet --depth 1 --branch "$tag" \
+            https://github.com/Spotnick2/LibGroupBuffs ../LibGroupBuffs
+          echo "LibGroupBuffs @ $tag ($(git -C ../LibGroupBuffs rev-parse --short HEAD))"
+
       - name: Syntax-check the Lua
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq lua5.1
-          luac5.1 -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua
+          lib=../LibGroupBuffs
+          luac5.1 -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua \
+            $(sed -e 's/<!--.*-->//' "$lib/LibGroupBuffs-1.0.xml" \
+              | grep -o 'file="[^"]*"' | cut -d'"' -f2 | tr '\\' '/' | sed "s|^|$lib/|")
 
       - name: Unit tests
+        env:
+          LIBGROUPBUFFS: ../LibGroupBuffs
         run: |
           for f in tests/test_*.lua; do
             echo "-- $f"
@@ -35,6 +51,22 @@ jobs:
         uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
         with:
           args: -d
+
+      # Local tests read the library from a sibling checkout, so they cannot
+      # prove the release carries it. Check the zip itself: every file the
+      # packaged library XML lists must be inside, at the path the TOC loads.
+      - name: The package embeds the library
+        run: |
+          zip=$(ls .release/*.zip | head -1)
+          unzip -Z1 "$zip" > contents.txt
+          base=Priestly/Libs/LibGroupBuffs-1.0
+          grep -qx "$base/LibGroupBuffs-1.0.xml" contents.txt \
+            || { echo "missing $base/LibGroupBuffs-1.0.xml"; exit 1; }
+          unzip -p "$zip" "$base/LibGroupBuffs-1.0.xml" | sed -e 's/<!--.*-->//' \
+            | grep -o 'file="[^"]*"' | cut -d'"' -f2 | tr '\\' '/' | while read -r f; do
+              grep -qx "$base/$f" contents.txt || { echo "missing $base/$f"; exit 1; }
+              echo "packaged $base/$f"
+            done
 
       # .release is a hidden directory, and upload-artifact@v4 skips hidden
       # content by default - without include-hidden-files the upload finds
