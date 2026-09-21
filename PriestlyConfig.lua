@@ -17,6 +17,7 @@ local DEFAULTS = {
     frameAlpha      = 0.96,
     popoverSide     = "auto",     -- "auto" | "left" | "right"
     lockFrame       = false,
+    showClickHints  = true,
 }
 
 -- Deliberately NOT in DEFAULTS: a nil value creates no key, so the pairs()
@@ -326,6 +327,11 @@ end
 -- frame rules and safe to toggle in combat.
 function Priestly_FrameLocked()
     return PriestlyDB and PriestlyDB.lockFrame == true
+end
+
+-- Whether a row explains what its clicks will cast, on hover.
+function Priestly_ShowClickHints()
+    return not (PriestlyDB and PriestlyDB.showClickHints == false)
 end
 
 -- "auto" | "left" | "right". Auto means "wherever there is room", decided
@@ -910,6 +916,10 @@ local function BuildPanel(panel)
     MakeDesc(settingsChild, y,
         "Stops the window being dragged by the header. |cff999999/priestly reset|r still recentres "
         .. "it, so a locked window can always be recovered.")
+    MakeCheckbox(settingsChild, y, "Show click hints on mouseover", "showClickHints")
+    MakeDesc(settingsChild, y,
+        "Hovering a row explains what each mouse button will cast, and on whom. What left-click "
+        .. "does depends on which spells you know, so it is worth reading once.")
 
     y.v = y.v - 10
     local sideLabel = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")

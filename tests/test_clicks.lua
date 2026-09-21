@@ -270,4 +270,75 @@ T.UpdatePopover(anchor, members, anchor._def)
 point, _, relPoint = pop:GetPoint()
 H.eq(point .. "/" .. relPoint, "RIGHT/LEFT", "and off its left edge on the right")
 
+------------------------------------------------------------
+-- Click hints
+--
+-- The point of these is that the mapping is NOT fixed: with no group Prayer
+-- known, left-click casts the single spell. A static "left is group, right is
+-- single" would be a lie for the whole current level range, and acting on it
+-- burns a reagent. So the hint is read from the attributes the buttons were
+-- wired with, and the tests check it says what a click would actually do.
+------------------------------------------------------------
+
+local function hintFor(row)
+    WoW.tooltipHidden = false
+    row._scripts.OnEnter(row)
+    return WoW.tooltipText()
+end
+
+-- Level 20: no Prayer exists, so BOTH buttons are single-target.
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+local hint = hintFor(row)
+H.check(hint:find("Power Word: Fortitude"), "the hint names the spell, got: " .. hint)
+H.check(not hint:find("Prayer"), "and never names a Prayer this priest cannot cast: " .. hint)
+H.check(hint:find("Left") and hint:find("Right"), "with a line per mouse button: " .. hint)
+
+-- With the Prayer known, left-click changes meaning - and the hint follows.
+rows = setup({ "FORT_SINGLE", "FORT_GROUP" })
+row = activeRows(rows)[1]
+hint = hintFor(row)
+H.check(hint:find("Prayer of Fortitude"), "left-click now reads as the group Prayer: " .. hint)
+H.check(hint:find("Power Word: Fortitude"), "with right-click still single-target: " .. hint)
+H.check(hint:find("your party"), "and the group cast names the group, not one member: " .. hint)
+
+-- The single-target line names who it would land on, which is the part that
+-- tells you whether the click is about to do what you meant.
+H.check(hint:find("Karuzo Elegia") or hint:find("Sten Thornbeard") or hint:find("Mirel Dawnsong"),
+    "the single buff names its target: " .. hint)
+
+-- Nobody valid: say so rather than naming a spell that will not fire.
+rows = setup({ "FORT_SINGLE" })
+WoW.units.player.dead = true
+WoW.units.party1.dead = true
+WoW.units.party2.connected = false
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+hint = hintFor(row)
+H.check(hint:find("nothing to buff"), "a row with no valid target says so: " .. hint)
+
+-- Off by preference.
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+PriestlyDB.showClickHints = false
+GameTooltip:Hide()
+row._scripts.OnEnter(row)
+H.eq(WoW.tooltipText(), "", "turning hints off shows nothing")
+PriestlyDB.showClickHints = true
+
+-- Leaving the row drops the tooltip. The popover has its own polling hide, so
+-- this must not be the thing that closes it.
+row._scripts.OnEnter(row)
+H.check(WoW.tooltipText() ~= "", "hovering shows it again")
+row._scripts.OnLeave(row)
+H.eq(WoW.tooltipText(), "", "and leaving hides it")
+H.check(T.popFrame():IsShown(), "without closing the popover")
+
+-- Group naming
+H.eq(T.GroupLabel(nil), "this group", "an unknown group still reads as something")
+WoW.inRaid = true
+H.eq(T.GroupLabel(3), "group 3", "raid groups are numbered")
+WoW.inRaid = false
+H.eq(T.GroupLabel(1), "your party", "and a party is a party")
+
 H.done("test_clicks")

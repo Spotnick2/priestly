@@ -8,6 +8,12 @@
   so a locked window can always be recovered.
 
   Thanks to **Warbullio** on CurseForge for the request.
+- **Click hints.** Hovering a buff row now tells you what each mouse button will cast, and on whom.
+  Worth reading once even if you know the addon: what left-click does depends on which spells you
+  have, so while you have no group Prayer it buffs a single person rather than the group. Turn it
+  off with **Show click hints on mouseover** in Options - Appearance.
+
+  Thanks to **Giruy** on CurseForge, who lost a lot of candles finding this out the other way.
 
 ## v2.0.2 - 2026-09-21
 

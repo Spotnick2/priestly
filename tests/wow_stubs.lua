@@ -342,7 +342,32 @@ DEFAULT_CHAT_FRAME = {
     AddMessage = function(_, msg) WoW.messages[#WoW.messages + 1] = msg end,
 }
 
+-- Records what was put in it, so a test can assert what the player is told.
+-- Falling through to the catch-all no-op meant tooltip text was invisible to
+-- the suite - it could be wrong, or absent, and nothing would notice.
 GameTooltip = makeFrame("GameTooltip")
+GameTooltip.SetOwner = function(self, owner, anchor)
+    self._owner, self._anchor, self._lines = owner, anchor, {}
+    return self
+end
+GameTooltip.SetText = function(self, text)
+    self._lines = { text }
+    return self
+end
+GameTooltip.AddLine = function(self, text)
+    self._lines = self._lines or {}
+    self._lines[#self._lines + 1] = text
+    return self
+end
+GameTooltip.AddDoubleLine = function(self, left, right)
+    return GameTooltip.AddLine(self, tostring(left) .. "  " .. tostring(right))
+end
+-- Everything the tooltip is showing, colour codes stripped.
+function WoW.tooltipText()
+    if not GameTooltip:IsShown() then return "" end
+    local joined = table.concat(GameTooltip._lines or {}, " / ")
+    return (joined:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
 SlashCmdList = {}
 
 -- Present on the live client, so the options panel's real registration and

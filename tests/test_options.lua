@@ -98,6 +98,16 @@ H.eq(PriestlyDB.lockFrame, true, "ticking it locks the frame")
 lockBox:SetChecked(false)
 click("PriestlyCB_lockFrame")
 H.eq(PriestlyDB.lockFrame, false, "and clearing it unlocks again")
+-- Click hints. The client toggles a checkbox before OnClick fires, so the test
+-- does too - firing the handler alone just re-reads whatever state it was in.
+local hintBox = _G["PriestlyCB_showClickHints"]
+H.check(hintBox ~= nil, "the click-hints checkbox was created")
+hintBox:SetChecked(false)
+click("PriestlyCB_showClickHints")
+H.eq(PriestlyDB.showClickHints, false, "clearing it turns hints off")
+hintBox:SetChecked(true)
+click("PriestlyCB_showClickHints")
+H.eq(PriestlyDB.showClickHints, true, "and ticking it turns them back on")
 
 -- Popover side radios
 for _, side in ipairs({ "left", "right", "auto" }) do

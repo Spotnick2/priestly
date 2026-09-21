@@ -1226,6 +1226,66 @@ local function PopoverSide(anchorRow)
     return (rowX < screenW / 2) and "right" or "left"
 end
 
+-- ─── Click hints ────────────────────────────────────────────────────
+-- What a row's clicks will actually cast, shown on hover.
+--
+-- The controls used to be discoverable only from the addon page or
+-- /priestly help, and getting them wrong COSTS A REAGENT - casting the group
+-- Prayer when you meant a single buff burns a candle every time. Somebody
+-- reported doing exactly that.
+--
+-- It matters more here than it would have on TBC, because the mapping is no
+-- longer fixed: while no group Prayer is known - the whole current level range
+-- - left-click casts the single spell instead. So "left is group, right is
+-- single" is not something a static description can promise. The addon knows;
+-- it should say.
+
+-- How a group reads in a sentence. The header says "-- Group 3 --"; a tooltip
+-- wants "group 3", and wants an answer even where there is no header at all.
+local function GroupLabel(gNum)
+    if not gNum then return "this group" end
+    if gNum >= PET_GROUP then
+        local n = gNum - PET_GROUP + 1
+        return n > 1 and ("pet group " .. n) or "the pets"
+    end
+    if IsInRaid() then return "group " .. gNum end
+    return "your party"
+end
+
+local function HideClickHint()
+    GameTooltip:Hide()
+end
+
+local function ShowClickHint(row)
+    if not Priestly_ShowClickHints() then return end
+    local def = row and row._def
+    if not def then return end
+
+    -- The popover opens on this same hover, so sit on the other side of the
+    -- row rather than on top of it.
+    local side = (PopoverSide(row) == "right") and "ANCHOR_LEFT" or "ANCHOR_RIGHT"
+    GameTooltip:SetOwner(row, side)
+    GameTooltip:SetText(def.hasGroup and def.grp or def.sngl, 0.62, 0.85, 1.0)
+
+    -- Read from the attributes the buttons were actually wired with, not from
+    -- a second guess at the same logic. A hint that can disagree with the
+    -- click is worse than no hint.
+    local function describe(label, spell, unit, groupCast)
+        if not spell then
+            GameTooltip:AddLine(label .. "  |cff888888nothing to buff|r", 1, 1, 1)
+            return
+        end
+        local target = groupCast and GroupLabel(row._gNum)
+                        or API.UnitDisplayName(unit, "whoever needs it")
+        GameTooltip:AddLine(label .. "  |cffffffff" .. spell .. "|r on " .. target, 1, 1, 1)
+    end
+
+    describe("|cffaaaaaaLeft|r ", row:GetAttribute("spell1"), row:GetAttribute("unit1"),
+             row._groupMode)
+    describe("|cffaaaaaaRight|r", row:GetAttribute("spell2"), row:GetAttribute("unit2"), false)
+    GameTooltip:Show()
+end
+
 -- ─── UpdatePopover ───────────────────────────────────────────────────────────
 
 UpdatePopover = function(anchorRow, members, def)
@@ -1379,6 +1439,7 @@ UpdateUI = function()
             r._primary    = primary
             r._secondary  = secondary
             r._groupMode  = groupMode
+            r._gNum       = gNum
 
             ApplyRowVisuals(r, st, def.duration)
 
@@ -1450,8 +1511,12 @@ UpdateUI = function()
                 local cm, cd = members, def
                 r:SetScript("OnEnter", function(self)
                     UpdatePopover(self, cm, cd)
+                    ShowClickHint(self)
                 end)
-                -- OnLeave handled by popover's polling ticker
+                -- The popover's own hide is handled by the polling ticker -
+                -- an OnLeave would fire on the way TO the popover. Dropping
+                -- the tooltip there is right either way.
+                r:SetScript("OnLeave", HideClickHint)
             end
 
             r:Show()
@@ -1791,6 +1856,8 @@ Priestly._test = {
     PickTarget       = PickTarget,
     DurationFor      = DurationFor,
     PopoverSide      = PopoverSide,
+    ShowClickHint    = ShowClickHint,
+    GroupLabel       = GroupLabel,
     PruneAuraCache   = PruneAuraCache,
     IsValidTarget    = IsValidTarget,
     TimerColor       = TimerColor,
