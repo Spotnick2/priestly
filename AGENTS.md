@@ -78,7 +78,8 @@ Load order from `Priestly.toc`:
 
 `PriestlyConfig.lua` exposes: `Priestly_EnsureDefaults`, `Priestly_ShowSolo`, `Priestly_TrackPets`,
 `Priestly_IsBuffEnabled`, `Priestly_ShouldShowShadow`, `Priestly_GetFrameAlpha`,
-`Priestly_OpenConfig`, `Priestly_LearnDuration`, `Priestly_GetLearnedDuration`.
+`Priestly_OpenConfig`, `Priestly_LearnDuration`, `Priestly_GetLearnedDuration`,
+`Priestly_PopoverSide`.
 
 `Priestly.lua` exposes: `Priestly_ScheduleRefresh`, `Priestly_ForceRebuild`,
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
@@ -98,8 +99,8 @@ resetting a second time. Keep `Tools/PriestlyProbe` until #9 closes — `/pprobe
 gets re-tested.
 
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
-`trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `shadowInstances`,
-`learnedDurations`, `flavor`, `visible`, `pos`. `learnedDurations` is keyed by **spell name**,
+`trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,
+`shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`. `learnedDurations` is keyed by **spell name**,
 not by buff id: the single and group forms of one buff share an id and do not share a duration.
 
 ## WoW API And Lua Rules
@@ -117,6 +118,15 @@ not by buff id: the single and group forms of one buff share an id and do not sh
   normally sits. Use `API.UnitDisplayName` (`GetUnitName(unit, false)`).
 - **`GetInstanceInfo()` returns the continent outdoors**, not an empty string — gate on
   `instanceType ~= "none"`.
+- **Ask the client before assuming an API exists: `/api`.** Forever ships
+  `Blizzard_APIDocumentation`, so the game will give you the declared signature - argument names in
+  order, which are optional, return values, event payloads. `/api search <name>` (Lua patterns
+  work), `/api system list`, `/api <system> list`. Systems drop the `C_` prefix, so `C_UnitAuras` is
+  `/api unitauras list`. The verb is `search`, not `name`; a wrong verb is read as a system name.
+- `/api` documents intent, not behaviour. It would not have told us that auras throw for the whole
+  group in combat, that `GetInstanceInfo` returns the continent outdoors, or that account-wide
+  SavedVariables never load. Use it to find out what exists and what shape it is; use
+  `Tools/PriestlyProbe` to find out what it actually does.
 - Measured behaviour for all of this is in `docs/FOREVER-PROBE.md`; re-probe with
   `Tools/PriestlyProbe` rather than assuming.
 - `RegisterEvent` **throws** on an unknown event name. Go through `API.RegisterEvents`.

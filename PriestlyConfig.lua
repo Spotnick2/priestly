@@ -15,6 +15,7 @@ local DEFAULTS = {
     showSolo        = false,
     trackPets       = true,
     frameAlpha      = 0.96,
+    popoverSide     = "auto",     -- "auto" | "left" | "right"
 }
 
 -- Deliberately NOT in DEFAULTS: a nil value creates no key, so the pairs()
@@ -317,6 +318,12 @@ end
 
 function Priestly_GetFrameAlpha()
     return PriestlyDB and PriestlyDB.frameAlpha or 0.96
+end
+
+-- "auto" | "left" | "right". Auto means "wherever there is room", decided
+-- fresh each time the popover opens - see PopoverSide in Priestly.lua.
+function Priestly_PopoverSide()
+    return (PriestlyDB and PriestlyDB.popoverSide) or "auto"
 end
 
 function Priestly_ShowSolo()
@@ -889,6 +896,32 @@ local function BuildPanel(panel)
     y.v = y.v - 40
     MakeDesc(settingsChild, y,
         "Controls the background opacity of the main Priestly frame and popover.", 4)
+
+    y.v = y.v - 10
+    local sideLabel = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sideLabel:SetPoint("TOPLEFT", settingsChild, "TOPLEFT", 0, y.v)
+    sideLabel:SetText("Popover Side")
+    -- Reserve the label's own height, as every sibling does. MakeRadioGroup
+    -- anchors a ~20px button by its TOPLEFT and only subtracts 4 of its own,
+    -- so a smaller step here puts the first radio through the label.
+    y.v = y.v - 18
+
+    MakeRadioGroup(settingsChild, y, {
+        { key = "auto",  label = "Automatic - open it wherever there is room" },
+        { key = "left",  label = "Always on the left" },
+        { key = "right", label = "Always on the right" },
+    }, Priestly_PopoverSide(), function(key)
+        PriestlyDB.popoverSide = key
+        -- The side is chosen fresh every time the popover opens, so the next
+        -- hover would pick this up on its own. The rebuild is for the popover
+        -- that is open right now: UpdateUI re-anchors it, so the change shows
+        -- without having to move the mouse away and back.
+        if Priestly_ForceRebuild then Priestly_ForceRebuild() end
+    end)
+
+    MakeDesc(settingsChild, y,
+        "Which side of the frame the per-member popover opens on. Automatic follows the frame: "
+        .. "put Priestly on the left of your screen and the popover opens to the right.", 4)
 
     settingsChild:SetHeight(math.abs(y.v) + 20)
 
