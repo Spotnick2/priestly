@@ -210,6 +210,24 @@ ones — have something to attach to.
    and which you rejected.
 5. Squash-merge, then delete the branch.
 
+## Releasing
+
+CurseForge builds from the repository webhook when it sees a tag, and publishes `CHANGELOG.md` as
+the release notes.
+
+**Every tag needs a `CHANGELOG.md` entry, committed before the tag is pushed.** A tag without one
+publishes the *previous* release's notes against the new build, which is worse than no notes at all
+and is invisible from this side.
+
+1. Add a `## <version> - <date>` section at the top. Write it for players, not from the diff: what
+   changed for someone using the addon, in what they would call it. Internal refactors belong in
+   commit messages.
+2. Note anything that resets or behaves differently after updating — a settings change, a default
+   that moved — under its own heading. People read release notes to find out what broke.
+3. Commit the changelog, then tag: `git tag v2.0.0-beta1 && git push --tags`.
+4. The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
+   Release.
+
 ## Validation
 
 Offline, on every change:

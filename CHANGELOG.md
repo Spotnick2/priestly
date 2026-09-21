@@ -38,22 +38,38 @@ TBC Classic Anniversary is no longer supported; v1.0.6 remains available for tha
 ### Changed
 - **The instance list is Forever's content**, not Vanilla's: the three raids — The Barrow Deeps
   (10), Hyjal Summit (20) and Onyxia's Lair (40) — and all twenty-eight dungeons, ordered by level.
-  That includes Forever's nine new ones, from Hall of Thanes at 13 up to Shaper's Terrace at 60.
+  That includes Forever's nine new ones, from The Hall of Thanes at 13 up to Shaper's Terrace at 60.
   They are listed but unchecked, because nothing is known about their encounters yet and the
   tooltip says so rather than inventing detail. The Vanilla raids beyond Onyxia are gone; they are
   not in the game.
 - Multi-wing instances are one entry each. Scarlet Monastery, Maraudon, Dire Maul, Stratholme and
   Blackrock Spire report a single name to addons however you enter them, so one row is what the
   game actually exposes.
-- The TBC instance list is gone; the options panel is now **Settings | Instances**. An existing
-  Priestly profile is migrated automatically: your settings are kept, TBC-only entries are dropped.
+- If Priestly does not recognise an instance you walk into, it now says so instead of quietly doing
+  nothing — most of these names cannot be checked against the game until the level cap rises, and a
+  wrong one would otherwise just fail in silence.
+- The TBC instance list is gone; the options panel is now **Settings | Instances**. Priestly will
+  migrate a v1.x profile if it ever sees one - keeping your settings and dropping the TBC-only
+  entries - but on this client it will not: v1.x stored settings account-wide, and account-wide
+  saved variables are not read back (see above). Expect to configure Forever from defaults.
 - The main frame now survives being closed during combat the same way the popover already did.
-- Reagent tracking follows the spells you know instead of a hardcoded level.
+- Reagent tracking follows the spells you know instead of a hardcoded level, and counts the whole
+  carried inventory including a reagent bag.
+- Clicks prefer somebody in range. Casting at a member who is out of reach simply fails, and a
+  group Prayer reaches further than the single-target spell, so each click is measured against the
+  spell it will actually cast.
+- Closing the window is remembered. It no longer reopens on the next login, ready check or roster
+  change - only on joining a group, which is what the addon promises. A `/priestly show` asked for
+  during combat now happens when combat ends instead of being dropped.
+- Pets get as many rows as they need. A raid with more pets than the popover can list is split into
+  several pet groups rather than counting members it gave you no way to click.
+- The per-member popover follows a roster change while it is open, instead of showing the previous
+  group under the new names.
 
 ### Added
 - A unit test suite (`tests/`, plain Lua 5.1, no game client) and a deploy script.
-- Automated releases through the BigWigs packager, with a dry-run package check on every pull
-  request.
+- A package check on every pull request: syntax, the full test suite, and a dry-run build of the
+  release zip.
 
 ## v1.0.6 - 2026-05-13
 
