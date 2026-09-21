@@ -42,6 +42,54 @@ PriestlyProbeChar = PriestlyProbeChar or { launches = 0 }
 PriestlyProbeChar.launches = (PriestlyProbeChar.launches or 0) + 1
 PriestlyProbeChar.lastCharacter = nil   -- filled in at PLAYER_LOGIN
 
+------------------------------------------------------------
+-- Do CVars survive where SavedVariables do not?
+--
+-- Measured 2026-09-21: neither account-wide nor per-character SavedVariables
+-- are read back on this build. CVars are a different mechanism entirely -
+-- they live in Config.wtf and the CLIENT loads them at startup, not the addon
+-- loader - so they may persist where SavedVariables do not.
+--
+-- Same shape as the SavedVariables test above, and for the same reason: count
+-- launches. Do not read Config.wtf and conclude from its contents, which is
+-- exactly how the SavedVariables answer was wrong for a day.
+--
+-- READ BEFORE REGISTERING. RegisterCVar takes a default value, so registering
+-- first could overwrite the very thing we are trying to read back. A CVar that
+-- persisted is already readable before we touch it.
+------------------------------------------------------------
+
+local CVAR_NAME = "priestlyProbeLaunches"
+
+local CVAR_API, CVAR_ARRIVED, CVAR_BEFORE, CVAR_NOTE
+do
+    local get = (C_CVar and C_CVar.GetCVar) or _G.GetCVar
+    local set = (C_CVar and C_CVar.SetCVar) or _G.SetCVar
+    local reg = (C_CVar and C_CVar.RegisterCVar) or _G.RegisterCVar
+    CVAR_API = (get and set and reg) and "present" or string.format(
+        "INCOMPLETE (get=%s set=%s register=%s)",
+        tostring(get ~= nil), tostring(set ~= nil), tostring(reg ~= nil))
+
+    if get and set and reg then
+        local ok, raw = pcall(get, CVAR_NAME)
+        CVAR_ARRIVED = ok and raw or nil
+        if CVAR_ARRIVED == nil then
+            local registered = pcall(reg, CVAR_NAME, "0")
+            CVAR_NOTE = registered and "not present at load; registered now"
+                or "not present at load; RegisterCVar THREW"
+            local ok2, raw2 = pcall(get, CVAR_NAME)
+            CVAR_ARRIVED = ok2 and raw2 or nil
+        else
+            CVAR_NOTE = "arrived at load"
+        end
+        CVAR_BEFORE = tonumber(CVAR_ARRIVED) or 0
+        pcall(set, CVAR_NAME, tostring(CVAR_BEFORE + 1))
+    else
+        CVAR_NOTE = "no usable CVar API"
+        CVAR_BEFORE = 0
+    end
+end
+
 -- Spells the port cares about.
 local SPELLS = {
     { id = 1243,  name = "Power Word: Fortitude" },
@@ -842,6 +890,26 @@ SlashCmdList["PPROBE"] = function(msg)
         else
             say("  |cff55ff55SavedVariables DO load|r on this build.")
         end
+    elseif cmd == "cvar" then
+        say("|cff99ddff== CVar persistence ==|r")
+        say("  CVar API: " .. tostring(CVAR_API))
+        say("  " .. tostring(CVAR_NOTE))
+        say("  value that arrived: " .. tostring(CVAR_ARRIVED))
+        say("  launches recorded before this one: " .. tostring(CVAR_BEFORE))
+        say("  launches now: " .. tostring(CVAR_BEFORE + 1))
+        local info = (C_CVar and C_CVar.GetCVarInfo) or _G.GetCVarInfo
+        if info then
+            say("  GetCVarInfo: " .. try(info, CVAR_NAME))
+        end
+        local loaded = C_CVar and C_CVar.AreCVarsLoaded
+        if loaded then say("  AreCVarsLoaded: " .. try(loaded)) end
+        if CVAR_BEFORE == 0 then
+            say("  |cffff4444Nothing read back yet.|r /reload and run this again -")
+            say("  if it still says 0, CVars do not persist either.")
+        else
+            say("  |cff55ff55CVars DO persist|r - a usable store for settings.")
+        end
+
     elseif cmd == "text" or cmd == "copy" then
         ShowCopyWindow()
     elseif cmd == "hide" then

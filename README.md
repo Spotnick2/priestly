@@ -78,10 +78,14 @@ catch up:
 * The **by-instance** Shadow Protection mode lists Forever's own raids and dungeons. Most are above
   the current level cap, so the names it matches on are still unverified — if it ever fails to
   notice an instance you are standing in, that is why.
-* **Settings are saved per character.** This client has a bug where account-wide saved variables are
-  written but never read back, so addons that use them reset to defaults every session. Priestly
-  stores its settings per character, which does work — the cost is that configuring one character
-  does not configure the others.
+* **Your settings reset every time you reload.** This is a client bug and it affects every addon,
+  not just this one: Forever writes addon settings to disk correctly and then never reads them back
+  at login. Per-character storage fails the same way as account-wide. So the window position, the
+  lock, the buff toggles and the Shadow Protection list all start fresh each session.
+
+  Nothing an addon does can work around it directly. There is a usable alternative on this client
+  and Priestly will move its settings there, so this should be temporary — but for now, please do
+  not report lost settings as a Priestly bug.
 
 ---
 

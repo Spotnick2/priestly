@@ -207,7 +207,7 @@ H.check(pcall(TC.CheckCurrentInstance), "instance detection runs")
 local slash = SlashCmdList["PRIESTLY"]
 H.check(slash ~= nil, "the slash command is registered")
 for _, cmd in ipairs({ "", "help", "show", "hide", "close", "reset", "config",
-                       "options", "settings", "opt", "garbage" }) do
+                       "options", "settings", "opt", "pos", "garbage" }) do
     local ok, err = pcall(slash, cmd)
     H.check(ok, "/priestly " .. (cmd == "" and "<no args>" or cmd) .. ": " .. tostring(err))
 end
@@ -360,9 +360,25 @@ H.check(PriestlyDB.pos == nil, "and does not save a position it was not allowed 
 
 -- A locked window can still be recovered: the lock must not trap it offscreen.
 PriestlyDB.pos = { point = "CENTER", relPoint = "CENTER", x = 9999, y = 9999 }
+local msgBefore = #WoW.messages
 SlashCmdList["PRIESTLY"]("reset")
 H.check(PriestlyDB.pos == nil, "/priestly reset works while locked")
+
+-- ...but say so, because the window is now centred AND still locked. Dragging
+-- it does nothing and every reload puts it back, which reads exactly like the
+-- position not being saved - and was reported as that.
+local said = table.concat(WoW.messages, " ", msgBefore + 1, #WoW.messages)
+H.check(said:find("locked"), "and says the window is still locked: " .. said)
+H.check(said:find("config") or said:find("Lock frame"),
+    "pointing at the setting that undoes it: " .. said)
+
 PriestlyDB.lockFrame = false
+msgBefore = #WoW.messages
+SlashCmdList["PRIESTLY"]("reset")
+said = table.concat(WoW.messages, " ", msgBefore + 1, #WoW.messages)
+-- Plain-text match on the exact phrase: a bare "locked" substring would fail
+-- the day the unlocked path says anything containing "unlocked".
+H.check(not said:find("is locked", 1, true), "unlocked, it does not nag: " .. said)
 
 ------------------------------------------------------------
 -- Row hover handlers
@@ -384,5 +400,46 @@ PriestlyDB.showClickHints = false
 runScript(hoverRow, "OnEnter")
 runScript(hoverRow, "OnLeave")
 PriestlyDB.showClickHints = true
+
+------------------------------------------------------------
+-- The position diagnostic must work when it is most needed
+--
+-- Somebody runs this because the window is misbehaving, so it has to survive
+-- a nil PriestlyDB, an absent pos and an unbuilt frame rather than throwing a
+-- second error on top of the first.
+------------------------------------------------------------
+
+local before = #WoW.messages
+PriestlyDB.pos = nil
+H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "/priestly pos runs with no saved position")
+local said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(said:find("nothing saved"), "and says so plainly: " .. said)
+H.check(said:find("last restore"), "while still reporting what the restore decided")
+
+before = #WoW.messages
+PriestlyDB.pos = { point = "RIGHT", relPoint = "RIGHT", x = -350.5, y = -122.8 }
+H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "and with one")
+said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(said:find("RIGHT"), "reporting the saved anchor: " .. said)
+
+-- The restore decision must survive ordinary refreshes.
+--
+-- Every UpdateUI after the window is up skips the restore, correctly, because
+-- it is already anchored. If a skip overwrote the decision, one aura or roster
+-- event would erase the only thing this command exists to report - and it
+-- would be gone long before anybody thought to ask. That is a diagnostic that
+-- works in testing and is empty exactly when it is needed.
+before = #WoW.messages
+runScript(T.eventFrame(), "OnEvent", "PLAYER_LOGIN")
+WoW.flushTimers()
+T.UpdateUI()
+T.UpdateUI()
+T.UpdateUI()
+H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "/priestly pos after several refreshes")
+said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(said:find("applied saved") or said:find("DEFAULT"),
+    "still reports what the restore actually decided: " .. said)
+H.check(not said:find("SKIPPED"), "rather than the skip that came after it: " .. said)
+H.check(said:find("refresh"), "while saying refreshes have happened since: " .. said)
 
 H.done("test_frames")

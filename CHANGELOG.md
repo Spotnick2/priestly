@@ -1,5 +1,26 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Known issue
+- **Your settings reset every time you reload.** A client bug, affecting every addon rather than
+  this one: Forever writes addon settings to disk correctly and never reads them back at login.
+  Storing them per character fails the same way as account-wide, so the window position, the lock,
+  the buff toggles and the Shadow Protection list all start fresh each session. Priestly will move
+  its settings somewhere the client does remember; until then this is not something the addon can
+  fix, and it is not worth reporting as a Priestly bug.
+
+### Added
+- **`/priestly pos`** - says where the window is, where it was told to be, and what the addon
+  decided at login. Worth running before reporting anything about the window moving on its own.
+
+### Fixed
+- **`/priestly reset` left a locked window stranded.** Reset recentres the window even when it is
+  locked, so a window dragged somewhere unreachable can always be recovered. But it then sat in the
+  middle of the screen, still locked, refusing to be dragged - and returned there on every reload,
+  which looks exactly like the position not being saved. It now tells you the window is locked and
+  where to unlock it.
+
 ## v2.0.3 - 2026-09-21
 
 ### Fixed

@@ -171,6 +171,18 @@ local g_Ticker   = 0
 local g_IsPriest = false
 local g_PendingShow  = false   -- a show request that arrived during combat
 local g_LastGroupSize = 0
+-- What the position restore in UpdateUI decided, and why. Printed by
+-- `/priestly pos`. Reading the code twice and consulting a second reviewer
+-- both said this path is sound, while the frame demonstrably came back at the
+-- default - so the next step is to make it say what it did.
+--
+-- This holds the last time the restore ACTUALLY RAN. Every refresh after that
+-- skips it, correctly, because the window is already up - and a skip must not
+-- overwrite the decision. Otherwise the one thing worth knowing is gone by the
+-- time anyone asks: a single aura or roster event fires ScheduleRefresh, and
+-- the answer becomes "SKIPPED" forever.
+local g_RestoreLog = "UpdateUI has not run yet"
+local g_RestoreSkips = 0
 
 local g_GHdrs = {}   -- FontStrings [1..MAX_GROUPS]
 local g_Rows  = {}   -- Buttons     [1..MAX_ROWS]
@@ -895,7 +907,12 @@ InitUI = function()
     -- this clear of the secure-frame rules, so the lock can be toggled in
     -- combat like any other setting.
     drag:SetScript("OnDragStart", function()
-        if Priestly_FrameLocked() then return end
+        -- `Priestly_FrameLocked and` is not decoration. If PriestlyConfig ever
+        -- fails to load, or a half-deployed build leaves the helper behind,
+        -- calling a nil global throws - and this client has errors OFF by
+        -- default, so the whole drag dies in silence. Short-circuiting leaves
+        -- the window draggable, which is the safe way to be wrong.
+        if Priestly_FrameLocked and Priestly_FrameLocked() then return end
         g_Main:StartMoving()
     end)
     g_Main.dragHandle = drag
@@ -905,15 +922,30 @@ InitUI = function()
         -- stuck to the cursor.
         --
         -- What the bail below protects is the SAVED position, not where the
-        -- frame currently sits - a drag interrupted by the lock leaves it
-        -- wherever the cursor was until the window is next hidden and shown,
-        -- which then restores the saved spot. Narrow enough to accept: the
-        -- lock has to flip during an active drag, which takes a macro or a
-        -- second input.
+        -- frame currently sits. A drag interrupted by the lock leaves the
+        -- window wherever the cursor was, and it stays there for the session:
+        -- the restore in UpdateUI only runs while g_Moved is false, and a
+        -- completed drag or an earlier restore has already set it true.
+        -- CloseUI does not clear it. So the saved spot comes back on the next
+        -- login, not on the next hide and show. Narrow enough to accept - the
+        -- lock has to flip during an active drag - but worth stating
+        -- correctly, because the wrong version reads as a guarantee.
         g_Main:StopMovingOrSizing()
-        if Priestly_FrameLocked() then return end
+        -- Guarded for the same reason as OnDragStart, and it matters more
+        -- here: an error between the stop above and the save below loses the
+        -- position silently. The frame moves, stays put, and is back at the
+        -- default next login with nothing on screen to explain it.
+        if Priestly_FrameLocked and Priestly_FrameLocked() then return end
         g_Moved = true
-        -- Save position
+        -- Save position.
+        --
+        -- GetPoint reports relativeTo as nil after StopMovingOrSizing, while
+        -- the restore anchors explicitly to UIParent. That looks like a
+        -- mismatch and is not: g_Main is PARENTED to UIParent, and a nil
+        -- relativeTo means "my parent". Measured in game - saved and restored
+        -- values match to the decimal. It would be a real drift for a frame
+        -- parented anywhere else, which is why Blizzard's Edit Mode code
+        -- compensates when it converts nil to UIParent.
         if PriestlyDB then
             local point, _, relPoint, x, y = g_Main:GetPoint()
             PriestlyDB.pos = { point = point, relPoint = relPoint, x = x, y = y }
@@ -1597,9 +1629,16 @@ UpdateUI = function()
             local p = PriestlyDB.pos
             g_Main:SetPoint(p.point or "CENTER", UIParent, p.relPoint or "CENTER", p.x or 300, p.y or 50)
             g_Moved = true
+            g_RestoreLog = string.format("applied saved %s/%s %.1f,%.1f",
+                tostring(p.point), tostring(p.relPoint), tonumber(p.x) or 0/0, tonumber(p.y) or 0/0)
         else
             g_Main:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
+            g_RestoreLog = "used the DEFAULT - PriestlyDB." ..
+                (PriestlyDB and "pos was nil" or "was nil")
         end
+    else
+        -- Counted, not recorded over the decision above.
+        g_RestoreSkips = g_RestoreSkips + 1
     end
 
     g_Main:Show()
@@ -1819,6 +1858,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly hide|r       close")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly config|r     open options panel")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly reset|r      reset window position")
+        DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly pos|r        why the window is where it is")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly help|r       this message")
         -- Describe the mapping that is actually live: without the group
         -- Prayers (the whole current level range) left-click is single-target.
@@ -1857,6 +1897,41 @@ SlashCmdList["PRIESTLY"] = function(msg)
             g_Main:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
         end
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Window position reset.")
+        -- Reset deliberately ignores the lock, so a locked window dragged
+        -- somewhere unreachable can always be recovered. The trap is what
+        -- comes next: the window is now centred AND still locked, so dragging
+        -- it anywhere does nothing and every reload puts it back here. Without
+        -- this line that reads exactly like "the position is not saved".
+        if Priestly_FrameLocked() then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cff99ddff[Priestly]|r |cffffcc00The window is locked|r - untick " ..
+                "|cffffffffLock frame position|r in |cffffffff/priestly config|r to move it.")
+        end
+
+    elseif cmd == "pos" then
+        -- Diagnostic for "the window does not remember where I put it".
+        local p = PriestlyDB and PriestlyDB.pos
+        DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r position diagnostic:")
+        DEFAULT_CHAT_FRAME:AddMessage("  saved: " .. (p and string.format(
+            "%s/%s  %.1f, %.1f", tostring(p.point), tostring(p.relPoint),
+            tonumber(p.x) or 0/0, tonumber(p.y) or 0/0) or "|cffff6666nothing saved|r"))
+        DEFAULT_CHAT_FRAME:AddMessage("  last restore: " .. tostring(g_RestoreLog))
+        if g_RestoreSkips > 0 then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                "    (%d refresh%s since, which leave the position alone)",
+                g_RestoreSkips, g_RestoreSkips == 1 and "" or "es"))
+        end
+        if g_Main then
+            local pt, rel, relPt, x, y = g_Main:GetPoint()
+            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                "  frame now: %s/%s  %.1f, %.1f  (relativeTo %s)",
+                tostring(pt), tostring(relPt), tonumber(x) or 0/0, tonumber(y) or 0/0,
+                rel and (rel.GetName and rel:GetName() or "unnamed") or "nil"))
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("  frame now: |cffff6666not built|r")
+        end
+        DEFAULT_CHAT_FRAME:AddMessage("  locked: " ..
+            tostring(Priestly_FrameLocked and Priestly_FrameLocked() or false))
 
     elseif cmd == "hide" or cmd == "close" then
         CloseUI(true)

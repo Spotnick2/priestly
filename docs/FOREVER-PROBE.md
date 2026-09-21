@@ -256,35 +256,56 @@ The walk returns the rank in the subtext — `Lesser Heal [Rank 1]`, `Power Word
 — so the reagent-rank logic (`API.GetSpellRank`) has something to parse once Prayer of Fortitude is
 learnable.
 
-## 11. SavedVariables — account-wide never load back
+## 11. SavedVariables — nothing loads back, per-character included
 
-**The field notes are wrong about this.** `References/PORTING-TBC-TO-FOREVER.md` says the
-"writes but never reads" report "does not reproduce on build 69913". It does. Two independent
-probes, on two accounts, agree:
+**Re-measured 2026-09-21 01:14 on build 1.60.1.69913. This supersedes the earlier finding in this
+section that per-character storage worked.**
 
-| Mechanism | Written | Read back at login |
-|---|---|---|
-| `SavedVariables` (account-wide) | yes | **no** |
-| `SavedVariablesPerCharacter` | yes | **yes** |
+`/pprobe sv`:
 
-Writing and reading are indistinguishable from the file on disk, which is how the original
-verification went wrong: if the load is broken, every launch starts from defaults, rewrites the same
-content, and the file looks perfect. The `.bak` diff that "proved" it round-trips proves only that
-the same content was written twice. Only a session counter separates the two — capture whether the
-table arrived *before* touching it, then increment.
+```
+account-wide table arrived at load: NO
+per-character table arrived at load: NO
+launches recorded before this one: account=0 character=0
+launches now: account=1 character=1
+```
 
-Layout on disk, which may be related:
+Both files on disk read `launches = 1`. Every session starts from zero and writes 1; a working load
+would show 2, 3, 4. Confirmed independently by Priestly itself: `PriestlyDB.pos` is present in the
+character file and nil in the next session, which `/priestly pos` reports directly.
 
-- per-character variables are written **only** to the Retail-style path,
-  `WTF/Account/<id>/<realmID>/<Name>-<Surname>/SavedVariables/`
-- the Classic-style character folders (`<RealmName>/<Char>/`) contain no `SavedVariables` directory
-  at all — only `AddOns.txt`
-- that folder name, `Karuzo-Elegia`, has exactly the shape of Retail's `<Name>-<Realm>`, because
-  Forever characters have a surname
+**How the earlier wrong answer happened, because it will happen again.** Persistence was checked by
+reading the saved file. That file looks fully populated whether or not the load ran, because
+`Priestly_EnsureDefaults` rewrites every `DEFAULTS` key at login and `learnedDurations` / `flavor`
+are rebuilt from runtime state. Only a key absent from `DEFAULTS` can show the failure. `pos` is the
+only such key in this addon, and it is precisely the one that kept disappearing — reported twice by
+the user before it was believed.
 
-Priestly therefore declares `PriestlyDB` as `SavedVariablesPerCharacter` (#7). That is a workaround
-for a client bug rather than a design decision; #9 tracks revisiting it once the client loads
-account-wide variables, and records what moving back would involve.
+Verify persistence by **counting launches inside the addon**, never by reading the file.
+
+### CVars DO persist — measured
+
+`/pprobe cvar`, same launch-counting shape, across three sessions:
+
+```
+session 1   not present at load; registered now   before=0  now=1
+session 2   arrived at load, value 2              before=2  now=3
+```
+
+The counter survives `/reload`. Note the second line: `GetCVar` returned the value **before** the
+probe registered anything, so the client loads it from `Config.wtf` independently of
+`RegisterCVar`. `AreCVarsLoaded()` was already true at login.
+
+`GetCVarInfo` reports `isStoredServerAccount=false, isStoredServerCharacter=false` — purely
+client-local, so a CVar will not follow the player to another machine.
+
+**Read before registering.** `RegisterCVar(name, default)` takes a default value, so registering
+first can overwrite the value you are trying to read back — and the test would then report "does
+not persist" about a store that works. A persisted CVar is readable before you touch it.
+
+This is a usable settings store while SavedVariables are broken. Tracked in **issue #32**; see it
+for what still needs measuring (value length limits, how many CVars can be registered, and whether
+quotes or newlines survive the `SET name "value"` format of `Config.wtf`).
 
 ## 12. Instances
 
