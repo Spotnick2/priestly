@@ -199,7 +199,37 @@ The walk returns the rank in the subtext — `Lesser Heal [Rank 1]`, `Power Word
 — so the reagent-rank logic (`API.GetSpellRank`) has something to parse once Prayer of Fortitude is
 learnable.
 
-## 11. Still open
+## 11. SavedVariables — account-wide never load back
+
+**The field notes are wrong about this.** `References/PORTING-TBC-TO-FOREVER.md` says the
+"writes but never reads" report "does not reproduce on build 69913". It does. Two independent
+probes, on two accounts, agree:
+
+| Mechanism | Written | Read back at login |
+|---|---|---|
+| `SavedVariables` (account-wide) | yes | **no** |
+| `SavedVariablesPerCharacter` | yes | **yes** |
+
+Writing and reading are indistinguishable from the file on disk, which is how the original
+verification went wrong: if the load is broken, every launch starts from defaults, rewrites the same
+content, and the file looks perfect. The `.bak` diff that "proved" it round-trips proves only that
+the same content was written twice. Only a session counter separates the two — capture whether the
+table arrived *before* touching it, then increment.
+
+Layout on disk, which may be related:
+
+- per-character variables are written **only** to the Retail-style path,
+  `WTF/Account/<id>/<realmID>/<Name>-<Surname>/SavedVariables/`
+- the Classic-style character folders (`<RealmName>/<Char>/`) contain no `SavedVariables` directory
+  at all — only `AddOns.txt`
+- that folder name, `Karuzo-Elegia`, has exactly the shape of Retail's `<Name>-<Realm>`, because
+  Forever characters have a surname
+
+Priestly therefore declares `PriestlyDB` as `SavedVariablesPerCharacter` (#7). That is a workaround
+for a client bug rather than a design decision; #9 tracks revisiting it once the client loads
+account-wide variables, and records what moving back would involve.
+
+## 12. Still open
 
 - **Clicking in combat.** Casting works out of combat on both self and another player.
 - **`INSTANCE_DB` names** against real `GetInstanceInfo()` output, once those zones are reachable.

@@ -83,6 +83,19 @@ Load order from `Priestly.toc`:
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
 Protection aura names, which the config's "detect" mode reads).
 
+**`PriestlyDB` is `SavedVariablesPerCharacter`, not account-wide.** Measured on build
+1.60.1.69913 by two independent probes: this client writes account-wide SavedVariables but never
+reads them back, so every session starts from defaults. Per-character storage does load. Do not
+"fix" the TOC back — `tests/test_manifest.lua` asserts it, because the failure is invisible (the file
+on disk looks perfectly correct) and the cost is every setting silently resetting. The trade is that
+settings are no longer shared between characters.
+
+This is a workaround for a client bug, tracked in **issue #9** for revisiting once the client loads
+account-wide variables. Moving back is not just reverting the TOC line: by then people will have
+configured characters, and seeding the account-wide table from them is what stops every setting
+resetting a second time. Keep `Tools/PriestlyProbe` until #9 closes — `/pprobe sv` is how the client
+gets re-tested.
+
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `shadowInstances`,
 `learnedDurations`, `flavor`, `visible`, `pos`. `learnedDurations` is keyed by **spell name**,

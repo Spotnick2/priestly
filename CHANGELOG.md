@@ -29,6 +29,12 @@ TBC Classic Anniversary is no longer supported; v1.0.6 remains available for tha
   and the popover is wider to fit them. Buff state now follows the character, not the raid slot.
 - `UNIT_AURA` is filtered to the units and spells that matter - it fires far more often here.
 
+### Known client issue
+- **Settings are stored per character.** This client writes account-wide saved variables but never
+  reads them back, so any addon using them resets to defaults every session. Per-character storage
+  does work, so that is where Priestly keeps its settings. Configuring one character does not
+  configure the others.
+
 ### Changed
 - The TBC instance list is gone; the options panel is now **Settings | Instances**. An existing
   Priestly profile is migrated automatically: your settings are kept, TBC-only entries are dropped.
