@@ -26,6 +26,9 @@ local DEFAULTS = {
 --   shadowInstances   -- [instanceName] = tracked
 --   learnedDurations  -- [spellName] = seconds, scoped to a client build
 --   flavor            -- migration marker
+--
+-- And one that must NEVER be in DEFAULTS, or it stops working:
+--   svLoadCheck       -- proof the client read the file; see the load check
 
 -- ─── One write path for PriestlyDB ─────────────────────────────────────────────
 --
@@ -50,6 +53,11 @@ end
 
 function Priestly_SetConfig(key, value)
     if not PriestlyDB then PriestlyDB = {} end
+    -- An unchanged value is not a change. UpdateUI sets `visible` on every
+    -- refresh, which would otherwise run the hook on the aura hot path. Tables
+    -- are always reported: the caller may have built a new one with new
+    -- contents, and comparing them is not this function's job.
+    if type(value) ~= "table" and PriestlyDB[key] == value then return end
     PriestlyDB[key] = value
     Priestly_OnConfigChanged(key)
 end
@@ -58,6 +66,7 @@ end
 function Priestly_SetShadowInstance(name, tracked)
     if not PriestlyDB then PriestlyDB = {} end
     if not PriestlyDB.shadowInstances then PriestlyDB.shadowInstances = {} end
+    if PriestlyDB.shadowInstances[name] == tracked then return end
     PriestlyDB.shadowInstances[name] = tracked
     Priestly_OnConfigChanged("shadowInstances")
 end
@@ -251,6 +260,8 @@ local function DurationStore()
     if not store or store.build ~= g_Build then
         store = { build = g_Build }
         PriestlyDB.learnedDurations = store
+        -- Replaced from inside a getter, so it reports here or not at all.
+        Priestly_OnConfigChanged("learnedDurations")
     end
     return store
 end
@@ -387,70 +398,87 @@ function Priestly_ShowSolo()
     return PriestlyDB and PriestlyDB.showSolo == true
 end
 
--- ─── Has Blizzard fixed it? ────────────────────────────────────────────────────
+-- ─── Has Blizzard fixed it? ─────────────────────────────────────────────────
 --
--- PriestlyDB.svLoadCheck is written every session and is deliberately NOT in
--- DEFAULTS, so EnsureDefaults can never recreate it. It can only be there at
--- login if the client really read the SavedVariables file - which makes its
--- presence proof that the loader works, on whichever build fixed it. It needs
--- no working store, because it IS the test for one. (tests/test_config.lua
--- asserts it stays out of DEFAULTS: adding it there would silently switch the
--- detector off.)
+-- Each scope keeps a marker, `svLoadCheck`, written every session and never in
+-- DEFAULTS, so EnsureDefaults cannot recreate it. If it is there at login, the
+-- client read the file. Two scopes, because they can be fixed separately:
+-- PriestlyDB is per character, and PriestlySVCheck is a small account-wide
+-- table declared only for this check - account-wide storage is what #9 wants
+-- to move back to once it works.
 --
--- Only announced on a genuine initial login. A /reload proves nothing: this
--- client has been seen keeping settings across /reload and still losing them
--- on a real restart, so announcing then would be the very false positive the
--- check exists to avoid. The marker is rewritten on every UI load regardless,
--- so a session that reloaded part-way still leaves one for the next login.
+-- A returning marker can still be a false positive, and each case is handled:
 --
--- Residual limit: logging out to character select and back in is an initial
--- login inside the same process, so the message asks for a full exit to
--- confirm.
+--   * /reload keeps the client running and can hand back its cached copy.
+--     Never announced (PLAYER_ENTERING_WORLD's isReloadingUi).
+--   * Logging out to character select and back in is an initial login in the
+--     same process, and can be served from the same cache. Lua cannot tell it
+--     from a real start. So on SV_BROKEN_ON_BUILD - the build where loading is
+--     measured broken - a returning marker is treated as that cache and
+--     ignored. The fix needs a client patch, and a patch changes the build.
+--   * Every login after a real fix. The announcement is latched in the marker,
+--     which by then persists.
 --
--- Same shape as AltStable's (PR #33 there). Candidate for the shared core.
+-- On a newer build a relog is still indistinguishable, so the message says
+-- what it means under each procedure rather than claiming the fix.
+--
+-- Same approach as AltStable PR #33. Candidate for the shared core (#3).
 
+local SV_BROKEN_ON_BUILD = "69913"
+
+-- API.ClientBuild answers "?" when the build cannot be read; for these checks
+-- that is "unknown", never "a new build".
 local function CurrentBuild()
-    local ok, _, build = pcall(GetBuildInfo)
-    return ok and build and tostring(build) or nil
+    local build = API and API.ClientBuild and API.ClientBuild()
+    if not build or build == "?" then return nil end
+    return build
 end
 
 -- config-owner: begin
 local function CheckSavedVariablesLoad(announce)
     if not PriestlyDB then PriestlyDB = {} end
-    local previous = PriestlyDB.svLoadCheck
+    if not PriestlySVCheck then PriestlySVCheck = {} end
+    local build = CurrentBuild()
+    local trustworthy = announce and build ~= nil and build ~= SV_BROKEN_ON_BUILD
 
-    if announce and type(previous) == "table" and previous.stamp and DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage(
-            "|cff99ddff[Priestly]|r |cff55ff55Settings were remembered this session|r "
-            .. "(saved " .. tostring(previous.stamp) .. " on build " .. tostring(previous.build)
-            .. ", now " .. tostring(CurrentBuild()) .. "). The client bug looks fixed - "
-            .. "confirm with a full exit and relaunch, not /reload.")
+    local cameBack = {}
+    for _, scope in ipairs({ { "per-character", PriestlyDB },
+                             { "account-wide", PriestlySVCheck } }) do
+        local label, holder = scope[1], scope[2]
+        local previous = holder.svLoadCheck
+        local back = type(previous) == "table" and previous.stamp ~= nil
+        local already = back and previous.announced == true
+        local tell = trustworthy and back and not already
+        if tell then cameBack[#cameBack + 1] = label end
+        holder.svLoadCheck = {
+            stamp = (type(date) == "function" and date("%Y-%m-%d %H:%M:%S")) or "?",
+            build = build,
+            announced = (already or tell) or nil,
+        }
     end
+    Priestly_OnConfigChanged("svLoadCheck")
 
-    PriestlyDB.svLoadCheck = {
-        stamp = (type(date) == "function" and date("%Y-%m-%d %H:%M:%S")) or "?",
-        build = CurrentBuild(),
-    }
+    if #cameBack > 0 and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "|cff99ddff[Priestly]|r |cff55ff55Saved settings came back|r ("
+            .. table.concat(cameBack, " and ") .. ", build " .. tostring(build) .. "). "
+            .. "If you fully exited the game since you last played, the settings bug is "
+            .. "fixed. After only a relog or /reload this proves nothing.")
+    end
 end
 -- config-owner: end
 
--- PLAYER_LOGIN fires on /reload too and cannot tell the two apart.
--- PLAYER_ENTERING_WORLD can: on 1.60.1.69913 it carries (isInitialLogin,
--- isReloadingUi), checked against the API dump. It also fires on every zone
--- change with both false, which is ignored.
-function Priestly_HandleEnteringWorld(isInitialLogin, isReloadingUi)
-    if not (isInitialLogin or isReloadingUi) then return end
-    CheckSavedVariablesLoad(isInitialLogin and not isReloadingUi)
-end
-
--- ─── Which build were the findings measured on? ─────────────────────────────────
+-- ─── Which build were the findings measured on? ─────────────────────────────
 --
--- docs/FOREVER-PROBE.md and the API dump were measured on one client build,
--- and the beta updates without announcement. The build lives in the SOURCE -
--- the one thing that survives a restart here - and a mismatch says so at
--- every login until someone re-measures and bumps it. A stored build could
--- never fire: the build only changes across a restart, which is exactly when a
--- stored value is lost.
+-- Priestly's notes on how this beta behaves were measured on one client build,
+-- and the beta updates without announcement. The build lives in the SOURCE,
+-- the one thing that survives a restart here. A stored build could never fire:
+-- the build only changes across a restart, which is when stored data is lost.
+--
+-- Shown on a real login only, once per build where storage works, and worded
+-- for players: the re-measuring steps are for developers and live in
+-- AGENTS.md. On the broken client it shows once per game launch, since nothing
+-- can remember that it was shown.
 
 local MEASURED_ON_BUILD = "69913"
 
@@ -458,13 +486,25 @@ function Priestly_CheckClientBuild()
     local build = CurrentBuild()
     -- An unreadable build is not evidence of a new one; stay quiet.
     if not build or build == MEASURED_ON_BUILD then return end
+    if PriestlyDB and PriestlyDB.warnedBuild == build then return end
+    Priestly_SetConfig("warnedBuild", build)
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage(
-            "|cff99ddff[Priestly]|r |cffffcc00This is client build " .. build
-            .. "|r; Priestly's notes were measured on " .. MEASURED_ON_BUILD
-            .. ". Treat them as unverified until re-measured: /pprobe, and a full-exit "
-            .. "check of saved settings. Then bump MEASURED_ON_BUILD in PriestlyConfig.lua.")
+            "|cff99ddff[Priestly]|r This version was tested on game build " .. MEASURED_ON_BUILD
+            .. "; you are on " .. build .. ". It should still work, but if anything "
+            .. "misbehaves, please report it.")
     end
+end
+
+-- PLAYER_LOGIN fires on /reload too and cannot tell the two apart.
+-- PLAYER_ENTERING_WORLD can: on 1.60.1.69913 it carries (isInitialLogin,
+-- isReloadingUi), checked against the API dump. It also fires on every zone
+-- change with both false, which is ignored.
+function Priestly_HandleEnteringWorld(isInitialLogin, isReloadingUi)
+    if not (isInitialLogin or isReloadingUi) then return end
+    local realLogin = isInitialLogin and not isReloadingUi
+    CheckSavedVariablesLoad(realLogin)
+    if realLogin then Priestly_CheckClientBuild() end
 end
 
 -- ─── Instance detection events ──────────────────────────────────────────────
@@ -475,7 +515,6 @@ API.RegisterEvents(detectFrame,
 detectFrame:SetScript("OnEvent", function(self, event, isInitialLogin, isReloadingUi)
     if event == "PLAYER_LOGIN" then
         Priestly_EnsureDefaults()
-        Priestly_CheckClientBuild()
         CheckCurrentInstance()
     else
         if event == "PLAYER_ENTERING_WORLD" then
@@ -1133,4 +1172,5 @@ Priestly._testConfig = {
     CheckCurrentInstance = CheckCurrentInstance,
     inShadowInstance = function() return g_InShadowInstance end,
     MEASURED_ON_BUILD = MEASURED_ON_BUILD,
+    SV_BROKEN_ON_BUILD = SV_BROKEN_ON_BUILD,
 }

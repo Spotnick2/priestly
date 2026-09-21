@@ -143,7 +143,10 @@ gets re-tested.
 
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,
-`lockFrame`, `showClickHints`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`.
+`lockFrame`, `showClickHints`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`,
+`warnedBuild`, and `svLoadCheck` (never in `DEFAULTS`, see below). The account-wide
+`PriestlySVCheck` holds nothing but its own `svLoadCheck`: it exists only so the addon can tell
+when account-wide storage is fixed.
 `learnedDurations` is keyed by **spell name**,
 not by buff id: the single and group forms of one buff share an id and do not share a duration.
 
@@ -266,9 +269,16 @@ Adding a config option:
 Changing patch compatibility:
 
 - Update only `## Interface:` in `Priestly.toc` unless Lua API changes are required.
-- A new client build is announced at every login until `MEASURED_ON_BUILD` in `PriestlyConfig.lua`
-  is bumped. Bump it only after re-measuring: `/apidump`, `/pprobe`, and a full-exit check of saved
-  settings. Bumping it without re-measuring silences the one reminder that the notes are stale.
+- On a new client build, players see a one-line note at login, once per build (once per game
+  launch while storage is broken). It is worded for them, not for us: the procedure lives here.
+  When the build changes, re-measure - `/apidump`, `/pprobe`, and a **full-exit** check of saved
+  settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`, and keep `WoW.build`'s default
+  in `tests/wow_stubs.lua` equal to it. Bumping without re-measuring silences the only reminder
+  that the notes are stale.
+- If saved settings are **still** broken on the new build, set `SV_BROKEN_ON_BUILD` to it as well.
+  On that build a returning `svLoadCheck` is treated as the client's in-process cache (a relog to
+  character select can hand it back, just as `/reload` does), so the fix is never falsely
+  announced.
 - **`svLoadCheck` must never be added to `DEFAULTS`.** It detects Blizzard's SavedVariables fix by
   being written every session and never defaulted; a default would recreate it every login and the
   check could never fire. `tests/test_config_seam.lua` asserts this.

@@ -728,7 +728,7 @@ local KNOWN_ABSENT = {
     PriestlyProbeBenchA = true, PriestlyProbeBenchB = true,
     PriestlyProbeBenchC = true,
     -- Addon-owned globals that legitimately start out nil.
-    PriestlyDB = true, PriestlyProbeDB = true,
+    PriestlyDB = true, PriestlyProbeDB = true, PriestlySVCheck = true,
     Priestly_ScheduleRefresh = true, Priestly_ForceRebuild = true,
     Priestly_ApplyAlpha = true, Priestly_OnSoloToggle = true,
     Priestly_LearnDuration = true, Priestly_GetLearnedDuration = true,

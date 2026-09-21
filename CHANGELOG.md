@@ -12,12 +12,11 @@
   bug.
 
 ### Added
-- **Priestly tells you when the settings bug is fixed.** On the first login where your settings
-  were actually remembered, it says so in chat, and asks you to confirm with a full exit rather than
-  `/reload`. Nothing to do until then.
-- **A warning when the game client updates.** Priestly's notes on how this beta behaves were
-  measured on one build; on a newer one it says so at login, so nothing silently relies on findings
-  that may no longer hold.
+- **Priestly tells you when the settings bug is fixed.** Once a game update fixes it, Priestly says
+  so in chat the first time your saved settings come back - once, not at every login. Nothing to do
+  until then.
+- **A note when the game client updates.** Priestly was tested on one build of the beta. On a newer
+  one it mentions that once at login, so you know what to report if something misbehaves.
 - **`/priestly pos`** - says where the window is, where it was told to be, and what the addon
   decided at login. Worth running before reporting anything about the window moving on its own.
 
