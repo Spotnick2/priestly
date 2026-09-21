@@ -13,6 +13,35 @@ local C = "|cffff8800[Probe]|r "
 
 PriestlyProbeDB = PriestlyProbeDB or {}
 
+------------------------------------------------------------
+-- Does this client load SavedVariables back at all?
+--
+-- Writing them is easy to confirm - the file on disk looks right. Reading them
+-- is the part in doubt, and the two are indistinguishable unless something
+-- counts sessions: if the load is broken, every launch starts from defaults,
+-- rewrites the same file, and looks fine on disk.
+--
+-- So: capture what arrived BEFORE touching anything, then increment. If the
+-- count is always 1, nothing is being read back. Account-wide and
+-- per-character are tested separately because they are different mechanisms
+-- and only one of them may be broken - which would be a workaround.
+------------------------------------------------------------
+
+local SV_ACCOUNT_ARRIVED = (PriestlyProbePersist ~= nil)
+local SV_CHAR_ARRIVED    = (PriestlyProbeChar ~= nil)
+local SV_ACCOUNT_BEFORE  = SV_ACCOUNT_ARRIVED and PriestlyProbePersist.launches or 0
+local SV_CHAR_BEFORE     = SV_CHAR_ARRIVED and PriestlyProbeChar.launches or 0
+
+PriestlyProbePersist = PriestlyProbePersist or { launches = 0, stamps = {} }
+PriestlyProbePersist.launches = (PriestlyProbePersist.launches or 0) + 1
+PriestlyProbePersist.stamps = PriestlyProbePersist.stamps or {}
+PriestlyProbePersist.stamps[#PriestlyProbePersist.stamps + 1] = date("%Y-%m-%d %H:%M:%S")
+PriestlyProbePersist.marker = "written by PriestlyProbe"
+
+PriestlyProbeChar = PriestlyProbeChar or { launches = 0 }
+PriestlyProbeChar.launches = (PriestlyProbeChar.launches or 0) + 1
+PriestlyProbeChar.lastCharacter = nil   -- filled in at PLAYER_LOGIN
+
 -- Spells the port cares about.
 local SPELLS = {
     { id = 1243,  name = "Power Word: Fortitude" },
@@ -514,18 +543,39 @@ SlashCmdList["PPROBE"] = function(msg)
     elseif P[cmd] then
         local ok, err = pcall(P[cmd])
         if not ok then say("|cffff4444ERROR: " .. tostring(err) .. "|r") end
+    elseif cmd == "sv" then
+        say("|cff99ddff== SavedVariables persistence ==|r")
+        say("  account-wide table arrived at load: " ..
+            (SV_ACCOUNT_ARRIVED and "|cff55ff55YES|r" or "|cffff4444NO|r"))
+        say("  per-character table arrived at load: " ..
+            (SV_CHAR_ARRIVED and "|cff55ff55YES|r" or "|cffff4444NO|r"))
+        say("  launches recorded before this one: account=" .. SV_ACCOUNT_BEFORE ..
+            " character=" .. SV_CHAR_BEFORE)
+        say("  launches now: account=" .. PriestlyProbePersist.launches ..
+            " character=" .. PriestlyProbeChar.launches)
+        if SV_ACCOUNT_BEFORE == 0 and SV_CHAR_BEFORE == 0 then
+            say("  |cffff4444Nothing was read back.|r /reload and run this again -")
+            say("  if it still says 0, this client does not load SavedVariables.")
+        else
+            say("  |cff55ff55SavedVariables DO load|r on this build.")
+        end
     elseif cmd == "text" or cmd == "copy" then
         ShowCopyWindow()
     elseif cmd == "hide" then
         if g_btn then g_btn:Hide() end
         if PriestlyProbeCopyFrame then PriestlyProbeCopyFrame:Hide() end
     else
-        say("usage: /pprobe [all|" .. table.concat(ORDER, "|") .. "|secure|text|hide]")
+        say("usage: /pprobe [all|" .. table.concat(ORDER, "|") .. "|secure|sv|text|hide]")
     end
 end
 
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:SetScript("OnEvent", function()
-    say("loaded. |cffffffff/pprobe|r runs everything, |cffffffff/pprobe secure|r is the click test.")
+    PriestlyProbeChar.lastCharacter = (GetUnitName and GetUnitName("player", false)) or "?"
+    say("loaded. |cffffffff/pprobe|r runs everything, |cffffffff/pprobe sv|r checks persistence.")
+    say("  SavedVariables seen at load: account=" ..
+        (SV_ACCOUNT_ARRIVED and "yes" or "|cffff4444no|r") ..
+        " character=" .. (SV_CHAR_ARRIVED and "yes" or "|cffff4444no|r") ..
+        "  (launch #" .. PriestlyProbePersist.launches .. ")")
 end)
