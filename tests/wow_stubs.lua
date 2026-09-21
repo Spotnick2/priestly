@@ -52,6 +52,10 @@ function WoW.reset()
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
     WoW.timers      = {}
     WoW.mouseOver   = {}         -- [frame] = true; drives frame:IsMouseOver()
+    WoW.ejNumTiers  = 0          -- what this client actually reports
+    WoW.ejSelectThrows = false
+    WoW.ejDungeons  = {}         -- { { id =, name = }, ... }
+    WoW.ejRaids     = {}
     WoW.byNameBlind = false      -- simulate GetAuraDataBySpellName not resolving
     WoW.auraReadsThrow = false   -- combat secrecy: index reads throw
     WoW.aurasAreSecret = false   -- combat secrecy: the struct's fields throw
@@ -567,6 +571,22 @@ C_Container = {
 
 ------------------------------------------------------------
 
+-- Encounter journal. Measured on build 69913: EJ_GetNumTiers returns 0 while
+-- EJ_GetInstanceByIndex works, which is the case the probe has to survive.
+WoW = WoW or {}
+function EJ_GetNumTiers() return WoW.ejNumTiers or 0 end
+function EJ_SelectTier(tier)
+    if WoW.ejSelectThrows then error("EJ_SelectTier is not available", 2) end
+    WoW.ejSelectedTier = tier
+end
+function EJ_GetTierInfo(tier) return "Tier " .. tostring(tier) end
+function EJ_GetInstanceByIndex(index, isRaid)
+    local list = (isRaid and WoW.ejRaids) or WoW.ejDungeons
+    local entry = list and list[index]
+    if not entry then return nil end
+    return entry.id, entry.name
+end
+
 UIParent = makeFrame("UIParent")
 
 ------------------------------------------------------------
@@ -595,6 +615,12 @@ local KNOWN_ABSENT = {
     GetAddOnMetadata = true, InterfaceOptions_AddCategory = true,
     InterfaceOptionsFrame_OpenToCategory = true,
     loadstring_untainted = true, SecureHandlerWrapScript = true,
+    -- Globals the probe deliberately tests for the presence of.
+    C_EncounterJournal = true, EJ_GetNumTiers = true, EJ_SelectTier = true,
+    EJ_GetTierInfo = true, EJ_GetInstanceByIndex = true,
+    -- The probe's own saved variables, which start nil like any others.
+    PriestlyProbePersist = true, PriestlyProbeChar = true,
+    PriestlyProbeCopyFrame = true,
     -- Addon-owned globals that legitimately start out nil.
     PriestlyDB = true, PriestlyProbeDB = true,
     Priestly_ScheduleRefresh = true, Priestly_ForceRebuild = true,

@@ -47,12 +47,17 @@ local DEFAULTS = {
 -- give several that never match anything.
 --
 -- CAUTION: these names are the keys matched against GetInstanceInfo(), and a
--- name that is wrong fails silently - the mode simply never fires. None are
--- confirmed yet. The two lowest new dungeons ARE reachable at the current cap,
--- so those two can and should be measured; the rest cannot be until the cap
--- rises. Blizzard's own roster writes "The Hall of Thanes" and "Alcaz Prison",
--- which is what is used here - but the forum roster is not the client, and
--- only GetInstanceInfo() settles it.
+-- name that is wrong fails silently - so CheckCurrentInstance announces any
+-- instance it does not recognise, turning that into a report rather than a
+-- mystery.
+--
+-- MEASURED so far, with `/pprobe here`:
+--   "Ruins of Lordaeron"  instanceMapID 2999, party, 5 players  (2026-09-20)
+--
+-- Everything else is unverified. Most is above the current level cap and
+-- cannot be measured yet. Blizzard's roster writes "The Hall of Thanes" and
+-- "Alcaz Prison", which is what is used here - but a forum roster is not the
+-- client, and only GetInstanceInfo() settles it.
 -- Note the apostrophes are ASCII ('), not typographic - a detail that costs
 -- nothing to get right and everything to get wrong. `/pprobe here` inside an
 -- instance prints the exact string. Issue #12 covers matching on map ID
@@ -228,6 +233,10 @@ end
 
 local g_InShadowInstance = false
 
+-- Instances we have already complained about, so the message appears once per
+-- session rather than on every zone-in.
+local g_ReportedUnknown = {}
+
 local function CheckCurrentInstance()
     -- Out in the world this returns the CONTINENT ("Eastern Kingdoms" while
     -- standing in Undercity), not an empty string, so the name alone is not a
@@ -239,9 +248,24 @@ local function CheckCurrentInstance()
         g_InShadowInstance = false
         return
     end
-    g_InShadowInstance = (PriestlyDB
-        and PriestlyDB.shadowInstances
-        and PriestlyDB.shadowInstances[name] == true)
+
+    local saved = PriestlyDB and PriestlyDB.shadowInstances
+    g_InShadowInstance = (saved and saved[name] == true) or false
+
+    -- The list is keyed on exact instance names that mostly cannot be verified
+    -- until the level cap rises, and a wrong key fails SILENTLY - the mode
+    -- simply never fires, with nothing to explain why. So say something. This
+    -- turns an invisible bug into a bug report, and the players standing in
+    -- these instances are the only ones who can measure them.
+    if saved and saved[name] == nil and not g_ReportedUnknown[name] then
+        g_ReportedUnknown[name] = true
+        if DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cff99ddff[Priestly]|r does not recognise this instance: |cffffffff\"" ..
+                tostring(name) .. "\"|r - Shadow Protection's \"by instance\" mode cannot " ..
+                "work here. Please report that name so it can be added.")
+        end
+    end
 end
 
 function Priestly_ShouldShowShadow(groups, ord)
@@ -906,6 +930,7 @@ end
 
 Priestly._testConfig = {
     TextHeight    = TextHeight,
+    reportedUnknown = function() return g_ReportedUnknown end,
     INSTANCE_DB   = INSTANCE_DB,
     DEFAULTS      = DEFAULTS,
     FLAVOR        = FLAVOR,

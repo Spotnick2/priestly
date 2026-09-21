@@ -175,6 +175,45 @@ H.check(TC.inShadowInstance() == true, "...but a real instance still counts")
 WoW.instanceType = nil
 
 ------------------------------------------------------------
+-- An instance the list does not know must say so
+--
+-- The keys are exact instance names, most of which cannot be verified until
+-- the level cap rises, and a wrong key fails silently - the mode never fires
+-- and nothing explains why. Announcing it turns an invisible bug into a bug
+-- report from the only people who can measure it.
+------------------------------------------------------------
+
+WoW.reset()
+PriestlyDB = nil
+Priestly_EnsureDefaults()
+for k in pairs(TC.reportedUnknown()) do TC.reportedUnknown()[k] = nil end
+
+WoW.instanceName = "Scholomance"
+WoW.instanceType = "party"
+local before = #WoW.messages
+TC.CheckCurrentInstance()
+H.eq(#WoW.messages, before, "a known instance says nothing")
+
+WoW.instanceName = "Some Unlisted Dungeon"
+TC.CheckCurrentInstance()
+H.check(#WoW.messages > before, "an instance the list does not know is reported")
+H.check(WoW.messages[#WoW.messages]:find("Some Unlisted Dungeon", 1, true) ~= nil,
+    "and the message names it, so it can be reported and added")
+
+-- Once per session, not once per zone-in.
+before = #WoW.messages
+TC.CheckCurrentInstance()
+H.eq(#WoW.messages, before, "and it does not repeat itself every time you zone in")
+
+-- Out in the world there is no instance to complain about.
+WoW.instanceName = "Eastern Kingdoms"
+WoW.instanceType = "none"
+before = #WoW.messages
+TC.CheckCurrentInstance()
+H.eq(#WoW.messages, before, "standing outdoors is not an unknown instance")
+WoW.instanceType = nil
+
+------------------------------------------------------------
 -- Buff toggles
 ------------------------------------------------------------
 
