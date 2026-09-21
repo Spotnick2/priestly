@@ -307,8 +307,9 @@ The SavedVariables result in the section above still stands: SavedVariables are 
 **`/reload` can prove something is broken, never that it works.** Confirm any persistence claim with
 a full exit and relaunch.
 
-`/pprobe cvar` is kept. When a value comes back it now reports only that it survived a `/reload`,
-and says a full exit is needed to test real persistence - it no longer claims CVars persist.
+`/pprobe cvar` and `/pprobe sv` are kept, and neither guesses how the session started. When a value
+comes back they call it inconclusive if the user only did a `/reload`, and confirmed if they did a
+full exit and relaunch. That keeps them able to recognise Blizzard's fix when it lands.
 
 ## 12. Instances
 
