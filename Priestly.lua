@@ -1242,12 +1242,14 @@ end
 
 -- How a group reads in a sentence. The header says "-- Group 3 --"; a tooltip
 -- wants "group 3", and wants an answer even where there is no header at all.
+--
+-- nil for the pet buckets, deliberately. They are a display grouping, not a
+-- subgroup: a Prayer cast on a pet buffs whatever party that pet is in, so
+-- "on the pets" describes an outcome the click cannot produce. The caller
+-- names the target unit instead, which is literally what happens.
 local function GroupLabel(gNum)
     if not gNum then return "this group" end
-    if gNum >= PET_GROUP then
-        local n = gNum - PET_GROUP + 1
-        return n > 1 and ("pet group " .. n) or "the pets"
-    end
+    if gNum >= PET_GROUP then return nil end
     if IsInRaid() then return "group " .. gNum end
     return "your party"
 end
@@ -1270,19 +1272,23 @@ local function ShowClickHint(row)
     -- Read from the attributes the buttons were actually wired with, not from
     -- a second guess at the same logic. A hint that can disagree with the
     -- click is worse than no hint.
-    local function describe(label, spell, unit, groupCast)
+    local function describe(label, spell, unit)
         if not spell then
             GameTooltip:AddLine(label .. "  |cff888888nothing to buff|r", 1, 1, 1)
             return
         end
-        local target = groupCast and GroupLabel(row._gNum)
+        -- Decided from the spell this button actually carries, never from
+        -- which button it is. When a priest knows a Prayer but not the single
+        -- form, ClickSpells hands the group spell to BOTH clicks - and calling
+        -- that a single-target cast on a named person is the exact mistake
+        -- this tooltip exists to stop, reagent and all.
+        local target = (def.hasGroup and spell == def.grp and GroupLabel(row._gNum))
                         or API.UnitDisplayName(unit, "whoever needs it")
         GameTooltip:AddLine(label .. "  |cffffffff" .. spell .. "|r on " .. target, 1, 1, 1)
     end
 
-    describe("|cffaaaaaaLeft|r ", row:GetAttribute("spell1"), row:GetAttribute("unit1"),
-             row._groupMode)
-    describe("|cffaaaaaaRight|r", row:GetAttribute("spell2"), row:GetAttribute("unit2"), false)
+    describe("|cffaaaaaaLeft|r ", row:GetAttribute("spell1"), row:GetAttribute("unit1"))
+    describe("|cffaaaaaaRight|r", row:GetAttribute("spell2"), row:GetAttribute("unit2"))
     GameTooltip:Show()
 end
 

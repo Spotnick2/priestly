@@ -362,6 +362,11 @@ end
 GameTooltip.AddDoubleLine = function(self, left, right)
     return GameTooltip.AddLine(self, tostring(left) .. "  " .. tostring(right))
 end
+function WoW.clearTooltip()
+    GameTooltip:Hide()
+    GameTooltip._lines = nil
+end
+
 -- Everything the tooltip is showing, colour codes stripped.
 function WoW.tooltipText()
     if not GameTooltip:IsShown() then return "" end

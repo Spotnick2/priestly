@@ -280,11 +280,18 @@ H.eq(point .. "/" .. relPoint, "RIGHT/LEFT", "and off its left edge on the right
 -- wired with, and the tests check it says what a click would actually do.
 ------------------------------------------------------------
 
+-- Clear first, and mean it. The previous version set a field nothing reads,
+-- so an early return in ShowClickHint would have been scored against the
+-- PREVIOUS hover's text and every assertion here would still have passed.
 local function hintFor(row)
-    WoW.tooltipHidden = false
+    WoW.clearTooltip()
     row._scripts.OnEnter(row)
     return WoW.tooltipText()
 end
+
+-- Prove the clear works, or none of the assertions below mean anything.
+WoW.clearTooltip()
+H.eq(WoW.tooltipText(), "", "the tooltip starts empty between hovers")
 
 -- Level 20: no Prayer exists, so BOTH buttons are single-target.
 rows = setup({ "FORT_SINGLE" })
@@ -321,9 +328,7 @@ H.check(hint:find("nothing to buff"), "a row with no valid target says so: " .. 
 rows = setup({ "FORT_SINGLE" })
 row = activeRows(rows)[1]
 PriestlyDB.showClickHints = false
-GameTooltip:Hide()
-row._scripts.OnEnter(row)
-H.eq(WoW.tooltipText(), "", "turning hints off shows nothing")
+H.eq(hintFor(row), "", "turning hints off shows nothing")
 PriestlyDB.showClickHints = true
 
 -- Leaving the row drops the tooltip. The popover has its own polling hide, so
@@ -334,11 +339,37 @@ row._scripts.OnLeave(row)
 H.eq(WoW.tooltipText(), "", "and leaving hides it")
 H.check(T.popFrame():IsShown(), "without closing the popover")
 
+------------------------------------------------------------
+-- A Prayer on BOTH buttons must not be described as single-target
+--
+-- ClickSpells hands the group spell to both clicks when the priest knows a
+-- Prayer but not the single form. Calling right-click "Prayer of Spirit on
+-- Sten Thornbeard" is the exact mistake this tooltip exists to prevent - the
+-- player casts it expecting one person and spends a reagent on the group.
+------------------------------------------------------------
+
+rows = setup({ "SPIRIT_GROUP" })
+row = activeRows(rows)[1]
+H.eq(row:GetAttribute("spell2"), "Prayer of Spirit", "right-click really does carry the Prayer")
+hint = hintFor(row)
+H.check(not hint:find("Prayer of Spirit on Karuzo Elegia"),
+    "so it is not described as landing on one person: " .. hint)
+H.eq(select(2, hint:gsub("your party", "")), 2,
+    "both lines name the group, because both clicks cast the group spell: " .. hint)
+
+------------------------------------------------------------
 -- Group naming
+------------------------------------------------------------
+
 H.eq(T.GroupLabel(nil), "this group", "an unknown group still reads as something")
 WoW.inRaid = true
 H.eq(T.GroupLabel(3), "group 3", "raid groups are numbered")
 WoW.inRaid = false
 H.eq(T.GroupLabel(1), "your party", "and a party is a party")
+
+-- Pet buckets are a display grouping, not a subgroup: a Prayer cast on a pet
+-- buffs whatever party that pet is in, so there is no "the pets" to name.
+H.eq(T.GroupLabel(99), nil, "the pet bucket names no group")
+H.eq(T.GroupLabel(103), nil, "nor do the later pet buckets")
 
 H.done("test_clicks")
