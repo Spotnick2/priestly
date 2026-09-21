@@ -433,7 +433,7 @@ C_UnitAuras = {
     GetAuraDataBySpellName = function(unit, name, filter)
         -- Set WoW.byNameBlind = true to simulate the by-name lookup failing to
         -- resolve a spell the player does not know, which is the reason
-        -- API.GetBuff never trusts a by-name miss.
+        -- API.ReadBuff never trusts a by-name miss.
         if WoW.byNameBlind then return nil end
         -- Under secrecy this one returns nil rather than throwing.
         if WoW.auraReadsThrow then return nil end

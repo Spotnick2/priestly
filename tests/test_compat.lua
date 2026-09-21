@@ -16,16 +16,16 @@ local _, _, API = H.loadAddon()
 local FORT = { "Power Word: Fortitude", "Prayer of Fortitude" }
 
 ------------------------------------------------------------
--- GetBuff: struct in, (remaining, duration, expiration) out
+-- ReadBuff: struct in, (status, remaining, duration, expiration) out
 ------------------------------------------------------------
 
 WoW.reset()
 WoW.SetUnit("party1", { name = "Karuzo Elegia" })
 
-H.check(API.GetBuff("party1", FORT) == nil, "no aura -> nil, not a zero tuple")
+H.eq(API.ReadBuff("party1", FORT), "NONE", "no aura -> NONE, not a zero tuple")
 
 WoW.SetAura("party1", "Power Word: Fortitude", 3600, 1200)
-local rem, dur, exp = API.GetBuff("party1", FORT)
+local _, rem, dur, exp = API.ReadBuff("party1", FORT)
 H.eq(rem, 1200, "remaining comes back in seconds")
 H.eq(dur, 3600, "duration comes back from the struct")
 H.eq(exp, WoW.time + 1200, "expirationTime is passed through for the cache")
@@ -33,13 +33,13 @@ H.eq(exp, WoW.time + 1200, "expirationTime is passed through for the cache")
 -- The group form applies an aura under a different name; both must match.
 WoW.ClearAuras("party1")
 WoW.SetAura("party1", "Prayer of Fortitude", 3600, 900)
-rem = API.GetBuff("party1", FORT)
+_, rem = API.ReadBuff("party1", FORT)
 H.eq(rem, 900, "the Prayer form of the same buff is recognised")
 
 -- A permanent aura reports expirationTime 0, which is not "expired".
 WoW.ClearAuras("party1")
 WoW.SetAura("party1", "Power Word: Fortitude", 0, nil)
-rem = API.GetBuff("party1", FORT)
+_, rem = API.ReadBuff("party1", FORT)
 H.eq(rem, math.huge, "expirationTime 0 means permanent, not expired")
 
 -- The by-name lookup is a fast path, not the truth. On this client
@@ -50,10 +50,10 @@ H.eq(rem, math.huge, "expirationTime 0 means permanent, not expired")
 WoW.ClearAuras("party1")
 WoW.SetAura("party1", "Prayer of Fortitude", 3600, 1500)
 WoW.byNameBlind = true
-rem = API.GetBuff("party1", FORT)
+_, rem = API.ReadBuff("party1", FORT)
 H.eq(rem, 1500, "a by-name miss falls through to the aura walk instead of reporting unbuffed")
 WoW.ClearAuras("party1")
-H.check(API.GetBuff("party1", FORT) == nil, "and a genuine absence is still nil")
+H.eq(API.ReadBuff("party1", FORT), "NONE", "and a genuine absence is still NONE")
 WoW.byNameBlind = false
 
 ------------------------------------------------------------
@@ -94,8 +94,7 @@ H.eq(API.ReadBuff("raid17", FORT), "NONE", "a unit that does not exist is NONE")
 
 -- A unit that does not exist is not an error.
 WoW.SetAura("party1", "Power Word: Fortitude", 3600, 1200)
-H.check(API.GetBuff("raid17", FORT) == nil, "missing unit -> nil")
-H.check(API.HasBuff("party1", FORT) == true, "HasBuff mirrors GetBuff")
+H.eq(API.ReadBuff("raid17", FORT), "NONE", "missing unit -> NONE")
 
 -- Secrecy has a second shape: the getter succeeds but hands back a struct whose
 -- fields are secret. On this client touching one throws - and so does merely

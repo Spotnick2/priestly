@@ -82,22 +82,32 @@ WoW.reset()
 PriestlyDB = nil
 Priestly_EnsureDefaults()
 
-H.check(Priestly_GetLearnedDuration("fort") == nil, "nothing learned yet")
-Priestly_LearnDuration("fort", 3600)
-H.eq(Priestly_GetLearnedDuration("fort"), 3600, "a learned duration is stored")
-Priestly_LearnDuration("fort", 1800)
-H.eq(Priestly_GetLearnedDuration("fort"), 1800, "and replaced downward on a nerf")
-Priestly_LearnDuration("fort", 0)
-H.eq(Priestly_GetLearnedDuration("fort"), 1800, "a nonsense value is ignored")
-Priestly_LearnDuration("shadow", 600)
-H.eq(Priestly_GetLearnedDuration("shadow"), 600, "each buff is stored separately")
-H.eq(Priestly_GetLearnedDuration("fort"), 1800, "...without disturbing the others")
+-- Keyed by SPELL name, not by buff: the single and group forms of one buff run
+-- for different lengths.
+H.check(Priestly_GetLearnedDuration("Power Word: Fortitude") == nil, "nothing learned yet")
+Priestly_LearnDuration("Power Word: Fortitude", 3600)
+H.eq(Priestly_GetLearnedDuration("Power Word: Fortitude"), 3600, "a learned duration is stored")
+Priestly_LearnDuration("Power Word: Fortitude", 1800)
+H.eq(Priestly_GetLearnedDuration("Power Word: Fortitude"), 1800,
+    "and replaced downward on a nerf")
+Priestly_LearnDuration("Power Word: Fortitude", 0)
+H.eq(Priestly_GetLearnedDuration("Power Word: Fortitude"), 1800, "a nonsense value is ignored")
+Priestly_LearnDuration("Prayer of Fortitude", 3600)
+H.eq(Priestly_GetLearnedDuration("Prayer of Fortitude"), 3600,
+    "the group form of the same buff is stored separately")
+H.eq(Priestly_GetLearnedDuration("Power Word: Fortitude"), 1800,
+    "...without overwriting the single form")
+Priestly_LearnDuration("Shadow Protection", 600)
+H.eq(Priestly_GetLearnedDuration("Shadow Protection"), 600, "as is every other spell")
+Priestly_LearnDuration(nil, 600)
+H.check(true, "a nil spell name is ignored rather than erroring")
 
 WoW.build = "70000"
 Priestly_EnsureDefaults()       -- a build change means a restart means a login
-H.check(Priestly_GetLearnedDuration("fort") == nil, "a new build resets the table")
-Priestly_LearnDuration("fort", 900)
-H.eq(Priestly_GetLearnedDuration("fort"), 900, "and starts learning again")
+H.check(Priestly_GetLearnedDuration("Power Word: Fortitude") == nil,
+    "a new build resets the table")
+Priestly_LearnDuration("Power Word: Fortitude", 900)
+H.eq(Priestly_GetLearnedDuration("Power Word: Fortitude"), 900, "and starts learning again")
 
 ------------------------------------------------------------
 -- Shadow Protection visibility modes

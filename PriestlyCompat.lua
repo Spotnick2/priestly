@@ -27,6 +27,8 @@ local floor, max, huge = math.floor, math.max, math.huge
 -- guarded. Failures are recorded and printed - a silently missing handler is
 -- worse than a noisy one.
 
+-- Kept for diagnosis (`/dump Priestly.API.eventFailures`) rather than consumed
+-- by the addon: the failure itself is reported in chat when it happens.
 API.eventFailures = {}
 
 function API.RegisterEvents(frame, ...)
@@ -73,7 +75,7 @@ end
 -- unprotected.
 --
 -- Returns one of:
---   "HIT", remaining, duration, expirationTime
+--   "HIT", remaining, duration, expirationTime, matchedName
 --   "MISS"     - an aura is there, but not one of ours
 --   "EMPTY"    - no aura in that slot, so the walk can stop
 --   "BLOCKED"  - the client would not let us look
@@ -83,14 +85,14 @@ local function matchAura(getter, names, ...)
         if not aura then return "EMPTY" end
 
         local nm = aura.name
-        local hit = false
+        local matched
         for j = 1, #names do
             if names[j] and nm == names[j] then
-                hit = true
+                matched = names[j]
                 break
             end
         end
-        if not hit then return "MISS" end
+        if not matched then return "MISS" end
 
         local dur = aura.duration or 0
         local exp = aura.expirationTime or 0
@@ -100,11 +102,11 @@ local function matchAura(getter, names, ...)
         else
             remaining = max(0, exp - GetTime())
         end
-        return "HIT", remaining, dur, exp
+        return "HIT", remaining, dur, exp, matched
     end, ...) }
 
     if not packed[1] then return "BLOCKED" end
-    return packed[2], packed[3], packed[4], packed[5]
+    return packed[2], packed[3], packed[4], packed[5], packed[6]
 end
 
 -- Returns status, remaining, duration, expirationTime.
@@ -126,16 +128,16 @@ function API.ReadBuff(unit, names)
     if not unit or not UnitExists(unit) then return "NONE" end
     if not C_UnitAuras then return "BLOCKED" end
 
-    local blocked = false
+    local fastPathBlocked = false
 
     -- Fast path: ask by name rather than walking every aura.
     if C_UnitAuras.GetAuraDataBySpellName then
         for i = 1, #names do
             if names[i] then
-                local st, rem, dur, exp = matchAura(
+                local st, rem, dur, exp, matched = matchAura(
                     C_UnitAuras.GetAuraDataBySpellName, names, unit, names[i], "HELPFUL")
-                if st == "HIT" then return "HAS", rem, dur, exp end
-                if st == "BLOCKED" then blocked = true end
+                if st == "HIT" then return "HAS", rem, dur, exp, matched end
+                if st == "BLOCKED" then fastPathBlocked = true end
             end
         end
     end
@@ -149,38 +151,28 @@ function API.ReadBuff(unit, names)
     local byIndex = C_UnitAuras.GetAuraDataByIndex or C_UnitAuras.GetBuffDataByIndex
     if not byIndex then return "BLOCKED" end
 
-    local sawAny = false
+    local sawAny, walkBlocked = false, false
     for i = 1, 40 do
-        local st, rem, dur, exp = matchAura(byIndex, names, unit, i, "HELPFUL")
+        local st, rem, dur, exp, matched = matchAura(byIndex, names, unit, i, "HELPFUL")
         if st == "BLOCKED" then
-            blocked = true
+            walkBlocked = true
             break
         end
         if st == "EMPTY" then break end
         sawAny = true
-        if st == "HIT" then return "HAS", rem, dur, exp end
+        if st == "HIT" then return "HAS", rem, dur, exp, matched end
     end
 
-    if blocked then return "BLOCKED" end
+    -- Only the WALK decides absence. A throw from the fast path says nothing
+    -- about the unit if the walk then completed and proved the buff is not
+    -- there - latching that flag would pin the member on "unknown" forever.
+    if walkBlocked then return "BLOCKED" end
+    if fastPathBlocked and not sawAny then return "BLOCKED" end
     -- Secrecy may hide auras by handing back an empty list rather than
     -- throwing. Seeing nothing at all while it is active is not evidence of
     -- being unbuffed.
     if not sawAny and API.AurasAreSecret() then return "BLOCKED" end
     return "NONE"
-end
-
--- Returns remaining, duration, expirationTime - or nil when the unit does not
--- have the buff or we could not look. Callers that need to tell those two apart
--- use ReadBuff directly.
-function API.GetBuff(unit, names)
-    local status, rem, dur, exp = API.ReadBuff(unit, names)
-    if status ~= "HAS" then return nil end
-    return rem, dur, exp
-end
-
--- True when `unit` has any aura in `names`. Cheap wrapper for detection passes.
-function API.HasBuff(unit, names)
-    return API.ReadBuff(unit, names) == "HAS"
 end
 
 -- ─── spells ──────────────────────────────────────────────────────────────────
@@ -425,9 +417,6 @@ function API.ClientBuild()
     local ok, _, build = pcall(GetBuildInfo)
     return ok and tostring(build) or "?"
 end
-
-API.IsForever = (WOW_PROJECT_ID ~= nil and WOW_PROJECT_MAINLINE ~= nil
-    and WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
 -- ─── test seam ───────────────────────────────────────────────────────────────
 -- Harmless in game; the unit tests reach the file-locals through it.

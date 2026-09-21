@@ -292,15 +292,22 @@ local g_AuraCache = {}          -- [guid] = { [defId] = { exp, dur, stamp } }
 -- the beta, so the seed in DEFS is only a fallback: whatever a live aura
 -- reports wins, in either direction, and everything learned is thrown away when
 -- the client build changes.
-local function LearnDuration(def, dur)
-    if not dur or dur <= 0 then return end
-    if Priestly_LearnDuration then Priestly_LearnDuration(def.id, dur) end
+local function LearnDuration(spellName, dur)
+    if not spellName or not dur or dur <= 0 then return end
+    if Priestly_LearnDuration then Priestly_LearnDuration(spellName, dur) end
 end
 
-local function DurationFor(def, observed)
+-- `observed` is the duration the aura itself reported, which is the right
+-- denominator whenever we have it. The learned value only covers the case where
+-- it is missing, and it is looked up by the spell that was actually seen - not
+-- by the buff, because the single and group forms run for different lengths.
+local function DurationFor(def, observed, spellName)
     if observed and observed > 0 then return observed end
-    local learned = Priestly_GetLearnedDuration and Priestly_GetLearnedDuration(def.id)
-    return learned or def.duration or 3600
+    if spellName and Priestly_GetLearnedDuration then
+        local learned = Priestly_GetLearnedDuration(spellName)
+        if learned then return learned end
+    end
+    return def.duration or 3600
 end
 
 local function CacheFor(key)
@@ -331,21 +338,24 @@ local function BuffRem(unit, def)
     -- client refuses, so we never coast on a cache while real data is
     -- available. On this client every aura read throws once combat taints us,
     -- for every unit - not just the player.
-    local status, rem, dur, exp = API.ReadBuff(unit, def.names)
+    local status, rem, dur, exp, matched = API.ReadBuff(unit, def.names)
 
     if status == "HAS" then
         if rem == math.huge then rem = PERMANENT end
-        LearnDuration(def, dur)
+        LearnDuration(matched, dur)
         if key then
-            CacheFor(key)[def.id] = { exp = exp or 0, dur = dur or 0, stamp = GetTime() }
+            CacheFor(key)[def.id] = {
+                exp = exp or 0, dur = dur or 0, spell = matched, stamp = GetTime(),
+            }
         end
-        return rem, dur, ST_HAS
+        return rem, dur, ST_HAS, matched
     end
 
     if status == "NONE" then
         if key and g_AuraCache[key] then g_AuraCache[key][def.id] = nil end
         return 0, 0, ST_MISSING
     end
+
 
     -- BLOCKED: fall back to what this character last had.
     local cached = key and g_AuraCache[key] and g_AuraCache[key][def.id]
@@ -356,8 +366,8 @@ local function BuffRem(unit, def)
     else
         r = math.max(0, cached.exp - GetTime())
     end
-    if r > 0 then return r, cached.dur, ST_HAS end
-    return 0, cached.dur, ST_MISSING    -- it genuinely ran out mid-fight
+    if r > 0 then return r, cached.dur, ST_HAS, cached.spell end
+    return 0, cached.dur, ST_MISSING, cached.spell    -- it genuinely ran out mid-fight
 end
 
 -- "IN_RANGE" | "OUT_RANGE" | "OFFLINE" | "UNKNOWN"
@@ -520,8 +530,19 @@ local function GatherGroups()
     end
 
     if #pets > 0 and Priestly_TrackPets() then
-        g[PET_GROUP] = pets
-        ord[#ord + 1] = PET_GROUP
+        -- Split into popover-sized buckets. A raid can field more pets than the
+        -- popover has rows, and a row that reports "11 missing" while offering
+        -- eight of them to click is worse than two rows.
+        local bucket, gNum = nil, PET_GROUP
+        for i, pet in ipairs(pets) do
+            if not bucket or #bucket >= MAX_MEMBERS then
+                bucket = {}
+                gNum = PET_GROUP + math.floor((i - 1) / MAX_MEMBERS)
+                g[gNum] = bucket
+                ord[#ord + 1] = gNum
+            end
+            bucket[#bucket + 1] = pet
+        end
     end
 
     table.sort(ord)
@@ -579,7 +600,7 @@ local function GroupStat(members, def)
         if not UnitIsConnected(m.unit) then
             miss[#miss + 1] = m
         else
-            local r, d, state = BuffRem(m.unit, def)
+            local r, d, state, spell = BuffRem(m.unit, def)
             byUnit[m.unit] = { rem = r, state = state }
             if state == ST_UNKNOWN then
                 unknown = unknown + 1
@@ -587,7 +608,7 @@ local function GroupStat(members, def)
                 miss[#miss + 1] = m
             elseif r < minR then
                 minR = r
-                minDur = DurationFor(def, d)
+                minDur = DurationFor(def, d, spell)
             end
         end
     end
@@ -669,10 +690,15 @@ local function ApplyPopRowVisuals(pr)
     if not pr._active then return end
     local unit  = pr._unit
     local def   = pr._def
-    local rem, buffDur, state = BuffRem(unit, def)
+    local rem, buffDur, state, spell = BuffRem(unit, def)
     local has   = (state == ST_HAS) and rem > 0
-    local range = RangeStatus(unit, def.hasSingle and def.sngl or def.grp)
-    local dur   = DurationFor(def, buffDur)
+    -- The range dot has to describe the spell the LEFT-CLICK will cast: the
+    -- Prayers reach 40 yards where the single-target forms reach 30, so showing
+    -- the single spell's range marks members out of reach that a Prayer lands
+    -- on perfectly well.
+    local primarySpell = ClickSpells(def)
+    local range = RangeStatus(unit, primarySpell)
+    local dur   = DurationFor(def, buffDur, spell)
     local pct   = has and Pct(rem, dur) or 0
 
     -- Row background: flat color by state (matching PallyPower)
@@ -843,19 +869,21 @@ InitUI = function()
     verTxt:SetText("|cff555577" .. VERSION .. "|r")
 
     -- Close button
-    local xBtn = CreateFrame("Button", nil, g_Main, "UIPanelCloseButton")
+    local xBtn = CreateFrame("Button", "PriestlyCloseButton", g_Main, "UIPanelCloseButton")
     xBtn:SetPoint("TOPRIGHT", g_Main, "TOPRIGHT", 3, 3)
     xBtn:SetScale(0.6)
     xBtn:SetScript("OnClick", function() CloseUI(true) end)
+    g_Main.closeBtn = xBtn
 
     -- ── Drag handle (covers header only, so row buttons get clicks) ───────
-    local drag = CreateFrame("Frame", nil, g_Main)
+    local drag = CreateFrame("Frame", "PriestlyDragHandle", g_Main)
     drag:SetPoint("TOPLEFT",  hdrBg, "TOPLEFT",  0, 0)
     drag:SetPoint("TOPRIGHT", hdrBg, "TOPRIGHT", -16, 0)  -- leave room for X
     drag:SetHeight(HDR_H)
     drag:EnableMouse(true)
     drag:RegisterForDrag("LeftButton")
     drag:SetScript("OnDragStart", function() g_Main:StartMoving() end)
+    g_Main.dragHandle = drag
     drag:SetScript("OnDragStop",  function()
         g_Main:StopMovingOrSizing(); g_Moved = true
         -- Save position
@@ -997,9 +1025,12 @@ InitUI = function()
             if InCombatLockdown() then return end
             local df = self._def
             if df then
+                -- Same rule as the main rows: do not re-arm a click aimed at
+                -- someone who is dead, offline or gone.
+                local valid = IsValidTarget(self._unit)
                 local primary, secondary = ClickSpells(df)
-                self:SetAttribute("spell1", primary)
-                self:SetAttribute("spell2", secondary)
+                self:SetAttribute("spell1", valid and primary or nil)
+                self:SetAttribute("spell2", valid and secondary or nil)
             end
             ScheduleRefresh()
         end)
@@ -1028,6 +1059,9 @@ InitUI = function()
     g_Pop._combatHidden = false   -- track if we visually hid during combat
     g_Pop:SetScript("OnUpdate", function(self, dt)
         if not self:IsShown() then return end
+        -- Parking does not Hide(), so without this the poll re-parks an
+        -- already-parked popover on every tick until combat ends.
+        if self._combatHidden then return end
         self._hoverTimer = self._hoverTimer + dt
         if self._hoverTimer < 0.15 then return end
         self._hoverTimer = 0
@@ -1089,6 +1123,10 @@ InitUI = function()
 
     g_Main.candleBtn  = MakeReagentBtn("PriestlyCandleBtn",  ItemIcon(SACRED_CANDLE_ID), SACRED_CANDLE_ID)
     g_Main.featherBtn = MakeReagentBtn("PriestlyFeatherBtn", ItemIcon(LIGHT_FEATHER_ID), LIGHT_FEATHER_ID)
+
+    -- Seed the reagent state once; after this only SPELLS_CHANGED and talent
+    -- changes can alter it, and both call RefreshFooterState themselves.
+    RefreshFooterState()
 
     -- ── Timer ticker (0.5 s) ─────────────────────────────────────────────────
     local ftrTick = 0
@@ -1240,15 +1278,16 @@ UpdateUI = function()
 
         -- Group label (raid groups + pet group always)
         local inRaid = IsInRaid()
-        if inRaid or gNum == PET_GROUP then
+        if inRaid or gNum >= PET_GROUP then
             hdrIdx = hdrIdx + 1
             if hdrIdx <= MAX_GROUPS then
                 local hdr = g_GHdrs[hdrIdx]
                 y = y - 1
                 hdr:ClearAllPoints()
                 hdr:SetPoint("TOPLEFT", g_Main, "TOPLEFT", ROW_X + 2, y)
-                if gNum == PET_GROUP then
-                    hdr:SetText("-- Pets --")
+                if gNum >= PET_GROUP then
+                    local n = gNum - PET_GROUP + 1
+                    hdr:SetText(n > 1 and ("-- Pets " .. n .. " --") or "-- Pets --")
                 else
                     hdr:SetText("-- Group " .. gNum .. " --")
                 end
@@ -1331,14 +1370,21 @@ UpdateUI = function()
                 end
             end)
 
-            -- PostClick: restore cleared spells + refresh
+            -- PostClick: re-arm, but only where there is still somewhere to
+            -- cast. Restoring the spell unconditionally put it back while
+            -- unit1 was still the build-time "player" fallback, so the next
+            -- click - the first one in combat, where PreClick cannot re-aim -
+            -- buffed yourself.
             r:SetScript("PostClick", function(self, btn)
                 if InCombatLockdown() then return end
-                local df = self._def
-                if not df then return end
-                -- Restore spells that PreClick may have nilled
-                self:SetAttribute("spell1", self._primary)
-                self:SetAttribute("spell2", self._secondary)
+                local df, ms = self._def, self._members
+                if not df or not ms then return end
+                local pUnit = self._primary   and PickTarget(ms, df, self._groupMode) or nil
+                local sUnit = self._secondary and PickTarget(ms, df, false) or nil
+                self:SetAttribute("spell1", pUnit and self._primary or nil)
+                self:SetAttribute("unit1",  pUnit or "player")
+                self:SetAttribute("spell2", sUnit and self._secondary or nil)
+                self:SetAttribute("unit2",  sUnit or "player")
                 ScheduleRefresh()
             end)
 
@@ -1359,7 +1405,6 @@ UpdateUI = function()
     y = y - 2
 
     -- ── Position reagent footer (only if something to show) ──────────────
-    RefreshFooterState()
     local showFooter = g_ShowCandle or g_ShowFeather
     if showFooter then
         g_Main.ftrLine:ClearAllPoints()

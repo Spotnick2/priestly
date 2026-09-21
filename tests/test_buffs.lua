@@ -129,28 +129,54 @@ H.secrecy(false)
 -- Learned durations: seeds are only seeds
 ------------------------------------------------------------
 
+local SINGLE, PRAYER = "Power Word: Fortitude", "Prayer of Fortitude"
+
 fort = setup()
-H.eq(T.DurationFor(fort, nil), 3600, "with nothing learned, the DEFS seed is used")
-H.eq(T.DurationFor(fort, 1800), 1800, "an observed duration always wins")
+H.eq(T.DurationFor(fort, nil, SINGLE), 3600, "with nothing learned, the DEFS seed is used")
+H.eq(T.DurationFor(fort, 1800, SINGLE), 1800, "an observed duration always wins")
 
 WoW.SetUnit("party1", { name = "Karuzo Elegia", guid = "P1" })
-WoW.SetAura("party1", "Power Word: Fortitude", 1800, 900)
+WoW.SetAura("party1", SINGLE, 1800, 900)
 T.BuffRem("party1", fort)
-H.eq(Priestly_GetLearnedDuration("fort"), 1800, "a live aura teaches the real duration")
-H.eq(T.DurationFor(fort, nil), 1800, "and that is what later bars are scaled against")
+H.eq(Priestly_GetLearnedDuration(SINGLE), 1800, "a live aura teaches the real duration")
+H.eq(T.DurationFor(fort, nil, SINGLE), 1800,
+    "and that is what later bars are scaled against")
 
 -- A beta patch shortens the buff: the stored value must follow it DOWN.
 WoW.ClearAuras("party1")
-WoW.SetAura("party1", "Power Word: Fortitude", 600, 300)
+WoW.SetAura("party1", SINGLE, 600, 300)
 T.BuffRem("party1", fort)
-H.eq(Priestly_GetLearnedDuration("fort"), 600,
+H.eq(Priestly_GetLearnedDuration(SINGLE), 600,
     "durations are replaced in both directions, not maxed")
+
+-- The single and group forms of one buff share a def id and do NOT share a
+-- duration. Keying what we learn on the buff meant a group carrying a mix of
+-- both - the normal case when a second priest is buffing - rewrote the stored
+-- value back and forth on every pass, twice a second.
+fort = setup()
+WoW.SetUnit("party1", { name = "A One", guid = "P1" })
+WoW.SetUnit("party2", { name = "B Two", guid = "P2" })
+WoW.SetAura("party1", SINGLE, 1800, 900)
+WoW.SetAura("party2", PRAYER, 3600, 1800)
+T.BuffRem("party1", fort)
+T.BuffRem("party2", fort)
+H.eq(Priestly_GetLearnedDuration(SINGLE), 1800, "the single form keeps its own duration")
+H.eq(Priestly_GetLearnedDuration(PRAYER), 3600, "and the Prayer keeps its own")
+
+-- Reading them again in the other order must not disturb either.
+T.BuffRem("party2", fort)
+T.BuffRem("party1", fort)
+H.eq(Priestly_GetLearnedDuration(SINGLE), 1800, "still the single form's duration")
+H.eq(Priestly_GetLearnedDuration(PRAYER), 3600, "still the Prayer's")
+H.eq(T.DurationFor(fort, nil, PRAYER), 3600,
+    "and a bar scales against the spell that member actually has")
+H.eq(T.DurationFor(fort, nil, SINGLE), 1800, "...not against the other one")
 
 -- A new client build throws the whole table away. A build can only change
 -- across a client restart, so a fresh login (EnsureDefaults) is what notices.
 WoW.build = "70000"
 Priestly_EnsureDefaults()
-H.check(Priestly_GetLearnedDuration("fort") == nil,
+H.check(Priestly_GetLearnedDuration(SINGLE) == nil,
     "what was learned on an older build is discarded")
 
 ------------------------------------------------------------

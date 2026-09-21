@@ -62,8 +62,7 @@ Load order from `Priestly.toc`:
 
 | Contract | Replaces |
 |---|---|
-| `ReadBuff(unit, names)` → `"HAS"\|"NONE"\|"BLOCKED"`, remaining, duration, expirationTime | `UnitBuff` walk |
-| `GetBuff` / `HasBuff` | thin wrappers over `ReadBuff` |
+| `ReadBuff(unit, names)` → `"HAS"\|"NONE"\|"BLOCKED"`, remaining, duration, expirationTime, matchedName | `UnitBuff` walk |
 | `AurasAreSecret()` | — (`C_Secrets.ShouldAurasBeSecret`) |
 | `SpellInfo` / `SpellName(id)` / `SpellIcon(spell, fallback)` | `GetSpellInfo` tuple |
 | `SpellRange(unit, spell)` → `"IN_RANGE"\|"OUT_RANGE"\|"OFFLINE"\|"UNKNOWN"` | `IsSpellInRange` 1/0/nil |
@@ -86,7 +85,8 @@ Protection aura names, which the config's "detect" mode reads).
 
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `shadowInstances`,
-`learnedDurations`, `flavor`, `visible`, `pos`.
+`learnedDurations`, `flavor`, `visible`, `pos`. `learnedDurations` is keyed by **spell name**,
+not by buff id: the single and group forms of one buff share an id and do not share a duration.
 
 ## WoW API And Lua Rules
 

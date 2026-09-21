@@ -128,6 +128,30 @@ for _, name in ipairs({ "candleBtn", "featherBtn" }) do
 end
 
 ------------------------------------------------------------
+-- Header: drag handle and close button
+--
+-- OnDragStop is the only writer of PriestlyDB.pos and calls
+-- StartMoving/StopMovingOrSizing/GetPoint - exactly the shape of call the
+-- MouseIsOver regression proved can be silently absent on this client.
+------------------------------------------------------------
+
+setup()
+local drag = T.mainFrame().dragHandle
+H.check(drag ~= nil, "the drag handle is reachable")
+runScript(drag, "OnDragStart")
+PriestlyDB.pos = nil
+runScript(drag, "OnDragStop")
+H.check(PriestlyDB.pos ~= nil, "dragging the frame saves its position")
+H.check(PriestlyDB.pos.point ~= nil, "with an anchor point")
+
+-- The close button is the other way a user shuts the window.
+local closeBtn = T.mainFrame().closeBtn
+H.check(closeBtn ~= nil, "the close button is reachable")
+runScript(closeBtn, "OnClick")
+H.check(not T.mainFrame():IsShown(), "clicking it closes the window")
+H.eq(PriestlyDB.visible, false, "and records that as deliberate")
+
+------------------------------------------------------------
 -- Close, in and out of combat
 ------------------------------------------------------------
 

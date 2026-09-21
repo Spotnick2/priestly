@@ -15,10 +15,14 @@ local DEFAULTS = {
     showSolo        = false,
     trackPets       = true,
     frameAlpha      = 0.96,
-    shadowInstances = nil,
-    learnedDurations = nil,       -- [defId] = seconds, per client build
-    flavor          = nil,        -- migration marker
 }
+
+-- Deliberately NOT in DEFAULTS: a nil value creates no key, so the pairs()
+-- backfill below would never see them. Each is initialised by hand in
+-- Priestly_EnsureDefaults:
+--   shadowInstances   -- [instanceName] = tracked
+--   learnedDurations  -- [spellName] = seconds, scoped to a client build
+--   flavor            -- migration marker
 
 -- ─── Instance databases ─────────────────────────────────────────────────────
 -- { "Instance Name", "category", defaultEnabled, "Tooltip: boss encounters" }
@@ -132,19 +136,20 @@ local function DurationStore()
     return store
 end
 
-function Priestly_LearnDuration(defId, seconds)
-    if not defId or not seconds or seconds <= 0 then return end
+function Priestly_LearnDuration(spellName, seconds)
+    if not spellName or not seconds or seconds <= 0 then return end
     local store = DurationStore()
     if not store then return end
     -- Almost every call re-learns the value we already have; only write when it
     -- actually changed.
-    if store[defId] == seconds then return end
-    store[defId] = seconds
+    if store[spellName] == seconds then return end
+    store[spellName] = seconds
 end
 
-function Priestly_GetLearnedDuration(defId)
+function Priestly_GetLearnedDuration(spellName)
+    if not spellName then return nil end
     local store = DurationStore()
-    return store and store[defId] or nil
+    return store and store[spellName] or nil
 end
 
 -- ─── Instance-based shadow detection ────────────────────────────────────────
@@ -254,10 +259,21 @@ local CHECK_ART = {
 -- just move the load-blocking error one line down, which is the opposite of the
 -- point. If the template is missing we fall back to a bare frame; if even that
 -- fails nothing about the UI can work anyway, so let it raise.
-local function SafeFrame(frameType, name, parent, template)
+local function SafeFrame(frameType, name, parent, template, proof)
     if template then
         local ok, f = pcall(CreateFrame, frameType, name, parent, template)
-        if ok and f then return f, true end
+        if ok and f then
+            -- `proof` names a region the template is supposed to bring. Without
+            -- it we cannot tell an applied template from a missing one, because
+            -- a missing template does not throw - CreateFrame just returns a
+            -- bare frame (docs/FOREVER-PROBE.md).
+            local applied = true
+            if proof then
+                applied = f[proof] ~= nil
+                    or (f.GetName and f:GetName() and _G[f:GetName() .. proof] ~= nil)
+            end
+            return f, applied
+        end
     end
     return CreateFrame(frameType, name, parent), false
 end
@@ -265,7 +281,7 @@ end
 -- A check button that looks right whether or not the template exists, with a
 -- label we own (template label fields have moved around between UI versions).
 local function MakeCheckButton(parent, name, label, labelWidth)
-    local cb, templated = SafeFrame("CheckButton", name, parent, "UICheckButtonTemplate")
+    local cb, templated = SafeFrame("CheckButton", name, parent, "UICheckButtonTemplate", "text")
     cb:SetSize(24, 24)
     if not templated then
         cb:SetNormalTexture(CHECK_ART.normal)
@@ -292,6 +308,13 @@ local function TextHeight(fs, fallback)
     return h
 end
 
+-- One rebuild per click. ForceRebuild already re-runs everything
+-- ScheduleRefresh would, so asking for both queued two complete passes - roster
+-- gather, aura scan, SetAttribute on every secure row - 250ms apart.
+local function RefreshShadowRow()
+    if Priestly_ForceRebuild then Priestly_ForceRebuild() end
+end
+
 local function MakeHeader(parent, yRef, text, width)
     yRef.v = yRef.v - 14
     local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -315,8 +338,7 @@ local function MakeCheckbox(parent, yRef, label, dbKey, onChange)
     cb:SetScript("OnClick", function(self)
         PriestlyDB[dbKey] = self:GetChecked() and true or false
         if onChange then onChange(self:GetChecked()) end
-        if Priestly_ScheduleRefresh then Priestly_ScheduleRefresh() end
-        if Priestly_ForceRebuild then Priestly_ForceRebuild() end
+        RefreshShadowRow()
     end)
     yRef.v = yRef.v - 26
     return cb
@@ -340,7 +362,7 @@ local function MakeRadioGroup(parent, yRef, options, currentKey, onSelect)
         -- UIRadioButtonTemplate ships on this client, but fall back to the
         -- checkbox art rather than risk a load-blocking CreateFrame throw.
         local rb, templated = SafeFrame("CheckButton", "PriestlyRB_"..opt.key, parent,
-            "UIRadioButtonTemplate")
+            "UIRadioButtonTemplate", "text")
         rb:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, yRef.v)
         if not templated then
             rb:SetSize(20, 20)
@@ -379,11 +401,6 @@ end
 -- so every control that touches the list has to ask for the same refresh - the
 -- bulk buttons used to update the detector and stop there, leaving the row
 -- stale until something unrelated rebuilt the UI.
-local function RefreshShadowRow()
-    if Priestly_ScheduleRefresh then Priestly_ScheduleRefresh() end
-    if Priestly_ForceRebuild then Priestly_ForceRebuild() end
-end
-
 local function BuildInstanceTab(parent, instanceDB, panelWidth)
     local scroll = SafeFrame("ScrollFrame", parent:GetName().."Scroll", parent,
         "UIPanelScrollFrameTemplate")
