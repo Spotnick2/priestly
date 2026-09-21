@@ -62,6 +62,9 @@ local EVENTS = {
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
     "BAG_UPDATE", "SPELLS_CHANGED",
     "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD",
+    -- Drives the live half of the click-edge fix: without it a CVar flip only
+    -- takes effect on /reload.
+    "CVAR_UPDATE",
     "CHARACTER_POINTS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
 }
 
@@ -462,6 +465,12 @@ function P.secure()
     rec("C_CVar", tostring(C_CVar ~= nil))
     rec("C_CVar.GetCVarBool", tostring(C_CVar ~= nil and C_CVar.GetCVarBool ~= nil))
     rec("GetCVarBool_global", tostring(_G.GetCVarBool ~= nil))
+    rec("C_CVar.GetCVar", tostring(C_CVar ~= nil and C_CVar.GetCVar ~= nil))
+    rec("GetCVar_global", tostring(_G.GetCVar ~= nil))
+    local getStr = (C_CVar and C_CVar.GetCVar) or _G.GetCVar
+    if getStr then
+        rec("ActionButtonUseKeyDown_str", try(getStr, "ActionButtonUseKeyDown"))
+    end
     local getBool = (C_CVar and C_CVar.GetCVarBool) or _G.GetCVarBool
     if getBool then
         local gotIt, value = pcall(getBool, "ActionButtonUseKeyDown")

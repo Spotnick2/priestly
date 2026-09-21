@@ -47,18 +47,27 @@ each edge is a separate click: two casts and two reagents.
 |---|---|
 | `C_CVar.GetCVarBool` present | **unknown** — `/pprobe secure` records it |
 | bare `GetCVarBool` present | **unknown** — same |
+| `C_CVar.GetCVar` / bare `GetCVar` present | **unknown** — the likelier survivor of the two, and the fallback route |
 | `ActionButtonUseKeyDown` exists and what it returns | **unknown** |
+| `CVAR_UPDATE` registers | **unknown** — `/pprobe events` |
 | Does the CVar govern **mouse** clicks here, or only keybinds? | **unknown** |
 | Does registering both edges really double-cast on this client? | **unmeasured** — `MANUAL_double` |
 
-Until those are answered the addon defaults to the Down edge, which is what has always shipped,
-and the tests cover all three shapes (namespaced, global, absent) rather than assuming one.
+Until those are answered the addon defaults to the Down edge, which is what has always shipped, and
+the tests cover every shape — namespaced `GetCVarBool`, the bare global, string-returning `GetCVar`,
+and nothing at all — rather than assuming one. `GetCVar` matters on its own: a client with only the
+string form would otherwise read as "no answer" and ship the dead button unchanged to the people who
+reported it.
 
 ## 2. Events — all 16 register, none throw
 
 Including `ACTIVE_TALENT_GROUP_CHANGED`, which was the one to distrust (no working Forever addon in
 the local sample registers it). `PLAYER_SPECIALIZATION_CHANGED` and `CHARACTER_POINTS_CHANGED` also
 register.
+
+**`CVAR_UPDATE` is the 17th and is not yet measured.** It is now in the probe's list. It drives the
+live half of the click-edge fix (section 1): without it a CVar flip only takes effect on `/reload`,
+and `API.RegisterEvents` prints the failure on every login rather than hiding it.
 
 Registration still goes through `API.RegisterEvents`: it costs nothing, and it means a future event
 rename is reported instead of silently killing a handler.

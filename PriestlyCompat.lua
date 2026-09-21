@@ -434,14 +434,30 @@ end
 -- The CVar API is not confirmed present on this client (see the note in
 -- docs/FOREVER-PROBE.md), so every route to it is optional.
 local function cvarBool(name)
-    local get = (C_CVar and C_CVar.GetCVarBool) or GetCVarBool
-    if not get then return nil end
-    local ok, value = pcall(get, name)
-    if not ok or value == nil then return nil end
-    -- GetCVarBool answers with a boolean, but a GetCVar-backed shim can hand
-    -- back the string "0" - and "0" is TRUTHY in Lua, which would pin every
-    -- client to keydown and quietly reintroduce the bug this exists to fix.
-    if value == 0 or value == "0" or value == "" then return false end
+    local value
+    -- The Bool variant if there is one; otherwise the string-returning GetCVar,
+    -- which is the likelier survivor. Without this fallback a client that has
+    -- only GetCVar reads as "no answer" and ships the dead button to precisely
+    -- the people who reported it.
+    local getBool = (C_CVar and C_CVar.GetCVarBool) or GetCVarBool
+    if getBool then
+        local ok, v = pcall(getBool, name)
+        if ok then value = v end
+    end
+    if value == nil then
+        local getStr = (C_CVar and C_CVar.GetCVar) or GetCVar
+        if getStr then
+            local ok, v = pcall(getStr, name)
+            if ok then value = v end
+        end
+    end
+
+    -- No answer, which is NOT the same as "no". An unset or unknown CVar has to
+    -- leave the default standing, or every client that never touched the
+    -- setting gets flipped to the edge this exists to avoid.
+    if value == nil or value == "" then return nil end
+    -- GetCVar answers "0" / "1", and BOTH 0 and "0" are TRUTHY in Lua.
+    if value == 0 or value == "0" then return false end
     return value and true or false
 end
 

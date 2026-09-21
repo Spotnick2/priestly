@@ -265,6 +265,14 @@ H.eq(edges(), "LeftButtonUp/RightButtonUp",
 WoW.SetCVarAPI("global")
 H.eq(edges(), "LeftButtonUp/RightButtonUp", "the bare global is read too, if that is all there is")
 
+-- GetCVarBool may well not exist here while the string-returning GetCVar does.
+-- Without this route such a client reads as "no answer", keeps the Down edge,
+-- and ships the dead button to exactly the people who reported it.
+WoW.SetCVarAPI("string")
+H.eq(edges(), "LeftButtonUp/RightButtonUp", "GetCVar's \"0\" is understood, not just a boolean")
+WoW.cvars.ActionButtonUseKeyDown = true
+H.eq(edges(), "LeftButtonDown/RightButtonDown", "and its \"1\"")
+
 -- An unset CVar is not a "no": it is no answer, and the default stands.
 WoW.cvars.ActionButtonUseKeyDown = nil
 H.eq(edges(), "LeftButtonDown/RightButtonDown", "an unknown CVar falls back rather than flipping")
@@ -272,6 +280,9 @@ H.eq(edges(), "LeftButtonDown/RightButtonDown", "an unknown CVar falls back rath
 -- ZERO IS TRUTHY, and so is "0". A GetCVar-backed shim that hands back the
 -- string form would otherwise pin every client to keydown and silently
 -- reinstate the dead button.
+-- Back to the namespaced API, which hands the stored value straight through:
+-- these are about what cvarBool makes of a raw return, not about the routes.
+WoW.SetCVarAPI("namespace")
 local cvarBool = Priestly._testCompat.cvarBool
 WoW.cvars.probe = "0"
 H.eq(cvarBool("probe"), false, "the string \"0\" is false, not truthy")
@@ -281,6 +292,16 @@ WoW.cvars.probe = "1"
 H.eq(cvarBool("probe"), true, "\"1\" is true")
 WoW.cvars.probe = nil
 H.eq(cvarBool("probe"), nil, "and absent stays absent, distinct from false")
+
+-- An empty string is no answer, not a "no". Reading it as false would flip
+-- every client that never touched the setting onto the dead edge - the bug,
+-- reinstated for the majority in the name of fixing it for a few.
+WoW.SetCVarAPI("namespace")
+WoW.cvars.probe = ""
+H.eq(cvarBool("probe"), nil, "an empty answer is no answer")
+WoW.cvars.ActionButtonUseKeyDown = ""
+H.eq(edges(), "LeftButtonDown/RightButtonDown", "so the default stands rather than flipping")
+WoW.cvars.probe = nil
 
 -- A CVar API that throws must not take the addon down with it.
 C_CVar = { GetCVarBool = function() error("nope") end }

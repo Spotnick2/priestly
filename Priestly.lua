@@ -1181,9 +1181,13 @@ local function ApplyClickRegistration()
         g_ClickEdgePending = true
         return
     end
-    g_ClickEdge, g_ClickEdgePending = left, false
     for _, r  in ipairs(g_Rows)  do r:RegisterForClicks(left, right)  end
     for _, pr in ipairs(g_PRows) do pr:RegisterForClicks(left, right) end
+    -- Recorded last. If a RegisterForClicks call is refused after all, the
+    -- error unwinds with the pools half-moved and the old edge still on
+    -- record, so the next CVAR_UPDATE repairs them - rather than matching and
+    -- returning early, leaving them split until a /reload.
+    g_ClickEdge, g_ClickEdgePending = left, false
 end
 
 -- ─── CloseUI ─────────────────────────────────────────────────────────────────
