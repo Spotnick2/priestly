@@ -147,14 +147,22 @@ Load order from `Priestly.toc`:
 `Priestly_OnConfigChanged(key)`. Plus `Priestly_HandleEnteringWorld` and `Priestly_CheckClientBuild`,
 which the config's event frame calls.
 
-**Every write to `PriestlyDB` goes through `Priestly_SetConfig` or `Priestly_SetShadowInstance`.**
-The only exceptions are inside `-- config-owner: begin/end` regions in `PriestlyConfig.lua`: the
-setters themselves, `EnsureDefaults`, the learned-duration cache and the load check.
-`tests/test_config_seam.lua` scans the source and fails on any other write, and counts the owner
-regions so a new one has to be added on purpose. `Priestly_OnConfigChanged` is empty today; it is
-the one place the SavedVariables fix, or a migration, will land. It fires once per instance during
-Select All, so anything put in it must be cheap. This seam, `svLoadCheck` and the build watch match
-AltStable's and are candidates for the shared core (#3).
+**Every write to `PriestlyDB` or `PriestlySVCheck` goes through `Priestly_SetConfig` or
+`Priestly_SetShadowInstance`.** The only exceptions are inside `-- config-owner: begin/end` regions
+in `PriestlyConfig.lua`: the two saved-table accessors, `EnsureDefaults` and the learned-duration
+cache. `tests/test_config_seam.lua` scans the source with LibGroupBuffs' `tests/config_scan.lua`
+(from the library checkout the suite runs against) and fails on any other write, and counts the
+owner regions so a new one has to be added on purpose. Owner code that writes through a local alias
+reports it with `settings:Changed(key)`: the scan cannot see an alias.
+
+The setters, the `svLoadCheck` load check and the build watch are LibGroupBuffs' `Settings.lua`
+(#3). `PriestlyConfig.lua` builds one settings object from it with Priestly's saved-table
+accessors, `MEASURED_ON_BUILD` / `SV_BROKEN_ON_BUILD` and a chat reporter; the `Priestly_*`
+functions above are thin wrappers so the options panel and tests keep their names. A change to how
+the checks behave or what they say belongs in the library, not here. `Priestly_OnConfigChanged` is
+empty today; it is the one place the SavedVariables fix, or a migration, will land. The library
+looks it up at call time, so replacing it works. It fires once per instance during Select All, so
+anything put in it must be cheap.
 
 `Priestly.lua` exposes: `Priestly_ScheduleRefresh`, `Priestly_ForceRebuild`,
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
@@ -344,7 +352,8 @@ Changing patch compatibility:
   announced.
 - **`svLoadCheck` must never be added to `DEFAULTS`.** It detects Blizzard's SavedVariables fix by
   being written every session and never defaulted; a default would recreate it every login and the
-  check could never fire. `tests/test_config_seam.lua` asserts this.
+  check could never fire. `tests/test_config_seam.lua` asserts this, and the library refuses to
+  `Set` it.
 - Keep `@project-version@`; the packager replaces it. `Tools/deploy.ps1` rewrites it to `dev` in the
   deployed copy only — never in the repo copy.
 

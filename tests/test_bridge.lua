@@ -31,6 +31,7 @@ end
 local lib = LibStub("LibGroupBuffs-1.0")
 H.check(lib ~= nil, "LibGroupBuffs-1.0 is loaded")
 H.check(API == lib.API, "Priestly.API is the library's API table itself")
+H.check(Priestly.Settings == lib.Settings, "and Priestly.Settings its Settings")
 
 ------------------------------------------------------------
 -- Every API function Priestly calls exists in the library
@@ -169,6 +170,16 @@ end })
 loaded, err, chat = loadWithout(halfLoaded)
 H.check(not loaded, "a library that failed to load completely is refused too")
 H.check(chat:find("completely", 1, true), "and reported as that, not as missing: " .. chat)
+
+-- An older copy that loaded completely but predates Settings (r3): refused at
+-- the door, not as a nil call when PriestlyConfig builds its settings.
+local r3Shaped = setmetatable({}, { __call = function()
+    return { API = { RegisterEventsReported = function() return true end,
+                     ClickEdges = function() end } }
+end })
+loaded, err, chat = loadWithout(r3Shaped)
+H.check(not loaded, "a library without Settings is refused")
+H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
 
 -- The other two files stop before building anything, so a missing library is
 -- one message rather than a cascade of errors and half-made frames.
