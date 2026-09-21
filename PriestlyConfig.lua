@@ -257,7 +257,18 @@ local function CheckCurrentInstance()
     -- simply never fires, with nothing to explain why. So say something. This
     -- turns an invisible bug into a bug report, and the players standing in
     -- these instances are the only ones who can measure them.
-    if saved and saved[name] == nil and not g_ReportedUnknown[name] then
+    --
+    -- Narrowly, though. Battlegrounds and arenas report an instanceType too,
+    -- and asking for their names would be asking for entries that do not
+    -- belong in a shadow-damage list. And a player who has not chosen "by
+    -- instance" is being warned about a feature they are not using - worse,
+    -- being marked as already told, so the warning would never appear when
+    -- they did turn it on.
+    local relevantType = (instanceType == "party" or instanceType == "raid")
+    local modeActive = PriestlyDB and PriestlyDB.shadowMode == "instance"
+    if relevantType and modeActive
+        and saved and saved[name] == nil and not g_ReportedUnknown[name]
+    then
         g_ReportedUnknown[name] = true
         if DEFAULT_CHAT_FRAME then
             DEFAULT_CHAT_FRAME:AddMessage(

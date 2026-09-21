@@ -188,6 +188,7 @@ PriestlyDB = nil
 Priestly_EnsureDefaults()
 for k in pairs(TC.reportedUnknown()) do TC.reportedUnknown()[k] = nil end
 
+PriestlyDB.shadowMode = "instance"
 WoW.instanceName = "Scholomance"
 WoW.instanceType = "party"
 local before = #WoW.messages
@@ -211,6 +212,35 @@ WoW.instanceType = "none"
 before = #WoW.messages
 TC.CheckCurrentInstance()
 H.eq(#WoW.messages, before, "standing outdoors is not an unknown instance")
+
+-- Battlegrounds and arenas report an instanceType, but their names have no
+-- business in a shadow-damage list, so asking for them would be asking for the
+-- wrong thing.
+for _, kind in ipairs({ "pvp", "arena" }) do
+    WoW.instanceName = "Some " .. kind .. " Place"
+    WoW.instanceType = kind
+    before = #WoW.messages
+    TC.CheckCurrentInstance()
+    H.eq(#WoW.messages, before, "a " .. kind .. " instance is not reported as missing")
+end
+
+-- And somebody who has not chosen "by instance" is not warned about a feature
+-- they are not using - nor quietly marked as already told, which would stop the
+-- warning ever appearing once they did turn it on.
+for _, mode in ipairs({ "detect", "always" }) do
+    PriestlyDB.shadowMode = mode
+    WoW.instanceName = "Another Unlisted Dungeon"
+    WoW.instanceType = "party"
+    before = #WoW.messages
+    TC.CheckCurrentInstance()
+    H.eq(#WoW.messages, before, "'" .. mode .. "' mode does not warn about the instance list")
+end
+
+PriestlyDB.shadowMode = "instance"
+TC.CheckCurrentInstance()
+H.check(#WoW.messages > before,
+    "and the warning still arrives the first time the mode is actually on")
+
 WoW.instanceType = nil
 
 ------------------------------------------------------------
