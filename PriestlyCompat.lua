@@ -18,13 +18,15 @@ Priestly = Priestly or {}
 -- Is the library here, and did its compat layer load to the end? ClickEdges is
 -- the last function Compat.lua defines, so a file that threw partway through
 -- is caught here rather than as a nil call somewhere far from the cause.
--- RegisterEventsReported arrived in r3, so an older copy is refused too.
+-- RegisterEventsReported arrived in r3 and Settings in r4, so an older copy is
+-- refused too - here, with a message, rather than as a nil call later.
 local lib = LibStub and LibStub("LibGroupBuffs-1.0", true)
 local problem
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
 elseif not (type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
-            and type(lib.API.ClickEdges) == "function") then
+            and type(lib.API.ClickEdges) == "function"
+            and type(lib.Settings) == "table" and type(lib.Settings.New) == "function") then
     problem = "the LibGroupBuffs-1.0 library failed to load completely"
 end
 
@@ -42,6 +44,9 @@ if problem then
 end
 
 Priestly.API = lib.API
+-- The settings write path and the client-fix watches; PriestlyConfig.lua
+-- builds Priestly's settings object from it.
+Priestly.Settings = lib.Settings
 
 -- Priestly's own record of the events this client rejected, for
 -- `/dump Priestly.eventFailures`. The library also keeps it, as

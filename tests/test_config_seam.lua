@@ -70,153 +70,23 @@ Priestly_OnConfigChanged = realHook
 -- The source scan
 --
 -- A behavioural test cannot catch a new direct write: it works perfectly well.
--- So every file the TOC loads is read, and any assignment into PriestlyDB
--- outside a `config-owner` region fails the run.
+-- So every file the TOC loads is read, and any assignment into Priestly's
+-- saved tables outside a `config-owner` region fails the run.
 --
--- This is a small hand-written scanner rather than one pattern, because a
--- pattern keeps missing shapes. The first version missed writes whose key had
--- a space, a call, `..` or arithmetic in it, multiple assignment, and a value
--- on the next line - all found in review.
+-- The scanner is LibGroupBuffs' tests/config_scan.lua, loaded from the same
+-- library checkout the rest of the suite runs against (CI clones the pinned
+-- tag). Its own tests cover the shapes it must catch; the cases here only
+-- prove it is wired to Priestly's names.
 ------------------------------------------------------------
 
-local ReadFile = H.readFile
+local SAVED = { "PriestlyDB", "PriestlySVCheck" }
+local CS = dofile(H.libraryRoot() .. "/tests/config_scan.lua")
 
--- String contents blanked, so `=` and `--` inside them are ignored; then the
--- comment cut off.
-local function CodeOf(line)
-    local code = line:gsub('"[^"]*"', '""'):gsub("'[^']*'", "''")
-    return (code:gsub("%-%-.*$", ""))
-end
-
--- Is this piece of an assignment's left side a PriestlyDB lvalue? Bracket and
--- paren contents are dropped first, so any key expression counts:
--- `[ name ]`, `[self:GetName()]`, `[key .. "x"]`, `[i+1]`.
-local function IsDBTarget(piece)
-    local flat, depth = {}, 0
-    for ch in piece:gmatch(".") do
-        if ch == "[" or ch == "(" then
-            depth = depth + 1
-            if depth == 1 then flat[#flat + 1] = ch end
-        elseif ch == "]" or ch == ")" then
-            if depth == 1 then flat[#flat + 1] = ch end
-            depth = depth - 1
-        elseif depth == 0 then
-            flat[#flat + 1] = ch
-        end
-    end
-    local tail = table.concat(flat):match("([%w_%.%:%[%]%(%)]+)%s*$") or ""
-    return tail == "PriestlyDB" or tail:find("^PriestlyDB[%.%[]") ~= nil
-end
-
--- Every assignment target on one line of code. An `=` counts if it is at
--- bracket depth 0 and is not part of `==` `~=` `<=` `>=`. It may end the line,
--- with the value on the next one. The left side is cut back to the last
--- statement boundary, split on top-level commas for multiple assignment, and a
--- `local` declaration is skipped.
-local function DBWritesIn(code)
-    local hits, depth, from, i = 0, 0, 1, 1
-    while i <= #code do
-        local c = code:sub(i, i)
-        if c == "(" or c == "[" or c == "{" then
-            depth = depth + 1
-        elseif c == ")" or c == "]" or c == "}" then
-            depth = depth - 1
-        elseif c == "=" and depth == 0 then
-            local prev, nxt = code:sub(i - 1, i - 1), code:sub(i + 1, i + 1)
-            if nxt == "=" then
-                i = i + 1
-            elseif prev ~= "~" and prev ~= "<" and prev ~= ">" and prev ~= "=" then
-                local left = code:sub(from, i - 1)
-                left = left:gsub("%f[%w_]function%f[^%w_][^(]*%b()", "\1")
-                for _, kw in ipairs({ "then", "do", "else", "end", "return", "repeat" }) do
-                    left = left:gsub("%f[%w_]" .. kw .. "%f[^%w_]", "\1")
-                end
-                left = left:gsub(";", "\1")
-                local stmt = left:match("([^\1]*)$")
-                if not stmt:find("^%s*local%s") then
-                    local pieceDepth, piece = 0, ""
-                    for ch in (stmt .. ","):gmatch(".") do
-                        if ch == "(" or ch == "[" or ch == "{" then pieceDepth = pieceDepth + 1 end
-                        if ch == ")" or ch == "]" or ch == "}" then pieceDepth = pieceDepth - 1 end
-                        if ch == "," and pieceDepth == 0 then
-                            if IsDBTarget(piece) then hits = hits + 1 end
-                            piece = ""
-                        else
-                            piece = piece .. ch
-                        end
-                    end
-                end
-                from = i + 1
-            end
-        end
-        i = i + 1
-    end
-    return hits
-end
-
--- Violations in one file, and the number of owner regions it declares. Region
--- markers are recognised only as whole comment lines, so prose that mentions
--- them opens nothing, and they must balance.
-local BEGIN = "^%s*%-%- config%-owner: begin%s*$"
-local END = "^%s*%-%- config%-owner: end%s*$"
-
-local function Scan(path, src)
-    src = src or ReadFile(path)
-    if not src then return { path .. " unreadable" }, 0 end
-    local bad, owned, regions, n = {}, false, 0, 0
-    for line in (src .. "\n"):gmatch("([^\n]*)\n") do
-        n = n + 1
-        if line:find(BEGIN) then
-            if owned then bad[#bad + 1] = path .. ":" .. n .. "  nested owner region" end
-            owned, regions = true, regions + 1
-        elseif line:find(END) then
-            if not owned then bad[#bad + 1] = path .. ":" .. n .. "  owner end with no begin" end
-            owned = false
-        elseif not owned and DBWritesIn(CodeOf(line)) > 0 then
-            bad[#bad + 1] = path .. ":" .. n .. "  " .. line
-        end
-    end
-    if owned then bad[#bad + 1] = path .. "  owner region never closed" end
-    return bad, regions
-end
-
--- The scanner must see what it is meant to see. Checked on synthetic source,
--- so a broken scanner fails here rather than silently passing every file.
-for _, c in ipairs({
-    { 'if x then PriestlyDB.lockFrame = true end', 1, "an inline write mid-line" },
-    { 'PriestlyDB.flag = (a == b)', 1, "a write whose value contains ==" },
-    { 'PriestlyDB.shadowInstances[entry[1]] = true', 1, "a key indexed by entry[1]" },
-    { 'PriestlyDB.shadowInstances[ name ] = true', 1, "a key with spaces" },
-    { 'PriestlyDB.shadowInstances[self:GetName()] = true', 1, "a key from a method call" },
-    { 'PriestlyDB.shadowInstances[GetInstanceInfo()] = true', 1, "a key from a call" },
-    { 'PriestlyDB[key .. "x"] = 1', 1, "a concatenated key" },
-    { 'PriestlyDB.shadowInstances[i+1] = true', 1, "an arithmetic key" },
-    { 'PriestlyDB[dbKey] = v', 1, "a variable key" },
-    { 'PriestlyDB.a, x = 1, 2', 1, "multiple assignment" },
-    { 'x, PriestlyDB.b = 1, 2', 1, "multiple assignment, second target" },
-    { 'PriestlyDB.pos =\n    { point = p }', 1, "a value on the next line" },
-    { 'x = 1; PriestlyDB.y = 2', 1, "a second statement on the line" },
-    { 'local function f() PriestlyDB.x = 1 end', 1, "a write inside a one-line function" },
-    { 'PriestlyDB = {}', 1, "replacing the whole table" },
-    { 'if PriestlyDB.lockFrame == true then end', 0, "a comparison" },
-    { 'if PriestlyDB.frameAlpha ~= 1 then end', 0, "a ~= comparison" },
-    { 'if PriestlyDB.a then y = 2 end', 0, "a condition that reads it" },
-    { 'local p = PriestlyDB.pos', 0, "a read into a local" },
-    { 'local t = { pos = PriestlyDB.pos }', 0, "a read inside a table constructor" },
-    { 'print("PriestlyDB.x = 1")', 0, "text inside a string" },
-    { '-- PriestlyDB.pos = nil', 0, "a comment" },
-    { '-- see the config-owner: begin/end regions\nPriestlyDB.x = 1', 1,
-      "prose mentioning the marker, which opens nothing" },
-    { '-- config-owner: begin\nPriestlyDB.pos = nil\n-- config-owner: end', 0,
-      "a write inside an owner region" },
-}) do
-    H.eq(#Scan("synthetic", c[1]), c[2], "the scanner handles " .. c[3])
-end
-
-H.check(#Scan("synthetic", "-- config-owner: begin\nx = 1") > 0,
-    "an owner region that never closes is an error")
-H.check(#Scan("synthetic", "-- config-owner: end") > 0,
-    "an end with no begin is an error")
+H.eq(#CS.Scan("synthetic", "PriestlyDB.lockFrame = true", SAVED), 1,
+    "the scanner catches a direct PriestlyDB write")
+H.eq(#CS.Scan("synthetic", "PriestlySVCheck.svLoadCheck = {}", SAVED), 1,
+    "and a direct PriestlySVCheck write")
+H.eq(#CS.Scan("synthetic", "local p = PriestlyDB.pos", SAVED), 0, "but not a read")
 
 -- Every file the TOC loads, read from the TOC so a new one cannot be missed.
 local files = H.tocFiles()
@@ -224,13 +94,15 @@ H.check(#files >= 3, "the TOC lists the addon's files: " .. table.concat(files, 
 
 -- Owner regions must stay few, or the scan stops meaning anything. Each file's
 -- count is pinned, so adding one has to be done here on purpose.
-local expectedRegions = { ["PriestlyConfig.lua"] = 4 }
+local expectedRegions = { ["PriestlyConfig.lua"] = 3 }
 for _, path in ipairs(files) do
-    local bad, regions = Scan(path)
-    H.check(#bad == 0, path .. " writes PriestlyDB only through the setters: " ..
+    local src = H.readFile(path)
+    H.check(src ~= nil, path .. " is readable")
+    local bad, regions = CS.Scan(path, src or "", SAVED)
+    H.check(#bad == 0, path .. " writes its saved tables only through the setters: " ..
         table.concat(bad, " | "))
     H.eq(regions, expectedRegions[path] or 0, path .. " has the expected owner regions "
-        .. "(PriestlyConfig: the setters, EnsureDefaults, the duration cache, the load check)")
+        .. "(PriestlyConfig: the saved-table accessors, EnsureDefaults, the duration cache)")
 end
 
 ------------------------------------------------------------
