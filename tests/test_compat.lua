@@ -238,76 +238,28 @@ WoW.secret = true
 H.check(API.AurasAreSecret() == true, "secrecy is reported when the client says so")
 
 ------------------------------------------------------------
--- Which mouse edge the secure buttons register for
+-- Which mouse edges the secure buttons register for
 --
--- Registering the edge the client is not honouring makes every row a dead
--- button: no cast, no error. Registering BOTH edges would cover it, and is the
--- fix that gets passed around, but each edge is its own click on a secure
--- button - two casts, two reagents.
+-- Both of them, always. The client's own secure handler computes
+-- `down == useOnKeyDown` and performs the action on exactly one edge, so
+-- registering both is one cast and is correct whatever ActionButtonUseKeyDown
+-- says. Registering one and guessing wrong is a button that does nothing.
 ------------------------------------------------------------
 
-local function edges()
-    local left, right = API.ClickEdges()
-    return tostring(left) .. "/" .. tostring(right)
+local edges = { API.ClickEdges() }
+H.eq(#edges, 4, "four names: both buttons, both edges")
+
+local seen = {}
+for _, e in ipairs(edges) do seen[e] = true end
+for _, want in ipairs({ "LeftButtonDown", "RightButtonDown",
+                        "LeftButtonUp", "RightButtonUp" }) do
+    H.check(seen[want], "registers " .. want)
 end
 
-WoW.reset()   -- no CVar API at all, which is the unmeasured case
-H.eq(edges(), "LeftButtonDown/RightButtonDown",
-    "with no CVar API to ask, keep what has always shipped rather than guessing")
-
-WoW.SetCVarAPI("namespace")
-WoW.cvars.ActionButtonUseKeyDown = true
-H.eq(edges(), "LeftButtonDown/RightButtonDown", "keydown client -> the Down edge")
-WoW.cvars.ActionButtonUseKeyDown = false
-H.eq(edges(), "LeftButtonUp/RightButtonUp",
-    "keyup client -> the Up edge, which is the whole bug")
-
-WoW.SetCVarAPI("global")
-H.eq(edges(), "LeftButtonUp/RightButtonUp", "the bare global is read too, if that is all there is")
-
--- GetCVarBool may well not exist here while the string-returning GetCVar does.
--- Without this route such a client reads as "no answer", keeps the Down edge,
--- and ships the dead button to exactly the people who reported it.
-WoW.SetCVarAPI("string")
-H.eq(edges(), "LeftButtonUp/RightButtonUp", "GetCVar's \"0\" is understood, not just a boolean")
-WoW.cvars.ActionButtonUseKeyDown = true
-H.eq(edges(), "LeftButtonDown/RightButtonDown", "and its \"1\"")
-
--- An unset CVar is not a "no": it is no answer, and the default stands.
-WoW.cvars.ActionButtonUseKeyDown = nil
-H.eq(edges(), "LeftButtonDown/RightButtonDown", "an unknown CVar falls back rather than flipping")
-
--- ZERO IS TRUTHY, and so is "0". A GetCVar-backed shim that hands back the
--- string form would otherwise pin every client to keydown and silently
--- reinstate the dead button.
--- Back to the namespaced API, which hands the stored value straight through:
--- these are about what cvarBool makes of a raw return, not about the routes.
-WoW.SetCVarAPI("namespace")
-local cvarBool = Priestly._testCompat.cvarBool
-WoW.cvars.probe = "0"
-H.eq(cvarBool("probe"), false, "the string \"0\" is false, not truthy")
-WoW.cvars.probe = 0
-H.eq(cvarBool("probe"), false, "and so is the number 0")
-WoW.cvars.probe = "1"
-H.eq(cvarBool("probe"), true, "\"1\" is true")
-WoW.cvars.probe = nil
-H.eq(cvarBool("probe"), nil, "and absent stays absent, distinct from false")
-
--- An empty string is no answer, not a "no". Reading it as false would flip
--- every client that never touched the setting onto the dead edge - the bug,
--- reinstated for the majority in the name of fixing it for a few.
-WoW.SetCVarAPI("namespace")
-WoW.cvars.probe = ""
-H.eq(cvarBool("probe"), nil, "an empty answer is no answer")
-WoW.cvars.ActionButtonUseKeyDown = ""
-H.eq(edges(), "LeftButtonDown/RightButtonDown", "so the default stands rather than flipping")
-WoW.cvars.probe = nil
-
--- A CVar API that throws must not take the addon down with it.
-C_CVar = { GetCVarBool = function() error("nope") end }
-GetCVarBool = nil
-H.eq(edges(), "LeftButtonDown/RightButtonDown", "a throwing CVar API falls back")
-
-WoW.SetCVarAPI("none")
+-- No CVar is consulted. The whole point of registering both edges is that the
+-- answer stops mattering to us - including mid-combat, when RegisterForClicks
+-- is protected and we could not act on a change anyway.
+H.check(Priestly._testCompat.cvarBool == nil,
+    "the CVar plumbing is gone, not merely unused")
 
 H.done("test_compat")

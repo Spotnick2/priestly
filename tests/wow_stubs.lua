@@ -52,12 +52,6 @@ function WoW.reset()
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
     WoW.timers      = {}
     WoW.mouseOver   = {}         -- [frame] = true; drives frame:IsMouseOver()
-    -- The CVar API is NOT confirmed present on this client, so it is absent by
-    -- default and a test that wants it installs it with WoW.SetCVarAPI.
-    WoW.cvars       = {}         -- [name] = boolean, once an API is installed
-    C_CVar          = nil
-    GetCVarBool     = nil
-    GetCVar         = nil
     WoW.ejNumTiers  = 0          -- what this client actually reports
     WoW.ejSelectThrows = false
     WoW.ejDungeons  = {}         -- { { id =, name = }, ... }
@@ -141,33 +135,6 @@ end
 -- it (GetSpellInfo resolves, IsSpellKnown does not).
 function WoW.DefineSpell(spellID, name)
     WoW.spells[spellID] = { name = name, iconID = 100000 + spellID }
-end
-
--- Install a CVar API of a given shape. Which one Forever actually has is not
--- measured yet, so the addon has to cope with all three and the tests say so
--- out loud rather than picking one and calling it the truth.
---
---   "namespace" - C_CVar.GetCVarBool only
---   "global"    - the bare GetCVarBool only
---   "string"    - only GetCVar, which answers "0" / "1" rather than a boolean
---   "none"      - neither, which is the default after WoW.reset()
---
--- What it answers comes from WoW.cvars[name].
-function WoW.SetCVarAPI(shape)
-    local function get(name) return WoW.cvars[name] end
-    local function getStr(name)
-        local v = WoW.cvars[name]
-        if v == nil then return nil end
-        return v and "1" or "0"
-    end
-    C_CVar, GetCVarBool, GetCVar = nil, nil, nil
-    if shape == "namespace" then
-        C_CVar = { GetCVarBool = get }
-    elseif shape == "global" then
-        GetCVarBool = get
-    elseif shape == "string" then
-        GetCVar = getStr
-    end
 end
 
 function WoW.flushTimers()
@@ -649,8 +616,8 @@ local KNOWN_ABSENT = {
     GetAddOnMetadata = true, InterfaceOptions_AddCategory = true,
     InterfaceOptionsFrame_OpenToCategory = true,
     loadstring_untainted = true, SecureHandlerWrapScript = true,
-    -- Unverified on this client: the addon must work whether or not they are
-    -- there, so they stay absent unless a test installs them.
+    -- The probe records whether these exist; the addon no longer needs them,
+    -- because the secure handler does the keydown/keyup gating itself.
     C_CVar = true, GetCVarBool = true, GetCVar = true,
     -- Globals the probe deliberately tests for the presence of.
     C_EncounterJournal = true, EJ_GetNumTiers = true, EJ_SelectTier = true,

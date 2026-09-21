@@ -33,31 +33,39 @@ design holds.
 > Still to confirm: clicking in combat, where `PreClick` cannot re-target and the click has to use
 > the pre-combat wiring.
 
-### Which mouse edge to register for — **unmeasured**
+### Which mouse edge to register for — **both**, and the client picks
 
-A secure button only acts on the edge it is registered for, and the client honours the edge that
-matches the `ActionButtonUseKeyDown` CVar. Registering the other one leaves a button that casts
-nothing and says nothing — which is what CurseForge reports of "single click does nothing" from
-people running AdvancedInterfaceOptions or MiniPressRelease, both of which flip that CVar.
+Read from Forever 1.60.1 (69913) FrameXML, `SecureTemplates.lua` — `SecureActionButton_OnClick`:
 
-`API.ClickEdges()` follows the CVar rather than registering both edges, because on a secure button
-each edge is a separate click: two casts and two reagents.
+```lua
+useOnKeyDown = <button's "useOnKeyDown" attribute> or GetCVarBool("ActionButtonUseKeyDown")
+clickAction  = (down and useOnKeyDown) or (not down and not useOnKeyDown)
+```
 
-| Question | Status |
+`clickAction` is `down == useOnKeyDown`, so **of the two mouse edges exactly one ever performs the
+action**, and which one follows the CVar. That explains both halves of the CurseForge report:
+
+- Registering only `*ButtonDown`, as the addon did through v2.0.0, is dead on any client set to act
+  on release — AdvancedInterfaceOptions and MiniPressRelease both flip that CVar. The handler
+  rejects the only edge we asked for. No cast, no error.
+- Registering **both** edges is one cast, not two, because the handler admits one. This is the fix
+  suggested on CurseForge, and it is correct here.
+
+**It does not double-cast, but that rests on two things, not one.** The edge the handler rejects can
+still reach the press-and-hold release path when `ActionButtonUseKeyHeldSpell` is on. That path
+resolves its action from the **`typerelease`** attribute, not `type`, and Priestly sets no
+`typerelease` — so it finds no action and casts nothing. Setting `typerelease` on a row button
+*would* double-cast and burn two reagents.
+
+Following the CVar with a single edge was tried and rejected: `RegisterForClicks` is protected under
+combat lockdown, so a CVar change mid-fight leaves the rows on an edge the handler now refuses, with
+no way to re-register until combat ends. Both edges has no such state, so `C_CVar`, `GetCVarBool`,
+`GetCVar` and `CVAR_UPDATE` are all recorded by the probe for reference and consumed by nothing.
+
+| Still open | |
 |---|---|
-| `C_CVar.GetCVarBool` present | **unknown** — `/pprobe secure` records it |
-| bare `GetCVarBool` present | **unknown** — same |
-| `C_CVar.GetCVar` / bare `GetCVar` present | **unknown** — the likelier survivor of the two, and the fallback route |
-| `ActionButtonUseKeyDown` exists and what it returns | **unknown** |
-| `CVAR_UPDATE` registers | **unknown** — `/pprobe events` |
-| Does the CVar govern **mouse** clicks here, or only keybinds? | **unknown** |
-| Does registering both edges really double-cast on this client? | **unmeasured** — `MANUAL_double` |
-
-Until those are answered the addon defaults to the Down edge, which is what has always shipped, and
-the tests cover every shape — namespaced `GetCVarBool`, the bare global, string-returning `GetCVar`,
-and nothing at all — rather than assuming one. `GetCVar` matters on its own: a client with only the
-string form would otherwise read as "no answer" and ship the dead button unchanged to the people who
-reported it.
+| Does a live mouse click reach the handler as an addon click (CVar-gated) or as a secure mouse press (which forces the Up edge)? | The rows demonstrably cast today with Down-only registration and a default CVar, which says CVar-gated — but it has not been read off the client directly. |
+| `ActionButtonUseKeyHeldSpell` on this client | `/pprobe secure` records it |
 
 ## 2. Events — all 16 register, none throw
 
@@ -65,9 +73,9 @@ Including `ACTIVE_TALENT_GROUP_CHANGED`, which was the one to distrust (no worki
 the local sample registers it). `PLAYER_SPECIALIZATION_CHANGED` and `CHARACTER_POINTS_CHANGED` also
 register.
 
-**`CVAR_UPDATE` is the 17th and is not yet measured.** It is now in the probe's list. It drives the
-live half of the click-edge fix (section 1): without it a CVar flip only takes effect on `/reload`,
-and `API.RegisterEvents` prints the failure on every login rather than hiding it.
+**`CVAR_UPDATE` is the 17th and is not yet measured.** It is in the probe's list for reference. The
+addon does not register it: see section 1 — registering both mouse edges removes the reason to
+watch the CVar at all.
 
 Registration still goes through `API.RegisterEvents`: it costs nothing, and it means a future event
 rename is reported instead of silently killing a handler.
@@ -281,5 +289,6 @@ The encounter journal is not a usable source on this client: `EJ_GetNumTiers()` 
 ## 13. Still open
 
 - **Clicking in combat.** Casting works out of combat on both self and another player.
-- **The CVar API and the click edge** — see the table at the end of section 1. `/pprobe secure`.
+- **`ActionButtonUseKeyHeldSpell`**, and whether a live mouse click is CVar-gated — see the end of
+  section 1. `/pprobe secure`.
 - **`INSTANCE_DB` names** against real `GetInstanceInfo()` output, once those zones are reachable.

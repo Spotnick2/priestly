@@ -71,7 +71,7 @@ Load order from `Priestly.toc`:
 | `UnitKey(unit)` / `UnitDisplayName(unit, fallback)` | `UnitGUID` / `UnitName` |
 | `RegisterEvents(frame, ...)` | bare `RegisterEvent` (throws on unknown names here) |
 | `ClientBuild()` | `select(2, GetBuildInfo())` |
-| `ClickEdges()` → left, right `RegisterForClicks` names | — (`ActionButtonUseKeyDown`) |
+| `ClickEdges()` → the four `RegisterForClicks` names | — (both edges; the client picks) |
 | `CountItem(itemID)` — whole carried inventory, reagent bag included | `GetItemCount` / the `GetContainerNumSlots` walk |
 | `AddonVersion(addonName)` | `GetAddOnMetadata` |
 | `IsMouseOver(frame)` | `MouseIsOver` (absent on this client) |
@@ -166,13 +166,21 @@ no way out: attributes cannot be rewritten under lockdown, and an insecure `PreC
 a secure action. Parking the affected rows would need the same forbidden writes. It corrects itself
 on `PLAYER_REGEN_ENABLED`.
 
-**Row buttons register for one mouse edge, never both.** A secure button acts on the edge it is
-registered for, and the client honours the edge matching `ActionButtonUseKeyDown`; register the
-other one and every row is a dead button with no error. `API.ClickEdges()` answers which, and
-`ApplyClickRegistration()` re-applies it on `CVAR_UPDATE` (guarded — `RegisterForClicks` is
-protected under lockdown, so a mid-fight change waits for `PLAYER_REGEN_ENABLED`). Do not
-"simplify" this to `RegisterForClicks("AnyUp", "AnyDown")`: on a secure button both edges is two
-casts and two reagents per click.
+**Row buttons register BOTH mouse edges.** `API.ClickEdges()` returns all four names and nothing
+re-registers later. The client's secure handler performs the action when `down == useOnKeyDown`
+(`useOnKeyDown` = the button's attribute, or `GetCVarBool("ActionButtonUseKeyDown")` when unset, and
+Priestly sets no attribute), so **exactly one edge ever acts** — the gating is the client's, not
+ours. Registering a single edge is what made rows dead for anyone whose client acts on release.
+
+Do not "fix" this back to one edge, and do not add a `CVAR_UPDATE` handler to chase the setting:
+`RegisterForClicks` is protected under lockdown, so a single-edge design goes dead for the rest of
+any fight the CVar changes during, and there is nothing it could do about it.
+
+The reason this does not double-cast is worth knowing before touching these buttons. Two things have
+to hold: `down == useOnKeyDown` admits one edge, **and** the press-and-hold release path that the
+other edge can reach (when `ActionButtonUseKeyHeldSpell` is on) looks up the **`typerelease`**
+attribute rather than `type`, which Priestly never sets. **Setting `typerelease` on a row button
+would double-cast and consume two reagents.**
 
 Secure *snippets* are broken on this client (`loadstring_untainted` is missing, so
 `SecureHandlerWrapScript`, `_onstate-*` and state drivers throw). Priestly uses none of them — plain

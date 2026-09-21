@@ -62,8 +62,6 @@ local EVENTS = {
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
     "BAG_UPDATE", "SPELLS_CHANGED",
     "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD",
-    -- Drives the live half of the click-edge fix: without it a CVar flip only
-    -- takes effect on /reload.
     "CVAR_UPDATE",
     "CHARACTER_POINTS_CHANGED", "PLAYER_SPECIALIZATION_CHANGED",
 }
@@ -459,9 +457,10 @@ function P.secure()
     local ok, err = pcall(BuildSecureButton)
     rec("buildButton", ok and "OK" or ("ERROR: " .. tostring(err)))
 
-    -- Which mouse edge a secure button has to register for. Priestly follows
-    -- ActionButtonUseKeyDown rather than registering both edges, because on a
-    -- secure button both edges is two casts and two reagents per click.
+    -- Recorded for reference only. Priestly registers BOTH mouse edges and
+    -- lets the client's secure handler pick: it performs the action when
+    -- `down == useOnKeyDown`, so exactly one edge ever fires. What these CVars
+    -- say no longer changes what the addon does.
     rec("C_CVar", tostring(C_CVar ~= nil))
     rec("C_CVar.GetCVarBool", tostring(C_CVar ~= nil and C_CVar.GetCVarBool ~= nil))
     rec("GetCVarBool_global", tostring(_G.GetCVarBool ~= nil))
@@ -481,9 +480,15 @@ function P.secure()
         say("  |cffff4444no CVar API - Priestly defaults to the Down edge|r")
     end
 
+    -- The other edge can still reach the press-and-hold release path, which
+    -- looks up "typerelease" - an attribute Priestly never sets, so it casts
+    -- nothing. This records whether that path is even live here.
+    if getBool then
+        rec("ActionButtonUseKeyHeldSpell", try(getBool, "ActionButtonUseKeyHeldSpell"))
+    end
+
     rec("MANUAL", "did the click cast? out of combat / in combat - record by hand")
-    rec("MANUAL_edge", "flip ActionButtonUseKeyDown, /reload, and check the click still casts")
-    rec("MANUAL_double", "register both edges by hand: does one click cast TWICE?")
+    rec("MANUAL_edge", "flip ActionButtonUseKeyDown and check BOTH buttons still cast, once each")
     dumpSection("secure")
 end
 

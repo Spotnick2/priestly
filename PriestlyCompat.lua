@@ -418,59 +418,40 @@ function API.ClientBuild()
     return ok and tostring(build) or "?"
 end
 
--- ─── click registration ─────────────────────────────────────────────────────
--- A secure action button only casts on the mouse edge it is registered for,
--- and the client honours the edge that matches ActionButtonUseKeyDown. Wire up
--- the other one and the button is simply dead: no cast, no error, nothing to
--- see. That is what people running AdvancedInterfaceOptions or
--- MiniPressRelease - both of which flip that CVar - reported as "single click
--- does nothing".
+-- ─── click registration ────────────────────────────────────────────────
+-- Register BOTH mouse edges. The client decides which one acts.
 --
--- Registering BOTH edges covers every setting, and is the fix that gets passed
--- around, but on a secure button each edge is its own click: two casts and two
--- reagents. So follow the CVar instead, which is what Blizzard's own action
--- buttons do.
+-- Read Blizzard_FrameXML/SecureTemplates.lua before changing this. The secure
+-- handler computes, on every click:
+--
+--     useOnKeyDown = <the button's "useOnKeyDown" attribute>
+--                    or GetCVarBool("ActionButtonUseKeyDown")     -- we set no
+--                                                                 -- attribute
+--     clickAction  = (down and useOnKeyDown) or (not down and not useOnKeyDown)
+--
+-- which is `down == useOnKeyDown`. So of the two edges, **exactly one ever
+-- performs the action** - the client gates it, not us. Registering both is one
+-- cast, and it is right whatever the CVar says and whenever it changes.
+--
+-- Registering only one edge is what made rows dead for anyone whose client
+-- acts on release (AdvancedInterfaceOptions and MiniPressRelease both flip that
+-- CVar): the handler rejects the edge we asked for, and nothing happens. No
+-- cast, no error.
+--
+-- The obvious worry is that both edges means two casts and two reagents. It
+-- does not, here, for two separate reasons - and the second one is the one to
+-- re-check if this ever misbehaves:
+--
+--   1. `clickAction` above admits exactly one edge.
+--   2. The other edge can still reach the press-and-hold release path when
+--      GetCVarBool("ActionButtonUseKeyHeldSpell") is on. That path looks up
+--      the **"typerelease"** attribute, not "type", and Priestly never sets
+--      one - so it resolves to no action and casts nothing. Setting
+--      "typerelease" on these buttons WOULD double-cast.
 
--- The CVar API is not confirmed present on this client (see the note in
--- docs/FOREVER-PROBE.md), so every route to it is optional.
-local function cvarBool(name)
-    local value
-    -- The Bool variant if there is one; otherwise the string-returning GetCVar,
-    -- which is the likelier survivor. Without this fallback a client that has
-    -- only GetCVar reads as "no answer" and ships the dead button to precisely
-    -- the people who reported it.
-    local getBool = (C_CVar and C_CVar.GetCVarBool) or GetCVarBool
-    if getBool then
-        local ok, v = pcall(getBool, name)
-        if ok then value = v end
-    end
-    if value == nil then
-        local getStr = (C_CVar and C_CVar.GetCVar) or GetCVar
-        if getStr then
-            local ok, v = pcall(getStr, name)
-            if ok then value = v end
-        end
-    end
-
-    -- No answer, which is NOT the same as "no". An unset or unknown CVar has to
-    -- leave the default standing, or every client that never touched the
-    -- setting gets flipped to the edge this exists to avoid.
-    if value == nil or value == "" then return nil end
-    -- GetCVar answers "0" / "1", and BOTH 0 and "0" are TRUTHY in Lua.
-    if value == 0 or value == "0" then return false end
-    return value and true or false
-end
-
--- The RegisterForClicks event names for the left and right mouse button, in
--- that order.
+-- The RegisterForClicks event names to register a row button with.
 function API.ClickEdges()
-    -- nil means the CVar, or the whole API, is missing. Keydown is what has
-    -- always shipped and what works for most people, so it is the safe answer
-    -- to "no idea".
-    if cvarBool("ActionButtonUseKeyDown") == false then
-        return "LeftButtonUp", "RightButtonUp"
-    end
-    return "LeftButtonDown", "RightButtonDown"
+    return "LeftButtonDown", "RightButtonDown", "LeftButtonUp", "RightButtonUp"
 end
 
 -- ─── test seam ───────────────────────────────────────────────────────────────
@@ -479,5 +460,4 @@ end
 Priestly._testCompat = {
     matchAura = matchAura,
     spellInfo = spellInfo,
-    cvarBool  = cvarBool,
 }

@@ -6,10 +6,10 @@
 - **Single click does nothing for some people.** The buff rows only responded to the mouse button
   going *down*. If you run AdvancedInterfaceOptions, MiniPressRelease or anything else that sets
   actions to fire on release, every row was a dead button - no cast, no error, nothing. Rows now
-  follow that setting, and change with it straight away if you flip it.
+  listen for press *and* release, and the game picks the one your settings call for, so they work
+  whichever way you have it set and keep working if you change it mid-session.
 
-  Priestly deliberately does not listen for both press and release: on these buttons that is two
-  casts, and two reagents, for one click.
+  This is still one cast per click, not two.
 
 ## v2.0.0 - 2026-09-20
 

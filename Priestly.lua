@@ -171,8 +171,6 @@ local g_Ticker   = 0
 local g_IsPriest = false
 local g_PendingShow  = false   -- a show request that arrived during combat
 local g_LastGroupSize = 0
-local g_ClickEdge            -- mouse edge the row buttons are registered for
-local g_ClickEdgePending = false   -- a re-registration blocked by combat
 
 local g_GHdrs = {}   -- FontStrings [1..MAX_GROUPS]
 local g_Rows  = {}   -- Buttons     [1..MAX_ROWS]
@@ -1154,40 +1152,6 @@ InitUI = function()
             RefreshFooter()
         end
     end)
-
-    -- Both pools were just registered for this edge; record it so
-    -- ApplyClickRegistration only touches them when it actually changes.
-    g_ClickEdge = API.ClickEdges()
-end
-
--- ─── Click registration ─────────────────────────────────────────────────────
--- Re-point both row pools at whichever mouse edge the client is honouring now.
--- See API.ClickEdges: register the wrong edge and every row is a dead button.
---
--- CVAR_UPDATE fires for every CVar there is, and the name it passes has been
--- spelled differently across versions, so the trigger is not the argument but
--- the outcome: recompute, and do nothing unless the answer moved.
-
-local function ApplyClickRegistration()
-    if not g_Main then return end   -- nothing built yet; InitUI seeds it
-    local left, right = API.ClickEdges()
-    if left == g_ClickEdge then
-        g_ClickEdgePending = false
-        return
-    end
-    -- RegisterForClicks is protected on a secure button, so this has to wait
-    -- out the fight. The rows keep working on the old edge in the meantime.
-    if InCombatLockdown() then
-        g_ClickEdgePending = true
-        return
-    end
-    for _, r  in ipairs(g_Rows)  do r:RegisterForClicks(left, right)  end
-    for _, pr in ipairs(g_PRows) do pr:RegisterForClicks(left, right) end
-    -- Recorded last. If a RegisterForClicks call is refused after all, the
-    -- error unwinds with the pools half-moved and the old edge still on
-    -- record, so the next CVAR_UPDATE repairs them - rather than matching and
-    -- returning early, leaving them split until a /reload.
-    g_ClickEdge, g_ClickEdgePending = left, false
 end
 
 -- ─── CloseUI ─────────────────────────────────────────────────────────────────
@@ -1545,8 +1509,7 @@ API.RegisterEvents(evtFrame,
     "ACTIVE_TALENT_GROUP_CHANGED",
     "PLAYER_REGEN_ENABLED",
     "BAG_UPDATE",
-    "SPELLS_CHANGED",
-    "CVAR_UPDATE")
+    "SPELLS_CHANGED")
 
 -- UNIT_AURA is far noisier here than on TBC: every proc and every HoT tick on
 -- anyone in the group fires it. Only units we actually draw are interesting,
@@ -1684,9 +1647,6 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             -- saved position instead of leaving the frame unanchored.
             g_Moved = false
         end
-        -- ...and re-register the rows if the click edge changed mid-fight,
-        -- which RegisterForClicks is not allowed to do under lockdown.
-        if g_ClickEdgePending then ApplyClickRegistration() end
         -- Combat ended: full rebuild so SetAttribute calls actually work, and
         -- honour any show that was asked for while we were locked down.
         if g_Vis or g_PendingShow then
@@ -1696,12 +1656,6 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
     elseif event == "BAG_UPDATE" then
         if g_Vis then RefreshFooter() end
-
-    elseif event == "CVAR_UPDATE" then
-        -- Somebody flipped ActionButtonUseKeyDown - usually through
-        -- AdvancedInterfaceOptions - which changes the mouse edge our rows
-        -- have to be registered for.
-        ApplyClickRegistration()
     end
 end)
 
@@ -1808,8 +1762,6 @@ Priestly._test = {
     popFrame         = function() return g_Pop end,
     eventFrame       = function() return evtFrame end,
     CloseUI          = function(...) return CloseUI(...) end,
-    ApplyClickRegistration = function() return ApplyClickRegistration() end,
-    clickEdge        = function() return g_ClickEdge, g_ClickEdgePending end,
     RefreshTimers    = function() return RefreshTimers() end,
     RefreshFooter    = function() return RefreshFooter() end,
 }

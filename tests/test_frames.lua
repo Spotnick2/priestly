@@ -183,8 +183,6 @@ local events = {
     { "ACTIVE_TALENT_GROUP_CHANGED" },
     { "PLAYER_REGEN_ENABLED" },
     { "BAG_UPDATE" },
-    { "CVAR_UPDATE", "ActionButtonUseKeyDown", "0" },
-    { "CVAR_UPDATE" },   -- the payload has been spelled differently over time
 }
 for _, e in ipairs(events) do
     -- Dispatch to every frame registered for the event, as the game does: the
