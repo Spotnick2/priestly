@@ -1,9 +1,13 @@
 # Priestly Changelog
 
-## v2.0.0-beta1 - 2026-09-20
+## v2.0.0 - 2026-09-20
 
 **Priestly Forever** - a port to World of Warcraft: Forever 1.60.1 (Interface 16001).
 TBC Classic Anniversary is no longer supported; v1.0.6 remains available for that client.
+
+Forever itself is in beta and capped at level 20, so parts of this are waiting on content: the
+group "Prayer of X" spells do not exist yet, reagents do not apply, and most instances cannot be
+reached. Everything that can work at the current cap does, and is verified in game.
 
 ### Ported
 - Rebuilt every removed or moved API call behind a compatibility layer: auras now read through
