@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.4 - 2026-09-21
 
 ### Known issue
 - **Your settings reset every time you reload.** A client bug, affecting every addon rather than
@@ -30,9 +30,8 @@
   carrying.
 - **`/priestly reset` left a locked window stranded.** Reset recentres the window even when it is
   locked, so a window dragged somewhere unreachable can always be recovered. But it then sat in the
-  middle of the screen, still locked, refusing to be dragged - and returned there on every reload,
-  which looks exactly like the position not being saved. It now tells you the window is locked and
-  where to unlock it.
+  middle of the screen, still locked, refusing to be dragged, with nothing to say why. It now tells
+  you the window is locked and where to unlock it.
 
 ## v2.0.3 - 2026-09-21
 
