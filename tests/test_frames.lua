@@ -376,7 +376,9 @@ PriestlyDB.lockFrame = false
 msgBefore = #WoW.messages
 SlashCmdList["PRIESTLY"]("reset")
 said = table.concat(WoW.messages, " ", msgBefore + 1, #WoW.messages)
-H.check(not said:find("locked"), "unlocked, it does not nag: " .. said)
+-- Plain-text match on the exact phrase: a bare "locked" substring would fail
+-- the day the unlocked path says anything containing "unlocked".
+H.check(not said:find("is locked", 1, true), "unlocked, it does not nag: " .. said)
 
 ------------------------------------------------------------
 -- Row hover handlers
