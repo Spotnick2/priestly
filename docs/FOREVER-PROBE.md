@@ -283,6 +283,14 @@ the user before it was believed.
 
 Verify persistence by **counting launches inside the addon**, never by reading the file.
 
+**Only the account-scoped folders are affected.** Reported on the Blizzard forums
+([UI/Addon settings wiped on client restart](https://us.forums.blizzard.com/en/wow/t/uiaddon-settings-wiped-on-client-restart/2353992/15),
+same build, no Blizzard reply as of 2026-09-21) and matched on this install: the machine-level
+`WTF\SavedVariables\` holds only Blizzard's own login-screen files (`Blizzard_AddOnList`,
+`Blizzard_Console`, `Blizzard_GlueSavedVariables`), and those persist. Everything under
+`WTF\Account\<id>\` - account-wide and per-character alike - is lost. Addon SavedVariables
+always land under the account folder, so this narrows the bug without offering a workaround.
+
 ### CVars do not persist — the earlier "measured" result was a `/reload` artefact
 
 An earlier version of this section reported `/pprobe cvar` counting 1 → 2 → 3 and concluded CVars
