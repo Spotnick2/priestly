@@ -286,6 +286,18 @@ H.check(WoW.itemsRequested[17029], "and asks the client to load it")
 WoW.itemsUncached[17029] = nil
 H.eq(API.ItemInfo(17029), "Item 17029", "so the next hover has it")
 
+-- The two cache APIs can disagree: the flag says cached, the data is absent.
+-- Believe the data, and still ask for a load - otherwise every later hover
+-- misses in exactly the same way.
+local savedCached = C_Item.IsItemDataCachedByID
+C_Item.IsItemDataCachedByID = function() return true end
+WoW.itemsUncached[17056] = true
+WoW.itemsRequested[17056] = nil
+H.eq(API.ItemInfo(17056), nil, "cached-by-flag but empty returns nil")
+H.check(WoW.itemsRequested[17056], "and still asks the client to load it")
+C_Item.IsItemDataCachedByID = savedCached
+WoW.itemsUncached[17056] = nil
+
 -- A missing API must return nil, not throw: this whole contract exists
 -- because something we expected was not there.
 local savedFn = C_Item.GetItemInfo

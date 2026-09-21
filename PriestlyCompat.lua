@@ -416,12 +416,16 @@ function API.ItemInfo(itemID)
     -- and read the global instead, which is a different question.
     if not (C_Item and C_Item.GetItemInfo) then return nil end
 
+    local function requestLoad()
+        if C_Item.RequestLoadItemDataByID then
+            pcall(C_Item.RequestLoadItemDataByID, itemID)
+        end
+    end
+
     if C_Item.IsItemDataCachedByID then
         local known, cached = pcall(C_Item.IsItemDataCachedByID, itemID)
         if known and not cached then
-            if C_Item.RequestLoadItemDataByID then
-                pcall(C_Item.RequestLoadItemDataByID, itemID)
-            end
+            requestLoad()
             return nil   -- the caller shows a placeholder; the next hover has it
         end
     end
@@ -429,7 +433,14 @@ function API.ItemInfo(itemID)
     -- Returns are 1-based inside `packed` at index+1, pcall's ok being [1]:
     -- name is the 1st return, quality the 3rd.
     local packed = { pcall(C_Item.GetItemInfo, itemID) }
-    if not packed[1] or packed[2] == nil then return nil end
+    if not packed[1] or packed[2] == nil then
+        -- The cache check said yes and the data still is not there. Believe the
+        -- data over the flag, and ask again - otherwise the "having asked for
+        -- it first" promise above is false in exactly the case where the two
+        -- APIs disagree, and every later hover misses the same way.
+        requestLoad()
+        return nil
+    end
 
     local name, quality = packed[2], packed[4]
     local r, g, b = 1, 1, 1
