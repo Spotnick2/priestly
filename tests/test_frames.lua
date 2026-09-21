@@ -207,7 +207,7 @@ H.check(pcall(TC.CheckCurrentInstance), "instance detection runs")
 local slash = SlashCmdList["PRIESTLY"]
 H.check(slash ~= nil, "the slash command is registered")
 for _, cmd in ipairs({ "", "help", "show", "hide", "close", "reset", "config",
-                       "options", "settings", "opt", "garbage" }) do
+                       "options", "settings", "opt", "pos", "garbage" }) do
     local ok, err = pcall(slash, cmd)
     H.check(ok, "/priestly " .. (cmd == "" and "<no args>" or cmd) .. ": " .. tostring(err))
 end
@@ -400,5 +400,26 @@ PriestlyDB.showClickHints = false
 runScript(hoverRow, "OnEnter")
 runScript(hoverRow, "OnLeave")
 PriestlyDB.showClickHints = true
+
+------------------------------------------------------------
+-- The position diagnostic must work when it is most needed
+--
+-- Somebody runs this because the window is misbehaving, so it has to survive
+-- a nil PriestlyDB, an absent pos and an unbuilt frame rather than throwing a
+-- second error on top of the first.
+------------------------------------------------------------
+
+local before = #WoW.messages
+PriestlyDB.pos = nil
+H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "/priestly pos runs with no saved position")
+local said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(said:find("nothing saved"), "and says so plainly: " .. said)
+H.check(said:find("last restore"), "while still reporting what the restore decided")
+
+before = #WoW.messages
+PriestlyDB.pos = { point = "RIGHT", relPoint = "RIGHT", x = -350.5, y = -122.8 }
+H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "and with one")
+said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(said:find("RIGHT"), "reporting the saved anchor: " .. said)
 
 H.done("test_frames")

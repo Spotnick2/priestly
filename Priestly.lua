@@ -171,6 +171,11 @@ local g_Ticker   = 0
 local g_IsPriest = false
 local g_PendingShow  = false   -- a show request that arrived during combat
 local g_LastGroupSize = 0
+-- What the position restore in UpdateUI decided, and why. Printed by
+-- `/priestly pos`. Reading the code twice and consulting a second reviewer
+-- both said this path is sound, while the frame demonstrably came back at the
+-- default - so the next step is to make it say what it did.
+local g_RestoreLog = "UpdateUI has not run yet"
 
 local g_GHdrs = {}   -- FontStrings [1..MAX_GROUPS]
 local g_Rows  = {}   -- Buttons     [1..MAX_ROWS]
@@ -1609,9 +1614,16 @@ UpdateUI = function()
             local p = PriestlyDB.pos
             g_Main:SetPoint(p.point or "CENTER", UIParent, p.relPoint or "CENTER", p.x or 300, p.y or 50)
             g_Moved = true
+            g_RestoreLog = string.format("applied saved %s/%s %.1f,%.1f",
+                tostring(p.point), tostring(p.relPoint), tonumber(p.x) or 0/0, tonumber(p.y) or 0/0)
         else
             g_Main:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
+            g_RestoreLog = "used the DEFAULT - PriestlyDB." ..
+                (PriestlyDB and "pos was nil" or "was nil")
         end
+    else
+        g_RestoreLog = string.format("SKIPPED - g_Moved=%s shown=%s",
+            tostring(g_Moved), tostring(g_Main:IsShown()))
     end
 
     g_Main:Show()
@@ -1831,6 +1843,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly hide|r       close")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly config|r     open options panel")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly reset|r      reset window position")
+        DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly pos|r        why the window is where it is")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly help|r       this message")
         -- Describe the mapping that is actually live: without the group
         -- Prayers (the whole current level range) left-click is single-target.
@@ -1879,6 +1892,26 @@ SlashCmdList["PRIESTLY"] = function(msg)
                 "|cff99ddff[Priestly]|r |cffffcc00The window is locked|r - untick " ..
                 "|cffffffffLock frame position|r in |cffffffff/priestly config|r to move it.")
         end
+
+    elseif cmd == "pos" then
+        -- Diagnostic for "the window does not remember where I put it".
+        local p = PriestlyDB and PriestlyDB.pos
+        DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r position diagnostic:")
+        DEFAULT_CHAT_FRAME:AddMessage("  saved: " .. (p and string.format(
+            "%s/%s  %.1f, %.1f", tostring(p.point), tostring(p.relPoint),
+            tonumber(p.x) or 0/0, tonumber(p.y) or 0/0) or "|cffff6666nothing saved|r"))
+        DEFAULT_CHAT_FRAME:AddMessage("  last restore: " .. tostring(g_RestoreLog))
+        if g_Main then
+            local pt, rel, relPt, x, y = g_Main:GetPoint()
+            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                "  frame now: %s/%s  %.1f, %.1f  (relativeTo %s)",
+                tostring(pt), tostring(relPt), tonumber(x) or 0/0, tonumber(y) or 0/0,
+                rel and (rel.GetName and rel:GetName() or "unnamed") or "nil"))
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("  frame now: |cffff6666not built|r")
+        end
+        DEFAULT_CHAT_FRAME:AddMessage("  locked: " ..
+            tostring(Priestly_FrameLocked and Priestly_FrameLocked() or false))
 
     elseif cmd == "hide" or cmd == "close" then
         CloseUI(true)
