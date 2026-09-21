@@ -52,6 +52,8 @@ function WoW.reset()
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
     WoW.timers      = {}
     WoW.mouseOver   = {}         -- [frame] = true; drives frame:IsMouseOver()
+    WoW.centers     = {}         -- [frame] = x; drives frame:GetCenter()
+    WoW.screenWidth = 1920       -- what UIParent:GetWidth() reports
     WoW.ejNumTiers  = 0          -- what this client actually reports
     WoW.ejSelectThrows = false
     WoW.ejDungeons  = {}         -- { { id =, name = }, ... }
@@ -215,12 +217,30 @@ local function makeFrame(name)
     f.CreateFontString = function() return makeFrame() end
     f.CreateAnimationGroup = function() return makeFrame() end
     f.GetThumbTexture  = function() return makeFrame() end
-    f.GetPoint = function() return "CENTER", nil, "CENTER", 0, 0 end
+    f.SetPoint = function(self, point, rel, relPoint, x, y)
+        self._points = self._points or {}
+        self._points[#self._points + 1] = { point, rel, relPoint, x, y }
+        return self
+    end
+    f.ClearAllPoints = function(self) self._points = nil return self end
+    -- Reports what was actually set, so a test can assert where a frame went.
+    f.GetPoint = function(self)
+        local p = self._points and self._points[#self._points]
+        if not p then return "CENTER", nil, "CENTER", 0, 0 end
+        return p[1], p[2], p[3], p[4], p[5]
+    end
     -- Set WoW.zeroHeights to model a FontString that has not been laid out
     -- yet, which is what the live client reports inside a scroll child during
     -- OnShow.
     f.GetStringHeight = function() return WoW.zeroHeights and 0 or 12 end
-    f.GetWidth = function() return 100 end
+    f.GetWidth = function(self) return self == UIParent and WoW.screenWidth or 100 end
+    -- nil until a test places the frame, which is what the live client returns
+    -- before layout - a case the caller has to handle.
+    f.GetCenter = function(self)
+        local x = WoW.centers[self]
+        if not x then return nil end
+        return x, 300
+    end
     f.GetHeight = function() return 20 end
     f.GetChecked = function(self) return self._checked end
     f.SetChecked = function(self, v) self._checked = v return self end

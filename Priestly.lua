@@ -1182,6 +1182,32 @@ CloseUI = function(manual)
     if manual and PriestlyDB then PriestlyDB.visible = false end
 end
 
+-- ─── PopoverSide ──────────────────────────────────────────────────────
+-- Which side of its row the popover opens on.
+--
+-- It used to be hard-anchored to the left, so a frame parked on the left of
+-- the screen - which is where Pally Power sits, and therefore where a Pally
+-- Power user puts this - opened its popover off-screen, taking per-member
+-- click casting with it.
+--
+-- Auto is the default and needs no explanation: the popover goes wherever
+-- there is room. Recomputed every time it opens, because the frame is
+-- draggable and a side chosen at login is wrong after the first move.
+local function PopoverSide(anchorRow)
+    local pref = Priestly_PopoverSide()
+    if pref == "left" or pref == "right" then return pref end
+
+    -- GetCenter returns nil before a frame has been laid out, and screen width
+    -- can be 0 during a UI scale change - which is TRUTHY in Lua, so it has to
+    -- be tested for by value. Either way, fall back to the old left-hand
+    -- behaviour rather than guessing.
+    local rowX = anchorRow and anchorRow:GetCenter()
+    local screenW = UIParent and UIParent:GetWidth()
+    if not rowX or not screenW or screenW == 0 then return "left" end
+
+    return (rowX < screenW / 2) and "right" or "left"
+end
+
 -- ─── UpdatePopover ───────────────────────────────────────────────────────────
 
 UpdatePopover = function(anchorRow, members, def)
@@ -1241,7 +1267,11 @@ UpdatePopover = function(anchorRow, members, def)
     local popH = POP_HDR_H + 7 + cnt * (POP_ROW_H + 2) + 6
     g_Pop:SetSize(POP_W, popH)
     g_Pop:ClearAllPoints()
-    g_Pop:SetPoint("RIGHT", anchorRow, "LEFT", -4, 0)
+    if PopoverSide(anchorRow) == "right" then
+        g_Pop:SetPoint("LEFT", anchorRow, "RIGHT", 4, 0)
+    else
+        g_Pop:SetPoint("RIGHT", anchorRow, "LEFT", -4, 0)
+    end
     g_Pop:Show()
 end
 
@@ -1742,6 +1772,7 @@ Priestly._test = {
     BuffRem          = BuffRem,
     PickTarget       = PickTarget,
     DurationFor      = DurationFor,
+    PopoverSide      = PopoverSide,
     PruneAuraCache   = PruneAuraCache,
     IsValidTarget    = IsValidTarget,
     TimerColor       = TimerColor,

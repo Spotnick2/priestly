@@ -254,4 +254,23 @@ H.check(Priestly_IsBuffEnabled("spirit") == false, "Spirit disabled")
 H.check(Priestly_IsBuffEnabled("shadow") == true,
     "Shadow has no toggle of its own - the mode controls it")
 
+------------------------------------------------------------
+-- Popover side
+------------------------------------------------------------
+
+PriestlyDB = nil
+Priestly_EnsureDefaults()
+H.eq(PriestlyDB.popoverSide, "auto", "auto is the default - it needs no explanation")
+H.eq(Priestly_PopoverSide(), "auto", "and the helper agrees")
+
+PriestlyDB.popoverSide = "right"
+H.eq(Priestly_PopoverSide(), "right", "an explicit side is reported back")
+
+-- A saved variable from before this setting existed must not break, and must
+-- pick up the default rather than a nil that reads as "no preference".
+PriestlyDB.popoverSide = nil
+H.eq(Priestly_PopoverSide(), "auto", "an older PriestlyDB falls back to auto")
+Priestly_EnsureDefaults()
+H.eq(PriestlyDB.popoverSide, "auto", "and EnsureDefaults backfills the key")
+
 H.done("test_config")

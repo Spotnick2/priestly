@@ -15,6 +15,7 @@ local DEFAULTS = {
     showSolo        = false,
     trackPets       = true,
     frameAlpha      = 0.96,
+    popoverSide     = "auto",     -- "auto" | "left" | "right"
 }
 
 -- Deliberately NOT in DEFAULTS: a nil value creates no key, so the pairs()
@@ -317,6 +318,12 @@ end
 
 function Priestly_GetFrameAlpha()
     return PriestlyDB and PriestlyDB.frameAlpha or 0.96
+end
+
+-- "auto" | "left" | "right". Auto means "wherever there is room", decided
+-- fresh each time the popover opens - see PopoverSide in Priestly.lua.
+function Priestly_PopoverSide()
+    return (PriestlyDB and PriestlyDB.popoverSide) or "auto"
 end
 
 function Priestly_ShowSolo()
@@ -889,6 +896,28 @@ local function BuildPanel(panel)
     y.v = y.v - 40
     MakeDesc(settingsChild, y,
         "Controls the background opacity of the main Priestly frame and popover.", 4)
+
+    y.v = y.v - 10
+    local sideLabel = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sideLabel:SetPoint("TOPLEFT", settingsChild, "TOPLEFT", 0, y.v)
+    sideLabel:SetText("Popover Side")
+    y.v = y.v - 6
+
+    MakeRadioGroup(settingsChild, y, {
+        { key = "auto",  label = "Automatic - open it wherever there is room" },
+        { key = "left",  label = "Always on the left" },
+        { key = "right", label = "Always on the right" },
+    }, Priestly_PopoverSide(), function(key)
+        PriestlyDB.popoverSide = key
+        -- Only affects where the popover opens NEXT, so there is nothing to
+        -- rebuild - but close it so the change is visible immediately rather
+        -- than on the next hover.
+        if Priestly_ForceRebuild then Priestly_ForceRebuild() end
+    end)
+
+    MakeDesc(settingsChild, y,
+        "Which side of the frame the per-member popover opens on. Automatic follows the frame: "
+        .. "put Priestly on the left of your screen and the popover opens to the right.", 4)
 
     settingsChild:SetHeight(math.abs(y.v) + 20)
 

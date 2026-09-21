@@ -1,5 +1,19 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Fixed
+- **The per-member popover opened off-screen if you kept Priestly on the left.** It always opened to
+  the left of the frame, so anyone who put Priestly where Pally Power normally sits lost the popover
+  past the edge of the screen - and with it the per-member click casting. It now opens on whichever
+  side has room, and follows the frame when you drag it.
+
+### Added
+- **Popover Side** in Options - Appearance. Automatic by default, which is what the above describes;
+  set it to always-left or always-right if you would rather pin it.
+
+  Thanks to **zoikes** on CurseForge for the report.
+
 ## v2.0.1 - 2026-09-20
 
 ### Fixed

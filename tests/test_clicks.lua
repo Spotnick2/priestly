@@ -210,4 +210,64 @@ WoW.dispatch("PLAYER_REGEN_ENABLED")
 WoW.inCombat = false
 assertBothEdges(T.rows()[1], "after a combat cycle the first row still")
 
+------------------------------------------------------------
+-- Which side the popover opens on
+--
+-- It was hard-anchored to the left of its row, so a frame parked on the left
+-- of the screen - where Pally Power sits, and therefore where a Pally Power
+-- user puts this - opened its popover off-screen, taking per-member click
+-- casting with it. SetClampedToScreen hid how bad it was by dragging the
+-- remains back on.
+------------------------------------------------------------
+
+setup({ "FORT_SINGLE" })
+local anchor = T.rows()[1]
+WoW.screenWidth = 1920
+
+PriestlyDB.popoverSide = "auto"
+WoW.centers[anchor] = 200
+H.eq(T.PopoverSide(anchor), "right", "a frame on the left opens the popover to the right")
+WoW.centers[anchor] = 1700
+H.eq(T.PopoverSide(anchor), "left", "and a frame on the right opens it to the left")
+
+-- The frame is draggable, so the side has to be decided per open, not once.
+WoW.centers[anchor] = 300
+H.eq(T.PopoverSide(anchor), "right", "dragging it across the screen flips the side")
+
+-- Explicit settings win over the geometry.
+PriestlyDB.popoverSide = "left"
+H.eq(T.PopoverSide(anchor), "left", "'always left' overrides a frame on the left")
+PriestlyDB.popoverSide = "right"
+WoW.centers[anchor] = 1700
+H.eq(T.PopoverSide(anchor), "right", "'always right' overrides a frame on the right")
+
+-- Unknown geometry falls back to the old behaviour rather than guessing.
+-- GetCenter is nil before layout, and screen width is 0 mid UI-scale change -
+-- which is TRUTHY in Lua and would otherwise sail through an `or` guard.
+PriestlyDB.popoverSide = "auto"
+WoW.centers[anchor] = nil
+H.eq(T.PopoverSide(anchor), "left", "an unplaced row falls back to the left")
+WoW.centers[anchor] = 200
+WoW.screenWidth = 0
+H.eq(T.PopoverSide(anchor), "left", "and so does a zero-width screen, which is truthy")
+WoW.screenWidth = 1920
+
+------------------------------------------------------------
+-- ...and the popover is actually anchored that way
+------------------------------------------------------------
+
+local members = { { unit = "player", name = "Karuzo Elegia", class = "PRIEST" } }
+local pop = T.popFrame()
+
+WoW.centers[anchor] = 200
+T.UpdatePopover(anchor, members, anchor._def)
+local point, _, relPoint = pop:GetPoint()
+H.eq(point .. "/" .. relPoint, "LEFT/RIGHT",
+    "on the left of the screen the popover hangs off the row's right edge")
+
+WoW.centers[anchor] = 1700
+T.UpdatePopover(anchor, members, anchor._def)
+point, _, relPoint = pop:GetPoint()
+H.eq(point .. "/" .. relPoint, "RIGHT/LEFT", "and off its left edge on the right")
+
 H.done("test_clicks")
