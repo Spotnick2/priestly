@@ -884,11 +884,18 @@ SlashCmdList["PPROBE"] = function(msg)
             " character=" .. SV_CHAR_BEFORE)
         say("  launches now: account=" .. PriestlyProbePersist.launches ..
             " character=" .. PriestlyProbeChar.launches)
+        -- The probe cannot know whether this session followed a /reload or a
+        -- full restart, and the answer depends on which. So it reports what
+        -- came back and says what that means under each procedure.
         if SV_ACCOUNT_BEFORE == 0 and SV_CHAR_BEFORE == 0 then
-            say("  |cffff4444Nothing was read back.|r /reload and run this again -")
-            say("  if it still says 0, this client does not load SavedVariables.")
+            say("  |cffff4444Nothing was read back.|r Expected on the very first run.")
+            say("  Otherwise this is a real failure, whether it followed /reload or a")
+            say("  full exit: SavedVariables are re-read from disk either way.")
         else
-            say("  |cff55ff55SavedVariables DO load|r on this build.")
+            say("  |cffffcc00A value came back.|r What it means depends on what you did:")
+            say("  - after only /reload: |cffffcc00inconclusive|r. Settings have been seen to")
+            say("    survive /reload on this client and still be lost on a real restart.")
+            say("  - after a FULL exit and relaunch: SavedVariables load on this build.")
         end
     elseif cmd == "cvar" then
         say("|cff99ddff== CVar persistence ==|r")
@@ -903,14 +910,19 @@ SlashCmdList["PPROBE"] = function(msg)
         end
         local loaded = C_CVar and C_CVar.AreCVarsLoaded
         if loaded then say("  AreCVarsLoaded: " .. try(loaded)) end
+        -- As above: the probe cannot tell a /reload from a real restart, so it
+        -- must not guess. Assuming "/reload" would report Blizzard's eventual
+        -- fix as inconclusive forever; assuming "restart" is how CVars were
+        -- once wrongly recorded as a working store (AltStable PR #33).
         if CVAR_BEFORE == 0 then
-            say("  |cffff4444Nothing read back yet.|r /reload and run this again -")
-            say("  if it still says 0, CVars do not persist either.")
+            say("  |cffff4444Nothing came back.|r Expected on the very first run.")
+            say("  Otherwise, if this run follows a FULL exit and relaunch, CVars do")
+            say("  not persist on this build.")
         else
-            -- Only across /reload, which keeps the client process alive. A full
-            -- client exit loses addon CVars on this build (AltStable PR #33).
-            say("  |cffffcc00Survived a /reload|r - which proves nothing: the process stayed")
-            say("  alive. Only a full client exit and relaunch tests real persistence.")
+            say("  |cffffcc00A value came back.|r What it means depends on what you did:")
+            say("  - after only /reload: |cffffcc00inconclusive|r. /reload keeps the client")
+            say("    running, so the value may simply still be in memory.")
+            say("  - after a FULL exit and relaunch: CVars persist on this build.")
         end
 
     elseif cmd == "text" or cmd == "copy" then

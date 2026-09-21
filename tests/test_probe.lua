@@ -242,10 +242,29 @@ local said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
 
 H.check(said:find("before this one: 2", 1, true), "it reads the value that arrived: " .. said)
 H.eq(store.priestlyProbeLaunches, "3", "and counts this launch")
-H.check(said:find("/reload", 1, true), "it says the value only survived a /reload: " .. said)
-H.check(said:find("full client exit", 1, true), "and that a full exit is the real test: " .. said)
-H.check(not said:find("DO persist", 1, true), "it never claims CVars persist: " .. said)
-H.check(not said:find("usable store", 1, true), "or that they are a usable store: " .. said)
+-- The probe cannot know whether this followed a /reload or a real restart,
+-- so it must not assume either. Assuming /reload would report Blizzard's fix
+-- as inconclusive forever; assuming a restart is the original false positive.
+H.check(said:find("came back", 1, true), "it reports what it saw: " .. said)
+H.check(said:find("inconclusive", 1, true), "calls it inconclusive after only /reload: " .. said)
+H.check(said:find("FULL exit and relaunch", 1, true), "and conclusive after a full exit: " .. said)
+H.check(not said:find("process stayed alive", 1, true),
+    "without asserting which one happened: " .. said)
+H.check(not said:find("DO persist", 1, true), "and with no unconditional claim: " .. said)
+H.check(not said:find("usable store", 1, true), "or advice to build on it: " .. said)
+
+-- /pprobe sv had the same flaw: it said "SavedVariables DO load" on any value
+-- that came back, which a /reload alone can produce.
+PriestlyProbePersist = { launches = 4, stamps = {} }
+PriestlyProbeChar = { launches = 4 }
+assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
+before = #WoW.messages
+H.check(pcall(SlashCmdList["PPROBE"], "sv"), "/pprobe sv runs when values came back")
+said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said:find("inconclusive", 1, true), "sv is inconclusive after only /reload: " .. said)
+H.check(said:find("FULL exit and relaunch", 1, true), "and conclusive after a full exit: " .. said)
+H.check(not said:find("DO load", 1, true), "with no unconditional claim: " .. said)
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
 
 C_CVar = nil
 
