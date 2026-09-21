@@ -15,6 +15,12 @@
   decided at login. Worth running before reporting anything about the window moving on its own.
 
 ### Fixed
+- **The reagent counters would have errored when you hovered them.** Priestly asked the game to
+  build that tooltip using a call this client does not have, which would have thrown every time the
+  mouse crossed the candle or feather. Nobody hit it because the counters only appear once you know
+  a spell that uses a reagent, which is not yet possible - it was waiting for the level cap to rise.
+  The tooltip is now built by the addon, and says what the reagent is for and how many you are
+  carrying.
 - **`/priestly reset` left a locked window stranded.** Reset recentres the window even when it is
   locked, so a window dragged somewhere unreachable can always be recovered. But it then sat in the
   middle of the screen, still locked, refusing to be dragged - and returned there on every reload,

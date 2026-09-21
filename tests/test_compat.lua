@@ -262,4 +262,35 @@ end
 H.check(Priestly._testCompat.cvarBool == nil,
     "the CVar plumbing is gone, not merely unused")
 
+------------------------------------------------------------
+-- Item data for the reagent tooltip
+--
+-- This client's GameTooltip has no item setter at all - no SetItemByID, no
+-- SetHyperlink, no SetBagItem - so the tooltip is built from this. The call
+-- that was there before would have thrown from a hover handler.
+------------------------------------------------------------
+
+WoW.reset()
+local name, r, g, b = API.ItemInfo(17029)
+H.eq(name, "Item 17029", "an item in cache reports its name")
+H.near(r, 0.3, 0.001, "with its quality colour")
+H.eq(g, 0.2, "...green")
+H.eq(b, 0.3, "...blue")
+
+-- A cache miss must be distinguishable from an item that does not exist, and
+-- must ASK for the data - otherwise the second hover is no better than the
+-- first. GetItemInfo returns nothing at all on a miss, not nil.
+WoW.itemsUncached[17029] = true
+H.eq(API.ItemInfo(17029), nil, "a cache miss returns nil rather than a bad name")
+H.check(WoW.itemsRequested[17029], "and asks the client to load it")
+WoW.itemsUncached[17029] = nil
+H.eq(API.ItemInfo(17029), "Item 17029", "so the next hover has it")
+
+-- A missing API must return nil, not throw: this whole contract exists
+-- because something we expected was not there.
+local savedFn = C_Item.GetItemInfo
+C_Item.GetItemInfo = nil
+H.eq(API.ItemInfo(17029), nil, "no GetItemInfo is nil, not an error")
+C_Item.GetItemInfo = savedFn
+
 H.done("test_compat")

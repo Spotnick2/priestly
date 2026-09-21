@@ -398,6 +398,48 @@ function API.CountItem(itemID)
     return total
 end
 
+-- ─── items ──────────────────────────────────────────────────────────────────
+-- GameTooltip has NO item-setting method on this client. Measured against the
+-- full widget-method dump: no SetItemByID, no SetHyperlink, no SetBagItem, no
+-- SetInventoryItem. `GameTooltip:SetItemByID` was being called anyway and
+-- would have thrown from a hover handler the day a Prayer became learnable
+-- (issue #29). So the caller builds the lines and this hands back the data.
+--
+-- Returns nil when the item is not in the client's cache, having asked for it
+-- first. That matters: C_Item.GetItemInfo returns NOTHING on a cache miss
+-- rather than nil, and the cache is per client - the same call succeeds on one
+-- character and comes back empty on another.
+
+function API.ItemInfo(itemID)
+    -- C_Item is the file-local alias taken at load time, as every other
+    -- contract here does. Re-aliasing it inside the function would shadow that
+    -- and read the global instead, which is a different question.
+    if not (C_Item and C_Item.GetItemInfo) then return nil end
+
+    if C_Item.IsItemDataCachedByID then
+        local known, cached = pcall(C_Item.IsItemDataCachedByID, itemID)
+        if known and not cached then
+            if C_Item.RequestLoadItemDataByID then
+                pcall(C_Item.RequestLoadItemDataByID, itemID)
+            end
+            return nil   -- the caller shows a placeholder; the next hover has it
+        end
+    end
+
+    -- Returns are 1-based inside `packed` at index+1, pcall's ok being [1]:
+    -- name is the 1st return, quality the 3rd.
+    local packed = { pcall(C_Item.GetItemInfo, itemID) }
+    if not packed[1] or packed[2] == nil then return nil end
+
+    local name, quality = packed[2], packed[4]
+    local r, g, b = 1, 1, 1
+    if quality and C_Item.GetItemQualityColor then
+        local ok, qr, qg, qb = pcall(C_Item.GetItemQualityColor, quality)
+        if ok and qr then r, g, b = qr, qg, qb end
+    end
+    return name, r, g, b
+end
+
 -- ─── addon metadata ──────────────────────────────────────────────────────────
 -- GetAddOnMetadata moved to C_AddOns.
 

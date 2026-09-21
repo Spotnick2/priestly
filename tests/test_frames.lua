@@ -442,4 +442,48 @@ H.check(said:find("applied saved") or said:find("DEFAULT"),
 H.check(not said:find("SKIPPED"), "rather than the skip that came after it: " .. said)
 H.check(said:find("refresh"), "while saying refreshes have happened since: " .. said)
 
+------------------------------------------------------------
+-- The reagent footer tooltips
+--
+-- These handlers are why #29 shipped: nothing executed them, the buttons are
+-- hidden until a Prayer is learnable, and the stub's catch-all makes an
+-- unknown METHOD a silent no-op - so a call to a GameTooltip method this
+-- client does not have was invisible to the whole suite. Run them.
+------------------------------------------------------------
+
+local candle = _G["PriestlyCandleBtn"]
+local feather = _G["PriestlyFeatherBtn"]
+H.check(candle ~= nil and feather ~= nil, "the reagent buttons exist")
+
+WoW.clearTooltip()
+runScript(candle, "OnEnter")
+local tip = WoW.tooltipText()
+H.check(tip:find("Item 17029"), "the candle tooltip names the item: " .. tip)
+H.check(tip:find("in your bags"), "and how many you have: " .. tip)
+H.check(tip:find("group Prayers"), "and what consumes it: " .. tip)
+runScript(candle, "OnLeave")
+
+WoW.clearTooltip()
+runScript(feather, "OnEnter")
+tip = WoW.tooltipText()
+H.check(tip:find("Levitate"), "the feather tooltip says what it is for: " .. tip)
+runScript(feather, "OnLeave")
+
+-- A cache miss must produce a placeholder, not an empty tooltip, and must not
+-- throw. GetItemInfo returns NOTHING on a miss rather than nil.
+WoW.clearTooltip()
+WoW.itemsUncached[17029] = true
+runScript(candle, "OnEnter")
+tip = WoW.tooltipText()
+H.check(tip:find("Loading"), "an uncached item shows a placeholder: " .. tip)
+H.check(WoW.itemsRequested[17029], "and the data is requested for next time")
+WoW.itemsUncached[17029] = nil
+
+-- A button with no item must bail rather than opening an empty frame.
+WoW.clearTooltip()
+candle._itemID = nil
+runScript(candle, "OnEnter")
+H.eq(WoW.tooltipText(), "", "no item means no tooltip at all")
+candle._itemID = 17029
+
 H.done("test_frames")

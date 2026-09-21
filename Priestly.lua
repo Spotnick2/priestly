@@ -1150,11 +1150,14 @@ InitUI = function()
     g_Main.ftrLine:SetHeight(1)
 
     -- Helper: create a small reagent button with icon, count, and tooltip
-    local function MakeReagentBtn(name, iconPath, itemID)
+    local function MakeReagentBtn(name, iconPath, itemID, usedBy)
         local btn = CreateFrame("Button", name, g_Main)
         btn:SetSize(FTR_H - 2 + 24, FTR_H)  -- icon + room for count text
         btn:EnableMouse(true)
         btn._itemID = itemID
+        -- What consumes it. The stock item tooltip never said this, and it is
+        -- the question someone hovering a reagent count actually has.
+        btn._usedBy = usedBy
 
         btn.icon = btn:CreateTexture(nil, "ARTWORK")
         btn.icon:SetSize(FTR_H - 4, FTR_H - 4)
@@ -1165,10 +1168,26 @@ InitUI = function()
         btn.countTxt = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         btn.countTxt:SetPoint("LEFT", btn.icon, "RIGHT", 2, 0)
 
+        -- Built by hand because this client's GameTooltip has no item setter
+        -- at all - see API.ItemInfo. The old SetItemByID call would have
+        -- thrown from here the day a Prayer became learnable and the footer
+        -- first appeared.
         btn:SetScript("OnEnter", function(self)
+            if not self._itemID then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if self._itemID then
-                GameTooltip:SetItemByID(self._itemID)
+
+            local name, r, g, b = API.ItemInfo(self._itemID)
+            -- A cache miss is not an error: ItemInfo has asked the client for
+            -- the item, so the next hover will have it. Say something rather
+            -- than showing an empty frame.
+            GameTooltip:SetText(name or "Loading...", r or 1, g or 1, b or 1)
+
+            local have = CountItem(self._itemID)
+            GameTooltip:AddLine(
+                (have == 1 and "1 in your bags" or (have .. " in your bags")),
+                0.85, 0.85, 0.85)
+            if self._usedBy then
+                GameTooltip:AddLine("Used by " .. self._usedBy, 0.55, 0.75, 1.0)
             end
             GameTooltip:Show()
         end)
@@ -1180,8 +1199,10 @@ InitUI = function()
         return btn
     end
 
-    g_Main.candleBtn  = MakeReagentBtn("PriestlyCandleBtn",  ItemIcon(SACRED_CANDLE_ID), SACRED_CANDLE_ID)
-    g_Main.featherBtn = MakeReagentBtn("PriestlyFeatherBtn", ItemIcon(LIGHT_FEATHER_ID), LIGHT_FEATHER_ID)
+    g_Main.candleBtn  = MakeReagentBtn("PriestlyCandleBtn",  ItemIcon(SACRED_CANDLE_ID),
+        SACRED_CANDLE_ID, "the group Prayers")
+    g_Main.featherBtn = MakeReagentBtn("PriestlyFeatherBtn", ItemIcon(LIGHT_FEATHER_ID),
+        LIGHT_FEATHER_ID, "Levitate")
 
     -- Seed the reagent state once; after this only SPELLS_CHANGED and talent
     -- changes can alter it, and both call RefreshFooterState themselves.

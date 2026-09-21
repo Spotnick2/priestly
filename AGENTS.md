@@ -292,6 +292,17 @@ on mouseover in game. Confirm a new global with `Tools/PriestlyProbe` before stu
 rather than to assert behaviour: strict globals only catch what actually runs. A new handler belongs
 in that file the day it is written.
 
+**Strict globals do not cover METHODS.** The stub's catch-all `__index` returns a no-op for any
+method it does not define, so a call to a widget method this client lacks is silently swallowed -
+the opposite of the loud failure an undefined global gets. That is how `GameTooltip:SetItemByID`
+survived: the method does not exist on Forever at all, and the suite could not see it because
+nothing executed the handler and a no-op looks like success.
+
+So for anything built on a widget method: **execute the handler AND assert what it produced.**
+A test that only checks the handler ran would have passed against the broken call. Check the
+method against `C:/Projects/References/forever-api-1.60.1.69913.md` before relying on it - the
+widget-method section is the only place that lists them.
+
 In game:
 
 ```powershell

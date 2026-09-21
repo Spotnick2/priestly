@@ -47,6 +47,8 @@ function WoW.reset()
     WoW.instanceName = ""
     WoW.instanceType = nil       -- nil = derive from instanceName
     WoW.itemCounts  = {}         -- [itemID] = count, treated as sitting in bag 0
+    WoW.itemsUncached = {}       -- [itemID] = true -> GetItemInfo returns nothing
+    WoW.itemsRequested = {}      -- [itemID] = true once the addon asked for it
     WoW.bags        = {}         -- [bagID] = { {itemID=, stackCount=}, ... }
     WoW.messages    = {}         -- everything printed to DEFAULT_CHAT_FRAME
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
@@ -633,9 +635,17 @@ end
 
 C_Item = {
     GetItemIconByID = function(itemID) return "icon:" .. tostring(itemID) end,
+    -- Returns NOTHING on a cache miss, not nil - the live behaviour, and the
+    -- reason API.ItemInfo checks the cache first instead of trusting a nil.
     GetItemInfo = function(itemID)
-        return "Item " .. tostring(itemID), "link", 1, 1, 1, "", "", 20, "",
+        if WoW.itemsUncached[itemID] then return end
+        return "Item " .. tostring(itemID), "link", 3, 1, 1, "", "", 20, "",
             "icon:" .. tostring(itemID)
+    end,
+    IsItemDataCachedByID = function(itemID) return not WoW.itemsUncached[itemID] end,
+    RequestLoadItemDataByID = function(itemID) WoW.itemsRequested[itemID] = true end,
+    GetItemQualityColor = function(quality)
+        return 0.1 * quality, 0.2, 0.3, "quality" .. tostring(quality)
     end,
     -- The live API answers for the whole carried inventory, reagent bag
     -- included.
