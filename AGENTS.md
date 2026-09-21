@@ -144,7 +144,7 @@ gets re-tested.
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,
 `lockFrame`, `showClickHints`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`,
-`warnedBuild`, and `svLoadCheck` (never in `DEFAULTS`, see below). The account-wide
+and `svLoadCheck` (never in `DEFAULTS`, see below). The account-wide
 `PriestlySVCheck` holds nothing but its own `svLoadCheck`: it exists only so the addon can tell
 when account-wide storage is fixed.
 `learnedDurations` is keyed by **spell name**,
@@ -269,8 +269,10 @@ Adding a config option:
 Changing patch compatibility:
 
 - Update only `## Interface:` in `Priestly.toc` unless Lua API changes are required.
-- On a new client build, players see a one-line note at login, once per build (once per game
-  launch while storage is broken). It is worded for them, not for us: the procedure lives here.
+- On a new client build, players see a one-line note at every real login (never on `/reload`)
+  until `MEASURED_ON_BUILD` is bumped. It is deliberately not latched: a notice seen once and missed
+  would leave the addon on stale findings with nothing left to say so. It is worded for players;
+  the procedure lives here.
   When the build changes, re-measure - `/apidump`, `/pprobe`, and a **full-exit** check of saved
   settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`, and keep `WoW.build`'s default
   in `tests/wow_stubs.lua` equal to it. Bumping without re-measuring silences the only reminder

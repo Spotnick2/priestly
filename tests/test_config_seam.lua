@@ -344,9 +344,13 @@ H.check(msg:find("report", 1, true), "worded for players: " .. msg)
 H.check(not msg:find("pprobe", 1, true) and not msg:find("MEASURED_ON_BUILD", 1, true),
     "with no developer instructions a player cannot act on: " .. msg)
 
+-- Not latched: it repeats at every real login until MEASURED_ON_BUILD is
+-- bumped. A notice shown once and missed would leave the addon running on
+-- stale findings with nothing left to say so.
 before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
-H.check(not said(before):find("tested on", 1, true),
-    "once per build, where storage can remember it was shown")
+H.check(said(before):find("tested on", 1, true),
+    "it warns again at the next real login, until someone re-measures")
+H.eq(PriestlyDB.warnedBuild, nil, "and records nothing that could silence it")
 
 H.done("test_config_seam")

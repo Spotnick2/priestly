@@ -16,7 +16,8 @@
   so in chat the first time your saved settings come back - once, not at every login. Nothing to do
   until then.
 - **A note when the game client updates.** Priestly was tested on one build of the beta. On a newer
-  one it mentions that once at login, so you know what to report if something misbehaves.
+  one it says so at login until an update catches up, so you know what to report if something
+  misbehaves.
 - **`/priestly pos`** - says where the window is, where it was told to be, and what the addon
   decided at login. Worth running before reporting anything about the window moving on its own.
 

@@ -475,10 +475,10 @@ end
 -- the one thing that survives a restart here. A stored build could never fire:
 -- the build only changes across a restart, which is when stored data is lost.
 --
--- Shown on a real login only, once per build where storage works, and worded
--- for players: the re-measuring steps are for developers and live in
--- AGENTS.md. On the broken client it shows once per game launch, since nothing
--- can remember that it was shown.
+-- Shown at every real login - never on /reload - until someone re-measures
+-- and bumps the constant. Deliberately not latched: a notice shown once and
+-- missed would leave the addon running on stale findings with nothing left to
+-- say so. Worded for players; the re-measuring steps live in AGENTS.md.
 
 local MEASURED_ON_BUILD = "69913"
 
@@ -486,8 +486,6 @@ function Priestly_CheckClientBuild()
     local build = CurrentBuild()
     -- An unreadable build is not evidence of a new one; stay quiet.
     if not build or build == MEASURED_ON_BUILD then return end
-    if PriestlyDB and PriestlyDB.warnedBuild == build then return end
-    Priestly_SetConfig("warnedBuild", build)
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage(
             "|cff99ddff[Priestly]|r This version was tested on game build " .. MEASURED_ON_BUILD
