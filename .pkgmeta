@@ -9,7 +9,11 @@ manual-changelog:
 ignore:
   - .github
   - docs
+  - AGENTS.md
+  - CLAUDE.md
   - screenshots
+  - tests
+  - Tools
   - README.md
   - CHANGELOG.md
   - LICENSE

@@ -1,0 +1,49 @@
+name: Package check
+
+# Dry run only. -d is the real no-upload switch: merely leaving CF_API_KEY out
+# still lets the packager cut a GitHub release.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Syntax-check the Lua
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+          luac5.1 -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua
+
+      - name: Unit tests
+        run: |
+          for f in tests/test_*.lua; do
+            echo "-- $f"
+            lua5.1 "$f" || exit 1
+          done
+
+      - name: Package (dry run)
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
+        with:
+          args: -d
+
+      # .release is a hidden directory, and upload-artifact@v4 skips hidden
+      # content by default - without include-hidden-files the upload finds
+      # nothing. `warn` then leaves the job green while publishing no artifact,
+      # so a passing check would not actually prove the package built.
+      - name: Keep the zip for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: priestly-package
+          path: .release/*.zip
+          include-hidden-files: true
+          if-no-files-found: error

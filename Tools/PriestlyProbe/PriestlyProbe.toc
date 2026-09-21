@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: |cffff8800Priestly Probe|r
+## Notes: Throwaway API probe for the WoW: Forever port. /pprobe
+## Author: Spotnick
+## Version: dev
+## SavedVariables: PriestlyProbeDB, PriestlyProbePersist
+## SavedVariablesPerCharacter: PriestlyProbeChar
+
+PriestlyProbe.lua

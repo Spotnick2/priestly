@@ -1,132 +1,93 @@
-# Priestly
+# Priestly Forever
 
-**Priestly** is a lightweight, intelligent buff management addon for priests in *World of Warcraft: TBC Anniversary*.
+**Priestly** is a lightweight buff manager for priests, inspired by **PallyPower**. It tracks
+*Power Word: Fortitude*, *Divine Spirit* and *Shadow Protection* across your party or raid and lets
+you rebuff with a single click.
 
-Inspired by **PallyPower**, it helps you efficiently manage group-wide buffs like *Power Word: Fortitude*, *Divine Spirit*, and *Shadow Protection* with minimal effort.
+This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16001`).
 
----
-
-## ✨ Features
-
-* 🧠 **Smart Buff Assignment**
-
-  * Automatically assigns buffs across party/raid members
-* 👥 **Group-Aware**
-
-  * Detects party/raid changes and updates accordingly
-* ⚡ **Auto-Open UI**
-
-  * Opens when joining a group so you're always ready
-* 🎯 **One-Click Buffing**
-
-  * Quickly apply buffs without targeting manually
-* 🧩 **Lightweight & Fast**
-
-  * No unnecessary overhead or bloated dependencies
+> **Playing TBC Classic Anniversary?** Install **v1.0.6** — the last release for that client. It
+> stays available on CurseForge and the CurseForge app will keep offering it for the Anniversary
+> game version. The Anniversary line is no longer being developed.
 
 ---
 
-## 🖥️ Usage
+## Features
 
-* Type:
-
-  ```
-  /priestly help
-  ```
-
-  for available commands
-
-* The addon will:
-
-  * Automatically open when you join a group
-  * Display buff assignments
-  * Let you apply buffs quickly
+* **One row per group, per buff** — colour-coded by how many people are missing it, with the lowest
+  remaining timer on the bar.
+* **One-click buffing** — left-click casts the group Prayer, right-click buffs the first person
+  missing it. No targeting.
+* **Works before you have the Prayers** — while you only know the single-target spells, left-click
+  simply buffs whoever needs it. Nothing is wired to a spell you do not have.
+* **Per-member popover** — mouse over a row for the full list with range indicators and per-person
+  click casting.
+* **Group-aware** — follows party and raid changes, subgroups, and pets.
+* **Reagent tracking** — Sacred/Holy Candle and Light Feather counts, once those spells matter.
+* **Shadow Protection when it counts** — always, only when someone in the group already has it, or
+  only inside instances you pick.
 
 ---
 
-## ⚙️ Configuration
-
-Priestly includes a simple configuration system:
-
-* Toggle features
-* Adjust behavior
-* Customize how buffs are handled
-
-Access via:
+## Usage
 
 ```
-/priestly
+/priestly          toggle the window
+/priestly show     force open
+/priestly hide     close
+/priestly config   open the options panel
+/priestly reset    reset the window position
+/priestly help     full command and click reference
 ```
+
+The window opens on its own when you join a group.
+
+**Row colours:** green = everyone has it · yellow = some missing · red = nobody has it ·
+grey `?` = buff state cannot be read right now (the client hides aura data during combat; Priestly
+keeps counting down from the last reading instead of guessing).
 
 ---
 
-## 📦 Installation
+## Installation
 
-### CurseForge (Recommended)
+### CurseForge (recommended)
 
-1. Install via CurseForge client
-2. Enable in-game
+Install through the CurseForge app and enable it in game.
 
 ### Manual
 
-1. Download the latest release
-2. Extract to:
+Download the release zip and extract it so the folder lands at:
 
-   ```
-   World of Warcraft/_classic_/Interface/AddOns/
-   ```
-3. Ensure folder is:
-
-   ```
-   AddOns/Priestly/
-   ```
+```
+World of Warcraft/_classic_beta_/Interface/AddOns/Priestly/
+```
 
 ---
 
-## 🧪 Supported Version
+## Beta notes
 
-* World of Warcraft: **TBC Anniversary**
-* Interface: `20504`
+Forever is in beta and the level cap is still low, so some of Priestly is waiting for content to
+catch up:
 
----
-
-## 🧠 Inspiration
-
-Priestly is inspired by:
-
-* PallyPower (paladin buff management)
-
-But built specifically for priests with a modern, lightweight approach.
-
----
-
-## 🐛 Feedback & Issues
-
-If you encounter bugs or have suggestions:
-
-* Open an issue on GitHub
-* Or leave a comment on CurseForge
+* The group **Prayer of X** spells are not learnable yet. Every row works single-target until they
+  are, and switches over automatically once you learn one.
+* **Buff durations differ from both TBC and Vanilla** and are still being tuned. Priestly learns the
+  real duration from your own buffs rather than assuming one, and forgets what it learned whenever
+  the client build changes.
+* **Reagents** (candles, Light Feather) only appear once you know the spells that need them.
+* The **by-instance** Shadow Protection mode lists the Vanilla dungeons and raids, none of which are
+  reachable yet. The instance names it matches on are unverified until they are.
 
 ---
 
-## 👤 Author
+## Feedback
+
+Open an issue on GitHub or leave a comment on CurseForge.
+
+## Author
 
 **Spotnick**
 
----
+## License
 
-## 📜 License
-
-MIT (or your preferred license)
-
----
-
-## 🚀 Future Plans
-
-* Raid-wide buff optimization
-* Better UI customization
-* Additional priest utility tracking
-
----
-
-Enjoy smoother buff management ✨
+MIT — see [LICENSE](LICENSE).

@@ -1,5 +1,45 @@
 # Priestly Changelog
 
+## v2.0.0-beta1 - 2026-09-20
+
+**Priestly Forever** - a port to World of Warcraft: Forever 1.60.1 (Interface 16001).
+TBC Classic Anniversary is no longer supported; v1.0.6 remains available for that client.
+
+### Ported
+- Rebuilt every removed or moved API call behind a compatibility layer: auras now read through
+  `C_UnitAuras`, spell data through `C_Spell`, the spellbook through `C_SpellBook`, item icons
+  through `C_Item`.
+- Event registration is guarded: this client throws on an unknown event name instead of ignoring it,
+  and anything unsupported is now reported rather than silently dead.
+- The options panel no longer depends on Classic-only frame templates.
+
+### New behaviour for Forever
+- **Works before the Prayers exist.** Every buff row is built from the spells you actually know, and
+  left-click falls back to the single-target spell when there is no group Prayer - so no click is
+  ever wired to a spell that does not exist. This applies to Fortitude and Shadow Protection now,
+  not just Divine Spirit.
+- **Buff durations are learned, not assumed.** Forever's durations match neither TBC nor Vanilla and
+  are still being tuned, so the timer bars scale against what your own buffs actually report, and
+  reset whenever the client build changes.
+- **Combat aura secrecy is handled.** This client makes every aura unreadable once combat starts -
+  for the whole group, not just you - and the by-name lookup returns "no buff" rather than an error,
+  so a naive port would report the entire raid as unbuffed the moment you pull. Priestly detects the
+  block, counts down from the last reading instead, and shows `?` for anyone it never saw buffed.
+- **Surnames.** Forever characters have one, and first names are not unique, so full names are shown
+  and the popover is wider to fit them. Buff state now follows the character, not the raid slot.
+- `UNIT_AURA` is filtered to the units and spells that matter - it fires far more often here.
+
+### Changed
+- The TBC instance list is gone; the options panel is now **Settings | Instances**. An existing
+  Priestly profile is migrated automatically: your settings are kept, TBC-only entries are dropped.
+- The main frame now survives being closed during combat the same way the popover already did.
+- Reagent tracking follows the spells you know instead of a hardcoded level.
+
+### Added
+- A unit test suite (`tests/`, plain Lua 5.1, no game client) and a deploy script.
+- Automated releases through the BigWigs packager, with a dry-run package check on every pull
+  request.
+
 ## v1.0.6 - 2026-05-13
 
 ### Fixed
