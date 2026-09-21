@@ -8,6 +8,7 @@
 ## SavedVariables: PriestlySVCheck
 ## X-Curse-Project-ID: 1489106
 
+Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml
 PriestlyCompat.lua
 PriestlyConfig.lua
 Priestly.lua

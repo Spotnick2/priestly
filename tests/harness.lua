@@ -30,11 +30,58 @@ function H.near(a, b, tol, msg)
         (msg or "values differ") .. "  (expected ~" .. tostring(b) .. ", got " .. tostring(a) .. ")")
 end
 
--- Load the addon in TOC order, once.
+-- A whole file as text with CRLF normalised, or nil if it does not exist. The
+-- one reader for the tests: they used to carry four copies that disagreed
+-- about CRLF and about whether a missing file was an error.
+function H.readFile(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local s = f:read("*a")
+    f:close()
+    return (s:gsub("\r\n", "\n"))
+end
+
+-- The addon's own Lua files, in the order Priestly.toc loads them. Read from
+-- the TOC so a new file cannot be missed by the tests that scan every file.
+function H.tocFiles()
+    local files = {}
+    local toc = assert(H.readFile("Priestly.toc"), "Priestly.toc not found - run from the repo root")
+    for line in (toc .. "\n"):gmatch("([^\n]*)\n") do
+        local file = line:match("^%s*([^#%s][^%s]*%.lua)%s*$")
+        if file then files[#files + 1] = file end
+    end
+    return files
+end
+
+-- Where LibGroupBuffs-1.0 is checked out. tests/run.ps1 sets LIBGROUPBUFFS to
+-- the path it resolved (and prints it); running a test file by hand falls back
+-- to the sibling checkout. There is deliberately no vendored copy to fall back
+-- to: a stale one would make the suite pass against code that no longer ships.
+function H.libraryRoot()
+    return os.getenv("LIBGROUPBUFFS") or "../LibGroupBuffs"
+end
+
+-- Load a file or stop the run, naming it. A test that silently skipped a
+-- missing file is how a load error in the client can pass a green suite.
+local function run(path)
+    local chunk, err = loadfile(path)
+    if not chunk then error("cannot load " .. path .. ": " .. tostring(err), 3) end
+    chunk()
+end
+
+-- Load everything the TOC loads, in its order: the library's files as its XML
+-- lists them (tests/libfiles.lua, the same reader run.ps1, deploy.ps1 and CI
+-- use), then Priestly's files.
 function H.loadAddon()
-    assert(loadfile("PriestlyCompat.lua"))()
-    assert(loadfile("PriestlyConfig.lua"))()
-    assert(loadfile("Priestly.lua"))()
+    local root = H.libraryRoot()
+    local L = dofile("tests/libfiles.lua")
+    local ok, load = pcall(L.resolve, root)
+    if not ok then
+        error(tostring(load) .. ". Check LibGroupBuffs out next to this repository "
+            .. "(../LibGroupBuffs) or set LIBGROUPBUFFS to its path.", 2)
+    end
+    for _, file in ipairs(load) do run(root .. "/" .. file) end
+    for _, file in ipairs(H.tocFiles()) do run(file) end
     return Priestly._test, Priestly._testConfig, Priestly.API
 end
 

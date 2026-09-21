@@ -6,6 +6,11 @@
 local ADDON_NAME = "Priestly"
 local API = Priestly.API
 
+-- PriestlyCompat.lua has already said in chat why Priestly cannot start if the
+-- shared library is missing. Stop here rather than building half an addon and
+-- failing further down, far from the cause.
+if not API then return end
+
 -- ─── Default configuration ──────────────────────────────────────────────────
 
 local DEFAULTS = {
@@ -508,7 +513,7 @@ end
 -- ─── Instance detection events ──────────────────────────────────────────────
 
 local detectFrame = CreateFrame("Frame", "PriestlyInstanceDetector")
-API.RegisterEvents(detectFrame,
+Priestly.RegisterEvents(detectFrame,
     "PLAYER_LOGIN", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD")
 detectFrame:SetScript("OnEvent", function(self, event, isInitialLogin, isReloadingUi)
     if event == "PLAYER_LOGIN" then
@@ -1143,7 +1148,7 @@ local function RegisterPanel()
 end
 
 local regFrame = CreateFrame("Frame")
-API.RegisterEvents(regFrame, "PLAYER_LOGIN")
+Priestly.RegisterEvents(regFrame, "PLAYER_LOGIN")
 regFrame:SetScript("OnEvent", function()
     Priestly_EnsureDefaults()
     RegisterPanel()

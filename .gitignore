@@ -1,3 +1,8 @@
+# Embedded libraries arrive through .pkgmeta externals at package time, and
+# from ../LibGroupBuffs during development. Never commit a copy: a vendored
+# one is exactly the second editable source the library exists to remove.
+Libs/
+
 # Compiled Lua sources
 luac.out
 

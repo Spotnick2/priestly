@@ -23,6 +23,11 @@ local addonName = "Priestly"
 -- ─── Compat layer (PriestlyCompat.lua, loaded first) ─────────────────────────
 local API = Priestly.API
 
+-- PriestlyCompat.lua has already said in chat why Priestly cannot start if the
+-- shared library is missing. Stop here rather than building half an addon and
+-- failing further down, far from the cause.
+if not API then return end
+
 local VERSION = API.AddonVersion(addonName)
 
 -- ─── Layout constants ────────────────────────────────────────────────────────
@@ -62,7 +67,13 @@ local SACRED_CANDLE_ID = 17029   -- rank 2+ Prayer of Fortitude
 local LIGHT_FEATHER_ID = 17056   -- Levitate
 
 -- Get item icon reliably (works even if item not in bags)
-local ItemIcon = API.ItemIcon
+-- Library functions are looked up through API at call time, never copied into
+-- a local when the file loads. API is the table LibGroupBuffs shares with
+-- every addon that embeds it: if a newer copy loads after Priestly (Wildly and
+-- Magely load later, alphabetically), it upgrades that table in place, and a
+-- copy taken here would keep running the old version beside the new one.
+-- tests/test_bridge.lua fails on a new capture.
+local function ItemIcon(...) return API.ItemIcon(...) end
 
 -- Returns r,g,b for a percentage (0.0 – 1.0)
 -- Matches PallyPower's GetSeverityColor: smooth green→yellow→red gradient
@@ -293,9 +304,9 @@ local function FmtTime(s)
     return string.format("%d:%02d", math.floor(s / 60), math.floor(s % 60))
 end
 
-local SpellIcon = API.SpellIcon
+local function SpellIcon(...) return API.SpellIcon(...) end
 
-local CountItem = API.CountItem
+local function CountItem(...) return API.CountItem(...) end
 
 -- ─── Aura reads: GUID-keyed cache and combat secrecy ─────────────────────────
 --
@@ -400,7 +411,7 @@ local function BuffRem(unit, def)
 end
 
 -- "IN_RANGE" | "OUT_RANGE" | "OFFLINE" | "UNKNOWN"
-local RangeStatus = API.SpellRange
+local function RangeStatus(...) return API.SpellRange(...) end
 
 -- Can we actually buff this unit right now?
 local function IsValidTarget(unit)
@@ -470,7 +481,7 @@ local function ClassColor(classFile)
     return 0.80, 0.80, 0.80
 end
 
-local KnowsSpell = API.KnowsSpell
+local function KnowsSpell(...) return API.KnowsSpell(...) end
 
 -- Returns the icon for the player's spec.
 -- Shadow (Shadowform) > Discipline (Power Infusion) > Holy (Circle of Healing).
@@ -1710,7 +1721,7 @@ end
 -- registration goes through the compat helper, which reports what it skipped
 -- rather than leaving a handler silently dead.
 local evtFrame = CreateFrame("Frame", "PriestlyEvents")
-API.RegisterEvents(evtFrame,
+Priestly.RegisterEvents(evtFrame,
     "PLAYER_LOGIN",
     "READY_CHECK",
     "UNIT_AURA",

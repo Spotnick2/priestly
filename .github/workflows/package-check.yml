@@ -18,13 +18,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The tests load LibGroupBuffs-1.0 from a checkout next to this one, the
+      # same layout as local development. CI uses the tag .pkgmeta pins - the
+      # library a release would actually ship - not whatever main holds today.
+      - name: Check out LibGroupBuffs at the pinned tag
+        run: |
+          tag=$(awk '$1 == "tag:" { print $2; exit }' .pkgmeta)
+          test -n "$tag" || { echo ".pkgmeta pins no LibGroupBuffs tag"; exit 1; }
+          git clone --quiet --depth 1 --branch "$tag" \
+            https://github.com/Spotnick2/LibGroupBuffs ../LibGroupBuffs
+          echo "LibGroupBuffs @ $tag ($(git -C ../LibGroupBuffs rev-parse --short HEAD))"
+
       - name: Syntax-check the Lua
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq lua5.1
-          luac5.1 -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua
+          # tests/libfiles.lua is the one reader of the library's XML; the
+          # harness, run.ps1 and deploy.ps1 use it too.
+          lib=../LibGroupBuffs
+          files=$(lua5.1 tests/libfiles.lua "$lib" load) || exit 1
+          luac5.1 -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua \
+            $(printf '%s\n' $files | sed "s|^|$lib/|")
 
       - name: Unit tests
+        env:
+          LIBGROUPBUFFS: ../LibGroupBuffs
         run: |
           for f in tests/test_*.lua; do
             echo "-- $f"
@@ -35,6 +53,23 @@ jobs:
         uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
         with:
           args: -d
+
+      # Local tests read the library from a sibling checkout, so they cannot
+      # prove a package carries it. Unpack the zip and resolve the library from
+      # inside it with the same reader: it fails, naming the file, if anything
+      # the packaged XML lists is absent at the path the TOC loads.
+      #
+      # This is the BigWigs packager's zip. Releases are built by CurseForge's
+      # own packager from the tag webhook, which CI cannot run - so the
+      # published file is checked by hand after each release (AGENTS.md,
+      # Releasing).
+      - name: The package embeds the library
+        run: |
+          zip=$(ls .release/*.zip | head -1)
+          rm -rf unpacked && mkdir unpacked && unzip -q "$zip" -d unpacked
+          lua5.1 tests/libfiles.lua unpacked/Priestly/Libs/LibGroupBuffs-1.0 ship \
+            | sed 's|^|packaged Priestly/Libs/LibGroupBuffs-1.0/|'
+          test "${PIPESTATUS[0]}" -eq 0
 
       # .release is a hidden directory, and upload-artifact@v4 skips hidden
       # content by default - without include-hidden-files the upload finds

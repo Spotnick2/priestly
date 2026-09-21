@@ -79,13 +79,7 @@ Priestly_OnConfigChanged = realHook
 -- on the next line - all found in review.
 ------------------------------------------------------------
 
-local function ReadFile(path)
-    local f = io.open(path, "rb")
-    if not f then return nil end
-    local s = f:read("*a")
-    f:close()
-    return (s:gsub("\r\n", "\n"))
-end
+local ReadFile = H.readFile
 
 -- String contents blanked, so `=` and `--` inside them are ignored; then the
 -- comment cut off.
@@ -225,11 +219,7 @@ H.check(#Scan("synthetic", "-- config-owner: end") > 0,
     "an end with no begin is an error")
 
 -- Every file the TOC loads, read from the TOC so a new one cannot be missed.
-local files = {}
-for line in (ReadFile("Priestly.toc") .. "\n"):gmatch("([^\n]*)\n") do
-    local file = line:match("^%s*([^#%s][^%s]*%.lua)%s*$")
-    if file then files[#files + 1] = file end
-end
+local files = H.tocFiles()
 H.check(#files >= 3, "the TOC lists the addon's files: " .. table.concat(files, ", "))
 
 -- Owner regions must stay few, or the scan stops meaning anything. Each file's
