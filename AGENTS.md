@@ -257,10 +257,22 @@ pwsh Tools\deploy.ps1
 `.pkgmeta` packages the addon as `Priestly`, uses `CHANGELOG.md` as the manual changelog, and
 excludes `.github`, `docs`, `screenshots`, `tests`, `Tools`, `README.md`, `CHANGELOG.md`, `LICENSE`.
 
-Releases run `BigWigsMods/packager` from `.github/workflows/release.yml` on a `v*` tag, pinned to
-commit `e50a250f8705` (Forever support landed in `7391c8de`). CurseForge project `1489106`, flavor
-`forever` (alias `camelot`), `gameVersionTypeID` 88568. The release type comes from the **tag
-name**: `alpha` → Alpha, `beta` → Beta, anything else → Release. Pull requests run the same packager
-with `-d` (no uploads) and publish the zip as a CI artifact.
+**Publishing is CurseForge's own packager, triggered by a repository webhook** — not a GitHub
+Actions workflow. The webhook posts to `curseforge.com/api/projects/1489106/package` on push, and
+CurseForge builds from `.pkgmeta` when it sees a tag. The credential is a per-project package token
+embedded in that webhook URL; it is **not** `CF_API_KEY`, which is an account-level API token for
+the upload API and is not used here.
 
-Requires a `CF_API_KEY` repo secret.
+**Do not add a release workflow.** One was added during the Forever port and removed again: running
+`BigWigsMods/packager` on a tag would publish a second time alongside the webhook, and without a
+secret it would silently skip the CurseForge upload while still cutting a GitHub release — a
+failure shaped to look like success. If a workflow is ever wanted, the webhook has to be disabled
+first, deliberately.
+
+`.github/workflows/package-check.yml` stays: it runs the syntax check, the unit tests and a
+`-d` dry-run package build on pull requests, and uploads the zip as an artifact. It publishes
+nothing.
+
+The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
+Release. Flavor is derived from `## Interface: 16001` → `forever` (CurseForge `gameVersionTypeID`
+88568).
