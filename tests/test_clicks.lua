@@ -120,6 +120,41 @@ H.eq(row:GetAttribute("unit2"), "party1", "in combat the wiring is left alone")
 WoW.inCombat = false
 
 ------------------------------------------------------------
+-- A button PreClick disarmed must re-arm itself
+--
+-- PreClick cleared the spell when nobody was valid, then on the next click
+-- wrote only the unit - leaving the spell nil. So the first click after
+-- somebody became valid again did nothing at all: no cast, no error, exactly
+-- the complaint that started #17. PostClick would fix it afterwards, so the
+-- SECOND click worked, which is the kind of thing a user reports as "it
+-- works sometimes".
+------------------------------------------------------------
+
+rows = setup({ "FORT_SINGLE" })
+row = activeRows(rows)[1]
+
+WoW.units.player.dead = true
+WoW.units.party1.dead = true
+WoW.units.party2.dead = true
+row._scripts.PreClick(row, "RightButton")
+H.check(row:GetAttribute("spell2") == nil, "nobody valid disarms the button")
+
+-- Somebody comes back, without a rebuild.
+WoW.units.party1.dead = false
+row._scripts.PreClick(row, "RightButton")
+H.eq(row:GetAttribute("unit2"), "party1", "the next click retargets to them")
+H.eq(row:GetAttribute("spell2"), "Power Word: Fortitude",
+    "and re-arms the spell, so that click actually casts")
+
+-- Left-click takes the same path.
+WoW.units.party1.dead = true
+row._scripts.PreClick(row, "LeftButton")
+H.check(row:GetAttribute("spell1") == nil, "left-click disarms too")
+WoW.units.party1.dead = false
+row._scripts.PreClick(row, "LeftButton")
+H.eq(row:GetAttribute("spell1"), "Power Word: Fortitude", "and re-arms")
+
+------------------------------------------------------------
 -- PostClick restores anything PreClick cleared
 ------------------------------------------------------------
 

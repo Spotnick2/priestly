@@ -1489,29 +1489,31 @@ UpdateUI = function()
                 local df = self._def
                 if not ms or not df then return end
 
+                -- Write the spell from the pick EVERY time, not only when
+                -- clearing it. Setting just the unit left a button that an
+                -- earlier PreClick had disarmed disarmed for good: everyone
+                -- goes out of range, the click clears spell1, someone comes
+                -- back, and the next click writes unit1 over a spell1 that is
+                -- still nil. A dead button, which is the complaint that
+                -- started #17 - and nothing on screen says so.
                 if btn == "LeftButton" then
                     if not self._primary then
                         self:SetAttribute("spell1", nil)
                         return
                     end
+                    -- Nobody valid clears the spell, so a click cannot fall
+                    -- back to casting on yourself.
                     local unit = PickTarget(ms, df, self._groupMode)
-                    if unit then
-                        self:SetAttribute("unit1", unit)
-                    else
-                        -- Nobody valid — clear spell to prevent casting on self
-                        self:SetAttribute("spell1", nil)
-                    end
+                    self:SetAttribute("spell1", unit and self._primary or nil)
+                    if unit then self:SetAttribute("unit1", unit) end
                 else
                     if not self._secondary then
                         self:SetAttribute("spell2", nil)
                         return
                     end
                     local unit = PickTarget(ms, df, false)
-                    if unit then
-                        self:SetAttribute("unit2", unit)
-                    else
-                        self:SetAttribute("spell2", nil)
-                    end
+                    self:SetAttribute("spell2", unit and self._secondary or nil)
+                    if unit then self:SetAttribute("unit2", unit) end
                 end
             end)
 

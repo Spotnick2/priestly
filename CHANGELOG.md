@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+- **A buff row could stop responding until you clicked it twice.** If everyone in a group went out
+  of reach - dead, offline or too far - the row disarmed itself so a click could not land on you by
+  mistake. It then failed to re-arm when somebody became reachable again, so the next click did
+  nothing at all and only the one after it cast. Found while building the click hints below: the
+  hint said what the click should do, and the click disagreed.
+
 ### Added
 - **Lock frame position** in Options - Appearance. Stops the window being dragged by its header, so
   it cannot be nudged out of place by a stray click mid-fight. `/priestly reset` still recentres it,
