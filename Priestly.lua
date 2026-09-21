@@ -111,7 +111,7 @@ local CLASS_ICONS = {
 -- exist in this version - nothing here assumes they do.
 --
 -- `duration` is only a seed for the timer gradient. The real value is learned
--- from live auras (see LearnDuration) because Forever's durations differ from
+-- from live auras (by the engine's BuffRem) because Forever's durations differ from
 -- both TBC and Vanilla and are still moving during the beta.
 local DEFS = {
     {
@@ -144,32 +144,57 @@ local DEFS = {
     },
 }
 
--- Resolve localized names and refresh per-buff spell availability. Cheap, and
--- rerun on SPELLS_CHANGED / talent changes: what a priest knows changes as they
--- level, and at the current beta cap the group spells do not exist at all.
+-- ─── The buff engine (LibGroupBuffs-1.0's Engine.lua) ─────────────────────
+--
+-- Aura reads and the combat-secrecy cache, durations, the roster, group stats,
+-- target picking, click mapping and UNIT_AURA filtering are shared with Wildly
+-- and Magely. Priestly supplies what is its own: DEFS, its config, the Shadow
+-- Protection mode and where learned durations are stored. The UI below calls
+-- the engine through these thin locals, which look the method up at call time
+-- so a newer embedded copy of the library is the one that runs.
+local engine = Priestly.Engine.New({
+    defs       = DEFS,
+    bucketSize = MAX_MEMBERS,           -- pets are split into popover-sized buckets
+    showSolo      = function() return Priestly_ShowSolo() end,
+    trackPets     = function() return Priestly_TrackPets() end,
+    isBuffEnabled = function(defId) return Priestly_IsBuffEnabled(defId) end,
+    isVisible = function(def, groups, ord)
+        if def.visibility ~= "shadow" then return true end
+        return Priestly_ShouldShowShadow(groups, ord)
+    end,
+    learnDuration   = function(spell, secs) Priestly_LearnDuration(spell, secs) end,
+    learnedDuration = function(spell) return Priestly_GetLearnedDuration(spell) end,
+})
+
+local ST_HAS     = Priestly.Engine.STATES.HAS
+local ST_MISSING = Priestly.Engine.STATES.MISSING
+local ST_UNKNOWN = Priestly.Engine.STATES.UNKNOWN
+local PET_GROUP  = Priestly.Engine.PET_GROUP
+
+-- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
+-- and talent changes: what a priest knows changes as they level, and at the
+-- current beta cap the group spells do not exist at all.
 local function RefreshSpellData()
+    engine:RefreshSpells()
+    -- PriestlyConfig's "show Shadow Protection when someone has it" mode needs
+    -- the localized aura names, and it loads before this file.
     for _, d in ipairs(DEFS) do
-        d.grp  = API.SpellName(d.grpID)  or d.grp
-        d.sngl = API.SpellName(d.snglID) or d.sngl
-        d.names = { d.sngl, d.grp }
-        d.hasGroup  = API.KnowsSpell(d.grpID)
-        d.hasSingle = API.KnowsSpell(d.snglID)
-        -- PriestlyConfig's "show Shadow Protection when someone has it" mode
-        -- needs the localized aura names, and it loads before this file.
         if d.id == "shadow" then Priestly.shadowAuraNames = d.names end
     end
 end
 
--- Click mapping for one buff: primary (left) and secondary (right) spell.
---
--- Left-click prefers the group Prayer, but when the group spell does not exist
--- - which is the case for the whole current level range, and may stay that way
--- - it falls back to the single-target spell rather than leaving the primary
--- click dead. Right-click is the mirror of that.
-local function ClickSpells(def)
-    local grp  = def.hasGroup  and def.grp  or nil
-    local sngl = def.hasSingle and def.sngl or nil
-    return grp or sngl, sngl or grp
+local function ClickSpells(def) return engine:ClickSpells(def) end
+local function BuffRem(unit, def) return engine:BuffRem(unit, def) end
+local function DurationFor(...) return engine:DurationFor(...) end
+local function PruneAuraCache() return engine:PruneCache() end
+local function IsValidTarget(unit) return engine:IsValidTarget(unit) end
+local function PickTarget(...) return engine:PickTarget(...) end
+local function GatherGroups() return engine:GatherGroups() end
+local function ActiveDefs(groups, ord) return engine:ActiveDefs(groups, ord) end
+local function MembersFor(def, members) return engine:MembersFor(def, members) end
+local function GroupStat(members, def) return engine:GroupStat(members, def) end
+local function AuraEventIsRelevant(unit, updateInfo)
+    return engine:AuraEventIsRelevant(unit, updateInfo)
 end
 
 -- ─── State ───────────────────────────────────────────────────────────────────
@@ -308,172 +333,8 @@ local function SpellIcon(...) return API.SpellIcon(...) end
 
 local function CountItem(...) return API.CountItem(...) end
 
--- ─── Aura reads: GUID-keyed cache and combat secrecy ─────────────────────────
---
--- On this client auras become unreadable while tainted in combat
--- (C_Secrets.ShouldAurasBeSecret). Reading them anyway reports every member as
--- unbuffed, so the whole frame flips red the instant a pull starts. Instead we
--- remember what each *character* had and count down from that.
---
--- The cache is keyed by GUID, never by unit token: "raid3" and "party2" are
--- disposable labels that get handed to a different player when the roster
--- reshuffles, and a token-keyed cache would show the previous occupant's buffs.
---
--- A member we have never seen buffed renders as UNKNOWN, not as a confident
--- MISS - guessing wrong in that direction sends you casting into combat for no
--- reason.
-
-local PERMANENT = 9999          -- FmtTime prints nothing above 9998
-local ST_HAS, ST_MISSING, ST_UNKNOWN = "HAS", "MISSING", "UNKNOWN"
-
-local g_AuraCache = {}          -- [guid] = { [defId] = { exp, dur, stamp } }
-
--- Durations differ from both TBC and Vanilla here and are still moving during
--- the beta, so the seed in DEFS is only a fallback: whatever a live aura
--- reports wins, in either direction, and everything learned is thrown away when
--- the client build changes.
-local function LearnDuration(spellName, dur)
-    if not spellName or not dur or dur <= 0 then return end
-    if Priestly_LearnDuration then Priestly_LearnDuration(spellName, dur) end
-end
-
--- `observed` is the duration the aura itself reported, which is the right
--- denominator whenever we have it. The learned value only covers the case where
--- it is missing, and it is looked up by the spell that was actually seen - not
--- by the buff, because the single and group forms run for different lengths.
-local function DurationFor(def, observed, spellName)
-    if observed and observed > 0 then return observed end
-    if spellName and Priestly_GetLearnedDuration then
-        local learned = Priestly_GetLearnedDuration(spellName)
-        if learned then return learned end
-    end
-    return def.duration or 3600
-end
-
-local function CacheFor(key)
-    local e = g_AuraCache[key]
-    if not e then e = {}; g_AuraCache[key] = e end
-    return e
-end
-
--- Drop characters we have not seen in a while so the cache cannot grow without
--- bound across a long session of pugs.
-local function PruneAuraCache()
-    local cutoff = GetTime() - 3600
-    for key, defs in pairs(g_AuraCache) do
-        local live = false
-        for _, entry in pairs(defs) do
-            if entry.stamp and entry.stamp > cutoff then live = true break end
-        end
-        if not live then g_AuraCache[key] = nil end
-    end
-end
-
--- Returns remaining, duration, state
-local function BuffRem(unit, def)
-    if not unit or not UnitExists(unit) then return 0, 0, ST_MISSING end
-    local key = API.UnitKey(unit)
-
-    -- Always attempt the live read: the compat layer reports BLOCKED when the
-    -- client refuses, so we never coast on a cache while real data is
-    -- available. On this client every aura read throws once combat taints us,
-    -- for every unit - not just the player.
-    local status, rem, dur, exp, matched = API.ReadBuff(unit, def.names)
-
-    if status == "HAS" then
-        if rem == math.huge then rem = PERMANENT end
-        LearnDuration(matched, dur)
-        if key then
-            CacheFor(key)[def.id] = {
-                exp = exp or 0, dur = dur or 0, spell = matched, stamp = GetTime(),
-            }
-        end
-        return rem, dur, ST_HAS, matched
-    end
-
-    if status == "NONE" then
-        if key and g_AuraCache[key] then g_AuraCache[key][def.id] = nil end
-        return 0, 0, ST_MISSING
-    end
-
-
-    -- BLOCKED: fall back to what this character last had.
-    local cached = key and g_AuraCache[key] and g_AuraCache[key][def.id]
-    if not cached then return 0, 0, ST_UNKNOWN end
-    local r
-    if cached.exp == 0 then
-        r = PERMANENT
-    else
-        r = math.max(0, cached.exp - GetTime())
-    end
-    if r > 0 then return r, cached.dur, ST_HAS, cached.spell end
-    return 0, cached.dur, ST_MISSING, cached.spell    -- it genuinely ran out mid-fight
-end
-
 -- "IN_RANGE" | "OUT_RANGE" | "OFFLINE" | "UNKNOWN"
 local function RangeStatus(...) return API.SpellRange(...) end
-
--- Can we actually buff this unit right now?
-local function IsValidTarget(unit)
-    if not UnitExists(unit) then return false end
-    if not UnitIsConnected(unit) then return false end
-    if UnitIsDeadOrGhost(unit) then return false end
-    return true
-end
-
--- Who a click should land on.
---   anyValid = true  (group Prayer): anybody alive and online will do, the
---                    Prayer covers their whole subgroup regardless.
---   anyValid = false (single target): the first member actually missing the
---                    buff, else whoever has the least time left.
--- Members whose auras we cannot read are never picked as "missing" - under
--- combat secrecy that would send you casting at the first name in the list.
-local function PickCandidate(members, def, anyValid, requireInRange, st)
-    -- Range-check whichever spell this click will actually cast. The Prayers
-    -- reach 40 yards where the single-target forms reach 30, so testing the
-    -- single spell would rule out members a Prayer could reach perfectly well.
-    local spell
-    if anyValid and def.hasGroup then
-        spell = def.grp
-    else
-        spell = def.hasSingle and def.sngl or def.grp
-    end
-    local firstValid, bestUnit, bestRem = nil, nil, math.huge
-    for _, m in ipairs(members) do
-        if IsValidTarget(m.unit)
-            and (not requireInRange or RangeStatus(m.unit, spell) == "IN_RANGE")
-        then
-            if anyValid then return m.unit end
-            firstValid = firstValid or m.unit
-            local rem, state
-            local known = st and st.byUnit and st.byUnit[m.unit]
-            if known then
-                rem, state = known.rem, known.state
-            else
-                rem, _, state = BuffRem(m.unit, def)
-            end
-            if state == ST_MISSING then return m.unit end
-            if state == ST_HAS and rem < bestRem then
-                bestRem = rem
-                bestUnit = m.unit
-            end
-        end
-    end
-    return bestUnit or firstValid
-end
-
-local function PickTarget(members, def, anyValid, st)
-    -- Prefer somebody we can actually reach. Casting at an out-of-range member
-    -- while an in-range one is missing the buff simply fails, and a group
-    -- Prayer covers the whole subgroup no matter which member it lands on - so
-    -- there is never a reason to aim it at someone too far away.
-    --
-    -- The range check falls back to ignoring range: it answers UNKNOWN for a
-    -- spell the player does not know and in a few other cases, and picking
-    -- nobody would be worse than picking someone out of range.
-    return PickCandidate(members, def, anyValid, true, st)
-        or PickCandidate(members, def, anyValid, false, st)
-end
 
 local function ClassColor(classFile)
     local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
@@ -502,93 +363,6 @@ end
 
 -- ─── Data ────────────────────────────────────────────────────────────────────
 
--- Pet group number (always sorted last)
-local PET_GROUP = 99
-
--- Determine pet "class" based on owner's class for icon display
-local function PetClass(ownerUnit)
-    if not ownerUnit then return "PET" end
-    local _, cls = UnitClass(ownerUnit)
-    if cls == "HUNTER"  then return "PET_HUNTER"  end
-    if cls == "WARLOCK" then return "PET_WARLOCK" end
-    if cls == "PRIEST"  then return "PET_PRIEST"  end
-    if cls == "MAGE"    then return "PET_MAGE"    end
-    return "PET"
-end
-
--- Returns groups[gNum] = { {unit, name, class}, ... },  ord = sorted group list
--- Pets go into PET_GROUP (99) at the bottom.
---
--- `name` is the full display name including the Forever surname. First names
--- are not unique here - two characters called Karuzo can sit in one raid - so
--- the name is for display only; identity is the unit's GUID (API.UnitKey).
-local function GatherGroups()
-    local g, ord = {}, {}
-    local pets = {}
-
-    if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do
-            local name, _, sg = GetRaidRosterInfo(i)
-            if name then
-                if not g[sg] then g[sg] = {}; ord[#ord + 1] = sg end
-                local _, cls = UnitClass("raid"..i)
-                g[sg][#g[sg] + 1] = { unit = "raid"..i, name = API.UnitDisplayName("raid"..i, name), class = cls }
-                local petUnit = "raidpet"..i
-                if UnitExists(petUnit) then
-                    pets[#pets + 1] = { unit = petUnit, name = API.UnitDisplayName(petUnit, "Pet"), class = PetClass("raid"..i) }
-                end
-            end
-        end
-    elseif GetNumGroupMembers() > 0 then
-        g[1] = {}
-        local _, pc = UnitClass("player")
-        g[1][1] = { unit = "player", name = API.UnitDisplayName("player", "You"), class = pc }
-        if UnitExists("pet") then
-            pets[#pets + 1] = { unit = "pet", name = API.UnitDisplayName("pet", "Pet"), class = PetClass("player") }
-        end
-        for i = 1, GetNumGroupMembers() do
-            local u = "party"..i
-            if UnitExists(u) then
-                local _, uc = UnitClass(u)
-                g[1][#g[1] + 1] = { unit = u, name = API.UnitDisplayName(u, "?"), class = uc }
-                local petUnit = "partypet"..i
-                if UnitExists(petUnit) then
-                    pets[#pets + 1] = { unit = petUnit, name = API.UnitDisplayName(petUnit, "Pet"), class = PetClass(u) }
-                end
-            end
-        end
-        ord[1] = 1
-    elseif Priestly_ShowSolo() then
-        -- Solo mode: just the player
-        g[1] = {}
-        local _, pc = UnitClass("player")
-        g[1][1] = { unit = "player", name = API.UnitDisplayName("player", "You"), class = pc }
-        if UnitExists("pet") then
-            pets[#pets + 1] = { unit = "pet", name = API.UnitDisplayName("pet", "Pet"), class = PetClass("player") }
-        end
-        ord[1] = 1
-    end
-
-    if #pets > 0 and Priestly_TrackPets() then
-        -- Split into popover-sized buckets. A raid can field more pets than the
-        -- popover has rows, and a row that reports "11 missing" while offering
-        -- eight of them to click is worse than two rows.
-        local bucket, gNum = nil, PET_GROUP
-        for i, pet in ipairs(pets) do
-            if not bucket or #bucket >= MAX_MEMBERS then
-                bucket = {}
-                gNum = PET_GROUP + math.floor((i - 1) / MAX_MEMBERS)
-                g[gNum] = bucket
-                ord[#ord + 1] = gNum
-            end
-            bucket[#bucket + 1] = pet
-        end
-    end
-
-    table.sort(ord)
-    return g, ord
-end
-
 -- Returns highest rank of Prayer of Fortitude known (0 if none)
 local function GetPrayerRank()
     local fort = DEFS[1]
@@ -605,65 +379,6 @@ local function GetCandleInfo()
     else
         return SACRED_CANDLE_ID, ItemIcon(SACRED_CANDLE_ID), "Sacred Candle"
     end
-end
-
--- Which buffs get a row.
---
--- Availability comes first and applies to every buff, not just Spirit: at the
--- current level cap a priest knows Power Word: Fortitude and nothing else, and
--- a row wired to a "Prayer of Fortitude" that does not exist is a dead click.
--- The config toggle and the Shadow Protection visibility mode layer on top of
--- availability, never instead of it.
-local function ActiveDefs(groups, ord)
-    local showShadow = Priestly_ShouldShowShadow(groups, ord)
-    local out = {}
-    for _, d in ipairs(DEFS) do
-        if (d.hasSingle or d.hasGroup)
-            and Priestly_IsBuffEnabled(d.id)
-            and (d.visibility ~= "shadow" or showShadow)
-        then
-            out[#out + 1] = d
-        end
-    end
-    return out
-end
-
--- Returns { miss, minR, minDur, allHave, nMiss, nUnknown, nTotal }
---
--- nUnknown counts members whose auras we cannot read right now (combat
--- secrecy, no cached state). They are deliberately NOT counted as missing.
-local function GroupStat(members, def)
-    local minR, minDur, miss, unknown = PERMANENT, 0, {}, 0
-    local byUnit = {}
-    for _, m in ipairs(members) do
-        -- Offline/disconnected always counts as missing
-        if not UnitIsConnected(m.unit) then
-            miss[#miss + 1] = m
-        else
-            local r, d, state, spell = BuffRem(m.unit, def)
-            byUnit[m.unit] = { rem = r, state = state }
-            if state == ST_UNKNOWN then
-                unknown = unknown + 1
-            elseif r <= 0 then
-                miss[#miss + 1] = m
-            elseif r < minR then
-                minR = r
-                minDur = DurationFor(def, d, spell)
-            end
-        end
-    end
-    return {
-        miss     = miss,
-        minR     = (minR == PERMANENT) and 0 or minR,
-        minDur   = minDur,
-        allHave  = (#miss == 0 and unknown == 0),
-        nMiss    = #miss,
-        nUnknown = unknown,
-        nTotal   = #members,
-        -- What each member's state was during this pass, so target picking can
-        -- reuse it instead of re-reading every aura.
-        byUnit   = byUnit,
-    }
 end
 
 -- ─── Per-element visual updaters (used by both full rebuild and ticker) ───────
@@ -1488,7 +1203,7 @@ UpdateUI = function()
 
     for _, gNum in ipairs(ord) do
         if rowIdx >= MAX_ROWS then break end
-        local members = groups[gNum]
+        local groupMembers = groups[gNum]
 
         -- Group label (raid groups + pet group always)
         local inRaid = IsInRaid()
@@ -1510,8 +1225,13 @@ UpdateUI = function()
             end
         end
 
-        -- One row per active buff
+        -- One row per active buff, over the members that buff covers. The
+        -- engine narrows the list only if the host asks it to (Priestly does
+        -- not); an empty list means no row. The same list drives the stats,
+        -- the targets, the popover and the clicks, so they cannot disagree.
         for _, def in ipairs(defs) do
+          local members = MembersFor(def, groupMembers)
+          if #members > 0 then
             rowIdx = rowIdx + 1
             if rowIdx > MAX_ROWS then break end
 
@@ -1624,6 +1344,7 @@ UpdateUI = function()
 
             r:Show()
             y = y - ROW_H - 1
+          end
         end
     end
 
@@ -1734,48 +1455,8 @@ Priestly.RegisterEvents(evtFrame,
     "BAG_UPDATE",
     "SPELLS_CHANGED")
 
--- UNIT_AURA is far noisier here than on TBC: every proc and every HoT tick on
--- anyone in the group fires it. Only units we actually draw are interesting,
--- and on a partial update only our own tracked spells are.
-local function AuraEventIsRelevant(unit, updateInfo)
-    if not unit then return false end
-    if not (unit == "player" or unit == "pet"
-        or unit:find("^party") or unit:find("^raid")) then
-        return false
-    end
-    if not updateInfo then return true end
-
-    -- Every field of updateInfo can be a SECRET VALUE in combat, and on this
-    -- client a secret value throws when it is truth-tested, not only when it is
-    -- read: `if updateInfo.isFullUpdate then` raises
-    -- "attempt to perform boolean test on field 'isFullUpdate' (a secret
-    -- boolean value)". So the whole inspection is guarded, and anything we
-    -- cannot inspect counts as relevant - refresh and let the throttle absorb
-    -- it, rather than dropping an update we simply were not allowed to read.
-    local ok, relevant = pcall(function()
-        if updateInfo.isFullUpdate then return true end
-
-        local added = updateInfo.addedAuras
-        if added then
-            for _, aura in ipairs(added) do
-                local nm = aura and aura.name
-                for _, d in ipairs(DEFS) do
-                    if nm == d.sngl or nm == d.grp then return true end
-                end
-            end
-        end
-
-        -- Updated/removed auras arrive as instance IDs with no spell attached,
-        -- so there is nothing to filter on.
-        if updateInfo.updatedAuraInstanceIDs or updateInfo.removedAuraInstanceIDs then
-            return true
-        end
-        return false
-    end)
-
-    if not ok then return true end
-    return relevant and true or false
-end
+-- UNIT_AURA filtering is the engine's (AuraEventIsRelevant above): only group
+-- units, and on a partial update only Priestly's own spells.
 
 evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     if event == "PLAYER_LOGIN" then
@@ -2012,7 +1693,9 @@ Priestly._test = {
     GetPrayerRank    = GetPrayerRank,
     GetCandleInfo    = GetCandleInfo,
     AuraEventIsRelevant = AuraEventIsRelevant,
-    auraCache        = function() return g_AuraCache end,
+    auraCache        = function() return engine.cache end,
+    engine           = engine,
+    MembersFor       = MembersFor,
     states           = { HAS = ST_HAS, MISSING = ST_MISSING, UNKNOWN = ST_UNKNOWN },
     -- Whole-UI seam: tests drive a rebuild and then read the secure
     -- attributes off the rows to see what a click would actually cast.

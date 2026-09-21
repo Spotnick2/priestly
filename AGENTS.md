@@ -39,7 +39,13 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 - `PriestlyCompat.lua` — the bridge to the shared library: exposes its compat layer as
   `Priestly.API` and reports rejected events in chat. No API code lives here any more.
 - `PriestlyConfig.lua` — options panel, defaults, instance database, exported config helpers.
-- `Priestly.lua` — main UI, buff logic, secure buttons, event handling, slash commands.
+- `Priestly.lua` — main UI, secure buttons, event handling, slash commands, and `DEFS`. The buff
+  logic itself (aura cache, roster, stats, targeting, click mapping, `UNIT_AURA` filtering) is
+  LibGroupBuffs' `Engine.lua`: Priestly builds one engine with `DEFS`, `MAX_MEMBERS` as the pet
+  bucket size, its config accessors, the Shadow Protection mode as `isVisible` and its duration
+  store, and calls it through thin locals (`BuffRem`, `GroupStat`, `PickTarget`, ...) that look the
+  method up at call time. A change to how buffs are read, counted or targeted belongs in the
+  library.
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
 - `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, library included.
 - `Tools/PriestlyProbe/` — throwaway in-game API probe. Delete once `docs/FOREVER-PROBE.md` is
@@ -118,6 +124,10 @@ the checks behave or what they say belongs in the library, not here. `Priestly_O
 empty today; it is the one place the SavedVariables fix, or a migration, will land. The library
 looks it up at call time, so replacing it works. It fires once per instance during Select All, so
 anything put in it must be cheap.
+
+`UpdateUI` runs each buff's members through `MembersFor` once and uses that list for the row's
+stats, targets, `_members` and popover — keep it that way, so a host filter can never make them
+disagree.
 
 `Priestly.lua` exposes: `Priestly_ScheduleRefresh`, `Priestly_ForceRebuild`,
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
