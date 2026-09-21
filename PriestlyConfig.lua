@@ -115,20 +115,24 @@ function Priestly_EnsureDefaults()
         PriestlyDB.shadowInstances = {}
     end
 
+    -- One-time migration off the TBC line: drop the instances that build knew
+    -- about, and the durations it learned, neither of which mean anything here.
     if PriestlyDB.flavor ~= FLAVOR then
-        PriestlyDB.learnedDurations = nil   -- TBC durations mean nothing here
+        local known = {}
+        for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
+        for name in pairs(PriestlyDB.shadowInstances) do
+            if not known[name] then PriestlyDB.shadowInstances[name] = nil end
+        end
+        PriestlyDB.learnedDurations = nil
         PriestlyDB.flavor = FLAVOR
     end
 
-    -- Drop saved entries for instances this build does not list. That covers
-    -- the TBC leftovers a v1.x profile carries, and it keeps working as the
-    -- list changes through the beta - which it will, so this cannot be a
-    -- one-time migration guarded by the flavor marker.
-    local known = {}
-    for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
-    for name in pairs(PriestlyDB.shadowInstances) do
-        if not known[name] then PriestlyDB.shadowInstances[name] = nil end
-    end
+    -- Deliberately NOT pruning unknown keys on every load. An entry the current
+    -- list does not name is inert - nothing reads shadowInstances except
+    -- CheckCurrentInstance, which looks up the zone you are standing in - so
+    -- pruning buys tidiness and costs real data: install an older build once,
+    -- or hand-edit an instance the list is missing, and every choice for those
+    -- entries is gone with no way to get it back.
 
     -- Backfill instances added since this profile was written
     for _, entry in ipairs(INSTANCE_DB) do
@@ -444,7 +448,9 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     desc:SetText("|cff999999When Shadow Protection is set to \"by instance\" in Settings, " ..
         "it activates when you zone into a checked instance. " ..
         "Hover an instance name for encounter details. " ..
-        "Pre-checked instances have bosses with significant shadow damage.|r")
+        "Instances are pre-checked when their bosses deal significant shadow damage - or, for " ..
+        "Forever's own raids, because nothing is known about them yet and a raid is where " ..
+        "missing the buff costs the most.|r")
     iy.v = iy.v - (TextHeight(desc, 32) + 10)
 
     -- Group by category

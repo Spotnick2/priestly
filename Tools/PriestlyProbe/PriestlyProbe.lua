@@ -486,12 +486,18 @@ function P.journal()
             local ok, nm = pcall(EJ_GetTierInfo, tier)
             if ok and nm then tierName = nm end
         end
-        pcall(EJ_SelectTier, tier)
+        local selected = EJ_SelectTier and pcall(EJ_SelectTier, tier)
+        if numTiers > 1 and not selected then
+            rec("tier" .. tostring(tierName) .. ".WARNING",
+                "EJ_SelectTier failed - the instances below may be another tier's")
+            say("  |cffff4444could not select tier " .. tostring(tierName) ..
+                "; treat its list as unreliable|r")
+        end
 
         for _, isRaid in ipairs({ false, true }) do
             local kind = isRaid and "raid" or "dungeon"
             local i, found = 1, 0
-            while i < 60 do
+            while i <= 60 do
                 local ok, instanceID, name = pcall(EJ_GetInstanceByIndex, i, isRaid)
                 if not ok or not instanceID then break end
                 found = found + 1
@@ -508,9 +514,11 @@ end
 
 -- Where am I standing right now? The INSTANCE_DB keys must match this exactly.
 function P.here()
-    head("here")
     local name, instanceType, difficultyID, difficultyName, maxPlayers,
           _, _, instanceMapID = GetInstanceInfo()
+    -- Key the section by where we are, so walking several instances
+    -- accumulates rather than each run erasing the last.
+    head("here." .. tostring(name or "unknown"))
     rec("GetInstanceInfo.name", tostring(name))
     rec("GetInstanceInfo.instanceType", tostring(instanceType))
     rec("GetInstanceInfo.difficultyName", tostring(difficultyName))
@@ -519,8 +527,9 @@ function P.here()
     rec("GetRealZoneText", try(GetRealZoneText))
     rec("GetZoneText", try(GetZoneText))
     rec("GetSubZoneText", try(GetSubZoneText))
-    dumpSection("here")
-    say("  |cffffff00run this INSIDE each instance|r - the name above is the key to use")
+    dumpSection("here." .. tostring(name or "unknown"))
+    say("  |cffffff00run this INSIDE each instance|r - the name above is the key to use,")
+    say("  and instanceMapID is what issue #12 wants instead")
 end
 
 -- ─── copy window ─────────────────────────────────────────────────────────────

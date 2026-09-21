@@ -75,6 +75,16 @@ Priestly_EnsureDefaults()
 H.eq(PriestlyDB.shadowInstances["Hyjal Summit"], false,
     "a second run does not re-apply defaults over user choices")
 
+-- Pruning is deliberately one-time, guarded by the flavor marker. An entry the
+-- current list does not name is inert - nothing reads shadowInstances except
+-- the zone lookup - so pruning on every load would buy tidiness and cost real
+-- data: install an older build once, and every choice it does not list is gone.
+PriestlyDB.shadowInstances["Some Future Instance"] = true
+Priestly_EnsureDefaults()
+H.eq(PriestlyDB.shadowInstances["Some Future Instance"], true,
+    "an unknown entry survives, because a build that does not list it may be an old one")
+H.eq(PriestlyDB.flavor, TC.FLAVOR, "and the marker keeps the migration from running again")
+
 ------------------------------------------------------------
 -- Duration store is per client build
 ------------------------------------------------------------
