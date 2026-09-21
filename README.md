@@ -83,8 +83,8 @@ catch up:
   at login. Per-character storage fails the same way as account-wide. So the window position, the
   lock, the buff toggles and the Shadow Protection list all start fresh each session.
 
-  Nothing an addon does can work around it directly. There is a usable alternative on this client
-  and Priestly will move its settings there, so this should be temporary — but for now, please do
+  No addon can work around it: there is nowhere on this client an addon can save to that survives
+  a restart. It waits on Blizzard's fix, which has been reported — and until then, please do
   not report lost settings as a Priestly bug.
 
 ---

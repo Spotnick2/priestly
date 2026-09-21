@@ -215,4 +215,57 @@ H.check(said:find("1 cast"), "the edge is inferred when the client stays quiet, 
 
 H.check(pcall(slash, ""), "/pprobe with no argument runs everything")
 
+------------------------------------------------------------
+-- /pprobe cvar when a value comes back
+--
+-- This branch produced a false conclusion once: a counter that survived
+-- /reload was reported as "CVars DO persist", but /reload keeps the client
+-- process alive, and a full exit lost the value. The branch never ran here,
+-- because the CVar API is absent in the stubs - so restoring the old message
+-- would have passed every test. Load the probe again with a CVar API that
+-- already holds a value, and check what it says.
+------------------------------------------------------------
+
+local store = { priestlyProbeLaunches = "2" }
+C_CVar = {
+    GetCVar = function(name) return store[name] end,
+    SetCVar = function(name, value) store[name] = value return true end,
+    RegisterCVar = function(name, value) if store[name] == nil then store[name] = value end end,
+    GetCVarInfo = function(name) return store[name] end,
+    AreCVarsLoaded = function() return true end,
+}
+assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
+
+local before = #WoW.messages
+H.check(pcall(SlashCmdList["PPROBE"], "cvar"), "/pprobe cvar runs when a value came back")
+local said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+
+H.check(said:find("before this one: 2", 1, true), "it reads the value that arrived: " .. said)
+H.eq(store.priestlyProbeLaunches, "3", "and counts this launch")
+-- The probe cannot know whether this followed a /reload or a real restart,
+-- so it must not assume either. Assuming /reload would report Blizzard's fix
+-- as inconclusive forever; assuming a restart is the original false positive.
+H.check(said:find("came back", 1, true), "it reports what it saw: " .. said)
+H.check(said:find("inconclusive", 1, true), "calls it inconclusive after only /reload: " .. said)
+H.check(said:find("FULL exit and relaunch", 1, true), "and conclusive after a full exit: " .. said)
+H.check(not said:find("process stayed alive", 1, true),
+    "without asserting which one happened: " .. said)
+H.check(not said:find("DO persist", 1, true), "and with no unconditional claim: " .. said)
+H.check(not said:find("usable store", 1, true), "or advice to build on it: " .. said)
+
+-- /pprobe sv had the same flaw: it said "SavedVariables DO load" on any value
+-- that came back, which a /reload alone can produce.
+PriestlyProbePersist = { launches = 4, stamps = {} }
+PriestlyProbeChar = { launches = 4 }
+assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
+before = #WoW.messages
+H.check(pcall(SlashCmdList["PPROBE"], "sv"), "/pprobe sv runs when values came back")
+said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said:find("inconclusive", 1, true), "sv is inconclusive after only /reload: " .. said)
+H.check(said:find("FULL exit and relaunch", 1, true), "and conclusive after a full exit: " .. said)
+H.check(not said:find("DO load", 1, true), "with no unconditional claim: " .. said)
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
+
+C_CVar = nil
+
 H.done("test_probe")

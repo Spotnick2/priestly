@@ -283,29 +283,33 @@ the user before it was believed.
 
 Verify persistence by **counting launches inside the addon**, never by reading the file.
 
-### CVars DO persist — measured
+**Only the account-scoped folders are affected.** Reported on the Blizzard forums
+([UI/Addon settings wiped on client restart](https://us.forums.blizzard.com/en/wow/t/uiaddon-settings-wiped-on-client-restart/2353992/15),
+same build, no Blizzard reply as of 2026-09-21) and matched on this install: the machine-level
+`WTF\SavedVariables\` holds only Blizzard's own login-screen files (`Blizzard_AddOnList`,
+`Blizzard_Console`, `Blizzard_GlueSavedVariables`), and those persist. Everything under
+`WTF\Account\<id>\` - account-wide and per-character alike - is lost. Addon SavedVariables
+always land under the account folder, so this narrows the bug without offering a workaround.
 
-`/pprobe cvar`, same launch-counting shape, across three sessions:
+### CVars do not persist — the earlier "measured" result was a `/reload` artefact
 
-```
-session 1   not present at load; registered now   before=0  now=1
-session 2   arrived at load, value 2              before=2  now=3
-```
+An earlier version of this section reported `/pprobe cvar` counting 1 → 2 → 3 and concluded CVars
+were a working store. **Every one of those readings was taken across `/reload`**, which keeps the
+client process alive — a CVar set last session is still in memory and reads back as though it had
+persisted.
 
-The counter survives `/reload`. Note the second line: `GetCVar` returned the value **before** the
-probe registered anything, so the client loads it from `Config.wtf` independently of
-`RegisterCVar`. `AreCVarsLoaded()` was already true at login.
+After a **full client exit** on this build, the client rewrote `Config.wtf` and both
+`config-cache.wtf` files without the addon's CVar, and `GetCVar` returned `nil` on relaunch.
+Measured in AltStable (PR #33 there). Nothing an addon writes survives a real restart.
 
-`GetCVarInfo` reports `isStoredServerAccount=false, isStoredServerCharacter=false` — purely
-client-local, so a CVar will not follow the player to another machine.
+The SavedVariables result in the section above still stands: SavedVariables are re-read from disk on
+`/reload`, so "nothing loads even across `/reload`" is a valid negative. The rule that follows:
+**`/reload` can prove something is broken, never that it works.** Confirm any persistence claim with
+a full exit and relaunch.
 
-**Read before registering.** `RegisterCVar(name, default)` takes a default value, so registering
-first can overwrite the value you are trying to read back — and the test would then report "does
-not persist" about a store that works. A persisted CVar is readable before you touch it.
-
-This is a usable settings store while SavedVariables are broken. Tracked in **issue #32**; see it
-for what still needs measuring (value length limits, how many CVars can be registered, and whether
-quotes or newlines survive the `SET name "value"` format of `Config.wtf`).
+`/pprobe cvar` and `/pprobe sv` are kept, and neither guesses how the session started. When a value
+comes back they call it inconclusive if the user only did a `/reload`, and confirmed if they did a
+full exit and relaunch. That keeps them able to recognise Blizzard's fix when it lands.
 
 ## 12. Instances
 
