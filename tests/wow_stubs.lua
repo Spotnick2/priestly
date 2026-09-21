@@ -624,7 +624,9 @@ local KNOWN_ABSENT = {
     EJ_GetTierInfo = true, EJ_GetInstanceByIndex = true,
     -- The probe's own saved variables, which start nil like any others.
     PriestlyProbePersist = true, PriestlyProbeChar = true,
-    PriestlyProbeCopyFrame = true,
+    PriestlyProbeCopyFrame = true, PriestlyProbeBench = true,
+    PriestlyProbeBenchA = true, PriestlyProbeBenchB = true,
+    PriestlyProbeBenchC = true,
     -- Addon-owned globals that legitimately start out nil.
     PriestlyDB = true, PriestlyProbeDB = true,
     Priestly_ScheduleRefresh = true, Priestly_ForceRebuild = true,

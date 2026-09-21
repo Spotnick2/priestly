@@ -96,10 +96,42 @@ H.check(PriestlyProbeDB["here.Ruins of Lordaeron"] ~= nil, "and so is the second
 ------------------------------------------------------------
 
 for _, cmd in ipairs({ "client", "events", "templates", "spells", "spellbook",
-                       "auras", "names", "misc", "sv", "secure", "hide", "nonsense" }) do
+                       "auras", "names", "misc", "sv", "secure", "click",
+                       "hide", "nonsense" }) do
     local ok, err = pcall(slash, cmd)
     H.check(ok, "/pprobe " .. cmd .. ": " .. tostring(err))
 end
+
+------------------------------------------------------------
+-- The click bench actually counts
+--
+-- It exists to answer "does one click cast twice?", so a bench that silently
+-- counts nothing would answer "no" to the one question where a wrong "no"
+-- costs the user reagents.
+------------------------------------------------------------
+
+WoW.reset()
+H.check(pcall(slash, "click"), "the click bench builds")
+
+local bench = _G.PriestlyProbeBenchC
+H.check(bench ~= nil, "the forced-keyup button exists - the branch that matters")
+H.eq(#(bench._clicks or {}), 4, "and registers both edges, like the rows it stands in for")
+H.eq(bench:GetAttribute("useOnKeyDown"), false,
+    "with the attribute that simulates a release-click client, so no /console is needed")
+H.eq(_G.PriestlyProbeBenchB:GetAttribute("useOnKeyDown"), true, "and B forces the other branch")
+H.check(_G.PriestlyProbeBenchA:GetAttribute("useOnKeyDown") == nil,
+    "while A sets none and follows the client")
+
+-- One physical click: PreClick on press, a cast, PreClick again on release.
+-- The second must not reset the count, or every reading is a half-click.
+bench._scripts.PreClick(bench)
+WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
+bench._scripts.PreClick(bench)
+local before = #WoW.messages
+WoW.flushTimers()
+local said = table.concat(WoW.messages, " | ", math.min(before + 1, #WoW.messages))
+H.check(said:find("1 cast"), "reports exactly one cast, got: " .. said)
+H.check(not said:find("DOUBLE"), "and does not cry double-cast for a single one")
 
 H.check(pcall(slash, ""), "/pprobe with no argument runs everything")
 
