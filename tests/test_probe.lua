@@ -96,7 +96,7 @@ H.check(PriestlyProbeDB["here.Ruins of Lordaeron"] ~= nil, "and so is the second
 ------------------------------------------------------------
 
 for _, cmd in ipairs({ "client", "events", "templates", "spells", "spellbook",
-                       "auras", "names", "misc", "sv", "secure", "click",
+                       "auras", "names", "misc", "sv", "cvar", "secure", "click",
                        "hide", "nonsense" }) do
     local ok, err = pcall(slash, cmd)
     H.check(ok, "/pprobe " .. cmd .. ": " .. tostring(err))

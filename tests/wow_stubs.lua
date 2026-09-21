@@ -708,6 +708,7 @@ local KNOWN_ABSENT = {
     -- The probe records whether these exist; the addon no longer needs them,
     -- because the secure handler does the keydown/keyup gating itself.
     C_CVar = true, GetCVarBool = true, GetCVar = true,
+    SetCVar = true, RegisterCVar = true, GetCVarInfo = true,
     -- Globals the probe deliberately tests for the presence of.
     C_EncounterJournal = true, EJ_GetNumTiers = true, EJ_SelectTier = true,
     EJ_GetTierInfo = true, EJ_GetInstanceByIndex = true,
