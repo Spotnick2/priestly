@@ -201,7 +201,6 @@ local function makeFrame(name)
     f.SetClampedToScreen = function(self, v) self._clamped = v return self end
     f.StartMoving = function(self) self._moving = true return self end
     f.StopMovingOrSizing = function(self) self._moving = false return self end
-    f.IsDragging = function(self) return self._moving == true end
     f.IsVisible = function(self) return self._shown end
     f.IsMouseEnabled = function(self) return true end
     f.RegisterEvent = function(self, ev)

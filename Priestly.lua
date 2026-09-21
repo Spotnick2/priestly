@@ -900,8 +900,16 @@ InitUI = function()
     end)
     g_Main.dragHandle = drag
     drag:SetScript("OnDragStop",  function()
-        -- Locking mid-drag would otherwise leave the frame stuck to the cursor:
-        -- StopMovingOrSizing is harmless on a frame that was never moving.
+        -- Release first: StopMovingOrSizing is harmless on a frame that was
+        -- never moving, and skipping it would leave a frame locked mid-drag
+        -- stuck to the cursor.
+        --
+        -- What the bail below protects is the SAVED position, not where the
+        -- frame currently sits - a drag interrupted by the lock leaves it
+        -- wherever the cursor was until the window is next hidden and shown,
+        -- which then restores the saved spot. Narrow enough to accept: the
+        -- lock has to flip during an active drag, which takes a macro or a
+        -- second input.
         g_Main:StopMovingOrSizing()
         if Priestly_FrameLocked() then return end
         g_Moved = true
