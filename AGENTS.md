@@ -78,6 +78,7 @@ Load order from `Priestly.toc`:
 | `SpellRange(unit, spell)` → `"IN_RANGE"\|"OUT_RANGE"\|"OFFLINE"\|"UNKNOWN"` | `IsSpellInRange` 1/0/nil |
 | `KnowsSpell(idOrName)` / `GetSpellRank(name)` | the spell-tab walk |
 | `ItemIcon(itemID)` | `GetItemIcon` |
+| `ItemInfo(itemID)` → name, r, g, b (quality colour), or nil on a cache miss after requesting a load | `GameTooltip:SetItemByID` — **no item setter exists on `GameTooltip` here**; wraps `C_Item.GetItemInfo`, `IsItemDataCachedByID`, `RequestLoadItemDataByID`, `GetItemQualityColor` |
 | `UnitKey(unit)` / `UnitDisplayName(unit, fallback)` | `UnitGUID` / `UnitName` |
 | `RegisterEvents(frame, ...)` | bare `RegisterEvent` (throws on unknown names here) |
 | `ClientBuild()` | `select(2, GetBuildInfo())` |
