@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\Spell_Holy_PrayerOfFortitude
 ## SavedVariablesPerCharacter: PriestlyDB
+## SavedVariables: PriestlySVCheck
 ## X-Curse-Project-ID: 1489106
 
 PriestlyCompat.lua

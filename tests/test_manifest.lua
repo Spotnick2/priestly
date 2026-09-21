@@ -62,8 +62,12 @@ H.eq(directive("Interface"), "16001",
 
 H.eq(directive("SavedVariablesPerCharacter"), "PriestlyDB",
     "PriestlyDB is declared per character - no worse than account-wide while neither loads")
-H.check(directive("SavedVariables") == nil,
-    "and is not ALSO declared account-wide - one variable cannot live in both")
+-- The only account-wide variable is the load check's marker, so the addon can
+-- tell when account-wide storage is fixed (#9 wants to move back to it).
+H.eq(directive("SavedVariables"), "PriestlySVCheck",
+    "the only account-wide variable is the load-check marker")
+H.check(not tostring(directive("SavedVariables")):find("PriestlyDB", 1, true),
+    "and PriestlyDB is not ALSO declared account-wide - one variable cannot live in both")
 
 ------------------------------------------------------------
 -- Load order

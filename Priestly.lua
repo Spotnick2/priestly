@@ -171,6 +171,14 @@ local g_Ticker   = 0
 local g_IsPriest = false
 local g_PendingShow  = false   -- a show request that arrived during combat
 local g_LastGroupSize = 0
+
+-- Settings writes go through PriestlyConfig's single write path (issue #35).
+-- Guarded like every other cross-file helper in this file: if PriestlyConfig
+-- failed to load, a bare call would throw from a drag or a refresh instead of
+-- quietly doing nothing, as the direct writes it replaced used to.
+local function SetConfig(key, value)
+    if Priestly_SetConfig then Priestly_SetConfig(key, value) end
+end
 -- What the position restore in UpdateUI decided, and why. Printed by
 -- `/priestly pos`. Reading the code twice and consulting a second reviewer
 -- both said this path is sound, while the frame demonstrably came back at the
@@ -254,7 +262,7 @@ function Priestly_OnSoloToggle(enabled)
         -- Solo enabled: show the frame immediately
         if not g_Vis and g_IsPriest then
             After(0.1, function()
-                if PriestlyDB then PriestlyDB.visible = true end
+                SetConfig("visible", true)
                 if UpdateUI then UpdateUI() end
             end)
         end
@@ -946,10 +954,8 @@ InitUI = function()
         -- values match to the decimal. It would be a real drift for a frame
         -- parented anywhere else, which is why Blizzard's Edit Mode code
         -- compensates when it converts nil to UIParent.
-        if PriestlyDB then
-            local point, _, relPoint, x, y = g_Main:GetPoint()
-            PriestlyDB.pos = { point = point, relPoint = relPoint, x = x, y = y }
-        end
+        local point, _, relPoint, x, y = g_Main:GetPoint()
+        SetConfig("pos", { point = point, relPoint = relPoint, x = x, y = y })
     end)
 
     -- ── Group header labels (pre-alloc) ──────────────────────────────────────
@@ -1250,7 +1256,7 @@ CloseUI = function(manual)
     -- would reopen it and overwrite the saved preference.
     g_PendingShow = false
     -- Only save "closed" state if user manually closed (not from leaving group)
-    if manual and PriestlyDB then PriestlyDB.visible = false end
+    if manual then SetConfig("visible", false) end
 end
 
 -- ─── PopoverSide ──────────────────────────────────────────────────────
@@ -1664,7 +1670,7 @@ UpdateUI = function()
 
     g_Main:Show()
     g_Vis = true
-    if PriestlyDB then PriestlyDB.visible = true end
+    SetConfig("visible", true)
 
     -- A rebuild rewires the rows but not an open popover: its member list and
     -- its secure attributes still name the previous roster's unit tokens. The
@@ -1768,7 +1774,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
         -- Initialise saved state (default: visible on Priests)
         Priestly_EnsureDefaults()
-        if PriestlyDB.visible == nil then PriestlyDB.visible = true end
+        if PriestlyDB.visible == nil then SetConfig("visible", true) end
 
         -- Resolve localized spell names and what this priest actually knows
         -- before anything reads DEFS.
@@ -1818,7 +1824,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- churn leaves a deliberate close alone.
         local joined = (g_LastGroupSize == 0 and n > 0)
         g_LastGroupSize = n
-        if joined and PriestlyDB then PriestlyDB.visible = true end
+        if joined then SetConfig("visible", true) end
         if n > 0 and not g_Vis and g_IsPriest
             and (joined or not PriestlyDB or PriestlyDB.visible ~= false)
         then
@@ -1911,7 +1917,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
         if Priestly_OpenConfig then Priestly_OpenConfig() end
 
     elseif cmd == "reset" then
-        if PriestlyDB then PriestlyDB.pos = nil end
+        SetConfig("pos", nil)
         g_Moved = false
         if g_Main then
             g_Main:ClearAllPoints()
@@ -1958,14 +1964,14 @@ SlashCmdList["PRIESTLY"] = function(msg)
         CloseUI(true)
 
     elseif cmd == "show" then
-        if PriestlyDB then PriestlyDB.visible = true end
+        SetConfig("visible", true)
         UpdateUI()
 
     else
         if g_Vis then
             CloseUI(true)
         else
-            if PriestlyDB then PriestlyDB.visible = true end
+            SetConfig("visible", true)
             UpdateUI()
         end
     end
