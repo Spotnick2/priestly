@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.3 - 2026-09-21
 
 ### Fixed
 - **A buff row could stop responding until you clicked it twice.** If nobody in a group could be
