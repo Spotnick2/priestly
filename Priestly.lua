@@ -895,7 +895,12 @@ InitUI = function()
     -- this clear of the secure-frame rules, so the lock can be toggled in
     -- combat like any other setting.
     drag:SetScript("OnDragStart", function()
-        if Priestly_FrameLocked() then return end
+        -- `Priestly_FrameLocked and` is not decoration. If PriestlyConfig ever
+        -- fails to load, or a half-deployed build leaves the helper behind,
+        -- calling a nil global throws - and this client has errors OFF by
+        -- default, so the whole drag dies in silence. Short-circuiting leaves
+        -- the window draggable, which is the safe way to be wrong.
+        if Priestly_FrameLocked and Priestly_FrameLocked() then return end
         g_Main:StartMoving()
     end)
     g_Main.dragHandle = drag
@@ -905,13 +910,20 @@ InitUI = function()
         -- stuck to the cursor.
         --
         -- What the bail below protects is the SAVED position, not where the
-        -- frame currently sits - a drag interrupted by the lock leaves it
-        -- wherever the cursor was until the window is next hidden and shown,
-        -- which then restores the saved spot. Narrow enough to accept: the
-        -- lock has to flip during an active drag, which takes a macro or a
-        -- second input.
+        -- frame currently sits. A drag interrupted by the lock leaves the
+        -- window wherever the cursor was, and it stays there for the session:
+        -- the restore in UpdateUI only runs while g_Moved is false, and a
+        -- completed drag or an earlier restore has already set it true.
+        -- CloseUI does not clear it. So the saved spot comes back on the next
+        -- login, not on the next hide and show. Narrow enough to accept - the
+        -- lock has to flip during an active drag - but worth stating
+        -- correctly, because the wrong version reads as a guarantee.
         g_Main:StopMovingOrSizing()
-        if Priestly_FrameLocked() then return end
+        -- Guarded for the same reason as OnDragStart, and it matters more
+        -- here: an error between the stop above and the save below loses the
+        -- position silently. The frame moves, stays put, and is back at the
+        -- default next login with nothing on screen to explain it.
+        if Priestly_FrameLocked and Priestly_FrameLocked() then return end
         g_Moved = true
         -- Save position
         if PriestlyDB then
