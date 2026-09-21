@@ -71,6 +71,19 @@ jobs:
             | sed 's|^|packaged Priestly/Libs/LibGroupBuffs-1.0/|'
           test "${PIPESTATUS[0]}" -eq 0
 
+      # ...and nothing else. The library's own .pkgmeta leaves out its tests
+      # and notes; if that list ever misses something, players would get it.
+      # Expected: exactly what the XML ships, plus LICENSE (MIT needs it).
+      - name: The package embeds only the library's runtime files
+        run: |
+          lib=unpacked/Priestly/Libs/LibGroupBuffs-1.0
+          { lua5.1 tests/libfiles.lua "$lib" ship; echo LICENSE; } | sort > expected.txt
+          (cd "$lib" && find . -type f | sed 's|^\./||' | sort) > actual.txt
+          if ! diff -u expected.txt actual.txt; then
+            echo "Libs/LibGroupBuffs-1.0 in the package differs from what the library ships (- missing, + extra)"
+            exit 1
+          fi
+
       # .release is a hidden directory, and upload-artifact@v4 skips hidden
       # content by default - without include-hidden-files the upload finds
       # nothing. `warn` then leaves the job green while publishing no artifact,

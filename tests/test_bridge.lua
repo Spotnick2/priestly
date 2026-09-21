@@ -49,7 +49,10 @@ end
 local count = 0
 for name, file in pairs(used) do
     count = count + 1
-    if name ~= "eventFailures" then
+    if name == "eventFailures" or name == "eventFailuresByOwner" then
+        H.check(type(API[name]) == "table",
+            file .. " reads API." .. name .. ", so the library must provide it")
+    else
         H.check(type(API[name]) == "function",
             file .. " calls API." .. name .. ", so the library must provide it")
     end
@@ -78,21 +81,23 @@ H.eq(#captures, 0, "no file copies a library function into a local: " .. table.c
 ------------------------------------------------------------
 -- Events are registered only through Priestly.RegisterEvents
 --
--- API.RegisterEvents returns the names this client rejected and prints
--- nothing. Called directly with the return value ignored - the natural way to
--- write it - a renamed event leaves a handler silently dead.
+-- The library prints nothing, and a bare frame:RegisterEvent throws on an
+-- unknown name or returns false. Any registration that skips
+-- Priestly.RegisterEvents - library call or bare method - can leave a handler
+-- silently dead, so neither may appear outside the wrapper.
 ------------------------------------------------------------
 
 local direct = {}
 for file, lines in pairs(SOURCES) do
     for n, code in ipairs(lines) do
         -- PriestlyCompat.lua is the wrapper itself, the one allowed caller.
-        if file ~= "PriestlyCompat.lua" and code:find("%f[%w_]API%.RegisterEvents%s*%(") then
+        if file ~= "PriestlyCompat.lua" and (code:find("%f[%w_]API%.RegisterEvents%w*%s*%(")
+                                             or code:find(":RegisterEvent%s*%(")) then
             direct[#direct + 1] = file .. ":" .. n .. "  " .. code
         end
     end
 end
-H.eq(#direct, 0, "nothing calls API.RegisterEvents directly: " .. table.concat(direct, " | "))
+H.eq(#direct, 0, "nothing registers events except through Priestly.RegisterEvents: " .. table.concat(direct, " | "))
 
 ------------------------------------------------------------
 -- Rejected events are reported in chat
@@ -119,6 +124,16 @@ local said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("NOT_A_REAL_EVENT", 1, true), "and it is printed, not silent: " .. said)
 H.check(Priestly.eventFailures.NOT_A_REAL_EVENT ~= nil,
     "and recorded in Priestly's own table - the library's is shared by every addon")
+H.check(API.eventFailuresByOwner.Priestly.NOT_A_REAL_EVENT ~= nil,
+    "and in the library under Priestly's name")
+
+-- The client can also refuse by returning false; that must be just as loud.
+WoW.refusedEvents.REFUSED_EVENT = true
+before = #WoW.messages
+ok, failed = Priestly.RegisterEvents(f, "REFUSED_EVENT")
+H.eq(ok, false, "a false return is a rejection too")
+said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(said:find("REFUSED_EVENT", 1, true), "and it is printed: " .. said)
 
 ------------------------------------------------------------
 -- A missing library stops loading, with a message that says why
@@ -149,7 +164,7 @@ H.check(chat:find("cannot start", 1, true) and chat:find("missing", 1, true),
 -- A library that threw partway through its compat layer: registered, but
 -- without the functions defined after the error.
 local halfLoaded = setmetatable({}, { __call = function()
-    return { API = { RegisterEvents = function() return true end } }
+    return { API = { RegisterEventsReported = function() return true end } }
 end })
 loaded, err, chat = loadWithout(halfLoaded)
 H.check(not loaded, "a library that failed to load completely is refused too")

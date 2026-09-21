@@ -52,6 +52,7 @@ function WoW.reset()
     WoW.bags        = {}         -- [bagID] = { {itemID=, stackCount=}, ... }
     WoW.messages    = {}         -- everything printed to DEFAULT_CHAT_FRAME
     WoW.badEvents   = {}         -- event names RegisterEvent should throw on
+    WoW.refusedEvents = {}       -- event names RegisterEvent should return false for
     WoW.timers      = {}
     WoW.mouseOver   = {}         -- [frame] = true; drives frame:IsMouseOver()
     WoW.centers     = {}         -- [frame] = x; drives frame:GetCenter()
@@ -205,12 +206,17 @@ local function makeFrame(name)
     f.StopMovingOrSizing = function(self) self._moving = false return self end
     f.IsVisible = function(self) return self._shown end
     f.IsMouseEnabled = function(self) return true end
+    -- The client declares `RegisterEvent(eventName:cstring) -> registered:bool`
+    -- and throws on a name it does not know. WoW.badEvents models the throw,
+    -- WoW.refusedEvents a refusal by return value.
     f.RegisterEvent = function(self, ev)
+        if type(ev) ~= "string" then error("bad argument #1 to 'RegisterEvent'", 2) end
         if WoW.badEvents[ev] then error("unknown event " .. tostring(ev), 2) end
+        if WoW.refusedEvents[ev] then return false end
         local set = WoW.events[self]
         if not set then set = {} WoW.events[self] = set end
         set[ev] = true
-        return self
+        return true
     end
     f.UnregisterEvent = function(self, ev)
         local set = WoW.events[self]
