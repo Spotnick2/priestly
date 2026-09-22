@@ -191,13 +191,23 @@ Fortitude (level 60, 3400 mana, Sacred Candle, 40 yd) reads: *"Power infuses all
 members, increasing their Stamina by 70 for 1 hour."* On Vanilla and TBC a Prayer covered only the
 party of whoever it was cast on, which is the assumption behind per-subgroup rows, the
 `groupMode` target pick and the click hint that names "group 3" or "your party". Read from the
-tooltip at the current cap, and datamining so far agrees: the one-hour, raid-wide version. Both
-ranks read that way, so it is the spell's design here rather than a rank-60 upgrade:
+tooltip at the current cap, and datamining so far agrees. **All three Prayers read that way, at
+every rank**, so it is the spell's design here rather than a rank-60 upgrade:
 
-| Rank | Level | Mana | Reagent | Stamina |
-|---|---|---|---|---|
-| 1 | 48 | 2600 | **Holy Candle** (17028) | 56 |
-| 2 | 60 | 3400 | **Sacred Candle** (17029) | 70 |
+| Prayer | Rank | Level | Mana | Reagent | Effect | Duration |
+|---|---|---|---|---|---|---|
+| Fortitude | 1 | 48 | 2600 | **Holy Candle** (17028) | +56 Stamina | 1 h |
+| Fortitude | 2 | 60 | 3400 | **Sacred Candle** (17029) | +70 Stamina | 1 h |
+| Spirit | 1 | 60 | 1940 | Sacred Candle | +40 Spirit | 1 h |
+| Shadow Protection | 1 | 56 | 1300 | Sacred Candle | +60 Shadow resistance | **20 min** |
+
+**The Shadow Prayer runs 20 minutes where the single-target form runs 10.** The group form is not
+just wider, it is longer, and `DEFS[].duration` is one seed per buff - 600 for shadow - so the
+Prayer's bar is under-scaled until a live aura teaches it. It clamps to full rather than
+misreporting, and the learned-duration cache is keyed by the **spell name** for exactly this
+reason, so the Prayer learns 1200 while the single keeps 600. If the cap reaches 56 before a
+priest has seen one, a `grpDuration` seed per def would close the gap; nothing else needs to
+change.
 
 That reagent split is what `GetCandleInfo` already assumes, keyed on the rank parsed from the
 spellbook - rank 1 takes the Holy Candle, rank 2 the Sacred one. The level column is also why the
