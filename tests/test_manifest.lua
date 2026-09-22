@@ -107,6 +107,17 @@ local tag = pkgmeta:match("\n%s+tag:%s*(%S+)")
 H.check(tag ~= nil and tag:match("^r%d+$") ~= nil,
     "pinned to a library tag, so a release cannot change under its own source: " .. tostring(tag))
 
+-- The bridge refuses a library older than the behaviour this build needs, and
+-- that floor has to be the tag actually shipped: pinning a newer tag while the
+-- floor stays behind means a player with the older library installed gets an
+-- addon that starts and quietly misbehaves, which is what the floor exists to
+-- prevent. (The opposite, a floor ahead of the pin, refuses to start at all.)
+local needs = tonumber((H.readFile("PriestlyCompat.lua") or "")
+    :match("local NEEDS_MINOR = (%d+)"))
+H.check(needs ~= nil, "PriestlyCompat declares the oldest library it works against")
+H.eq(needs, tonumber(tostring(tag):match("^r(%d+)$")),
+    "and it is the tag .pkgmeta pins: " .. tostring(tag) .. " vs NEEDS_MINOR " .. tostring(needs))
+
 local libIgnored = false
 for line in ((H.readFile(".gitignore") or "") .. "\n"):gmatch("([^\n]*)\n") do
     if line == "Libs/" then libIgnored = true end
