@@ -191,7 +191,18 @@ Fortitude (level 60, 3400 mana, Sacred Candle, 40 yd) reads: *"Power infuses all
 members, increasing their Stamina by 70 for 1 hour."* On Vanilla and TBC a Prayer covered only the
 party of whoever it was cast on, which is the assumption behind per-subgroup rows, the
 `groupMode` target pick and the click hint that names "group 3" or "your party". Read from the
-tooltip at the current cap, and datamining so far agrees: the one-hour, raid-wide version.
+tooltip at the current cap, and datamining so far agrees: the one-hour, raid-wide version. Both
+ranks read that way, so it is the spell's design here rather than a rank-60 upgrade:
+
+| Rank | Level | Mana | Reagent | Stamina |
+|---|---|---|---|---|
+| 1 | 48 | 2600 | **Holy Candle** (17028) | 56 |
+| 2 | 60 | 3400 | **Sacred Candle** (17029) | 70 |
+
+That reagent split is what `GetCandleInfo` already assumes, keyed on the rank parsed from the
+spellbook - rank 1 takes the Holy Candle, rank 2 the Sacred one. The level column is also why the
+port dropped its `UnitLevel >= 48` gate: 48 is where rank 1 appears, but knowing the spell is the
+real condition, and that is what the footer keys off.
 **Not castable yet**, so the behaviour is still unverified in play - and the duration is the part
 that needs no trust, because the first live aura teaches it (the 3600 seeds in `DEFS` only cover
 the gap until then). When the cap
