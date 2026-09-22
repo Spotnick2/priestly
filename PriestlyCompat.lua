@@ -24,12 +24,21 @@ Priestly = Priestly or {}
 -- table. Checked here, with a message, rather than failing as a missing
 -- method in the middle of a refresh. The markers arrived with r6, so any older
 -- copy is refused the same way.
+-- The oldest library this build of Priestly works against. A floor, not a
+-- feature check: behaviour changes cannot be feature-detected. r7's
+-- ui:Close() returns whether the window is hidden NOW, where r6's returned
+-- nothing (`not nil` is true, so every close would have claimed to be waiting
+-- for combat), and r8 answers the player who closes a window that is still on
+-- screen after Priestly closed it itself. Keep this equal to the tag
+-- .pkgmeta pins; tests/test_manifest.lua checks that.
+local NEEDS_MINOR = 8
+
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
 local problem
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
-elseif not (minor ~= nil
+elseif not (type(minor) == "number" and minor >= NEEDS_MINOR
             and lib.compatMinor == minor and lib.settingsMinor == minor
             and lib.engineMinor == minor and lib.uiMinor == minor
             and type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"

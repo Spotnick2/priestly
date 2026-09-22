@@ -234,7 +234,7 @@ end
 
 -- ─── The window (LibGroupBuffs-1.0's UI.lua) ─────────────────────────────────
 --
--- Rows, popover, clicks, combat parking, dragging and the ticker are shared
+-- Rows, popover, clicks, dragging, the ticker and what combat defers are shared
 -- with Wildly and Magely. Priestly supplies its title, spec icon, reagents and
 -- config, and decides when the window opens; the events and slash commands
 -- below call the ui's methods.
@@ -261,6 +261,14 @@ local ui = Priestly.UI.New({
     end,
     setPos     = function(pos) SetConfig("pos", pos) end,
     setVisible = function(visible) SetConfig("visible", visible) end,
+    -- The window parents secure buttons, so in combat the client refuses to
+    -- hide it (docs/FOREVER-PROBE.md section 13). Every way of closing - the X
+    -- button, /priestly hide, the toggle - lands here, so none of them looks
+    -- ignored.
+    onCloseDeferred = function()
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "|cff99ddff[Priestly]|r The window closes when you leave combat.")
+    end,
 })
 
 -- ─── Global hooks for PriestlyConfig.lua ────────────────────────────────────
@@ -455,8 +463,8 @@ SlashCmdList["PRIESTLY"] = function(msg)
         if ui:ResetPosition() then
             DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Window position reset.")
         else
-            -- Moving the window in combat could bring parked, invisible
-            -- buttons back on screen, so the move waits for the fight to end.
+            -- Re-anchoring the window is blocked in combat: it parents secure
+            -- buttons (docs/FOREVER-PROBE.md section 13), so the move waits.
             DEFAULT_CHAT_FRAME:AddMessage(
                 "|cff99ddff[Priestly]|r Window position reset - it moves when combat ends.")
         end
@@ -499,7 +507,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
             tostring(Priestly_FrameLocked and Priestly_FrameLocked() or false))
 
     elseif cmd == "hide" or cmd == "close" then
-        ui:Close(true)
+        ui:Close(true)      -- onCloseDeferred says so if combat refuses it
 
     elseif cmd == "show" then
         SetConfig("visible", true)

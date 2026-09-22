@@ -77,13 +77,16 @@ WoW.mouseOver[row] = nil
 runScript(pop, "OnUpdate", 5.0)
 H.check(not pop:IsShown(), "and closes once the mouse leaves both")
 
--- ...and in combat it parks offscreen instead of hiding, because it parents
--- secure buttons.
+-- ...and in combat it stays: it parents secure buttons, so the client refuses
+-- to hide it. It goes when the fight ends (docs/FOREVER-PROBE.md section 13).
 runScript(row, "OnEnter")
 WoW.inCombat = true
 runScript(pop, "OnUpdate", 5.0)
-H.check(pop._combatHidden == true, "in combat it parks offscreen rather than hiding")
+H.check(pop:IsShown(), "in combat the popover stays up rather than being hidden")
 WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+H.check(not pop:IsShown(), "and closes when combat ends")
+WoW.flushTimers()
 
 ------------------------------------------------------------
 -- Row and popover-row handlers
@@ -155,9 +158,13 @@ H.eq(PriestlyDB.visible, false, "and records that as deliberate")
 H.check(pcall(T.CloseUI, true), "CloseUI out of combat")
 T.UpdateUI()
 WoW.inCombat = true
-H.check(pcall(T.CloseUI, false), "CloseUI in combat takes the park branch")
-H.check(main._combatHidden == true, "the main frame is parked, not hidden")
+T.UpdateUI()
+H.check(pcall(T.CloseUI, false), "CloseUI in combat")
+H.check(main:IsShown(), "the main frame stays up: the client refuses to hide it")
 WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+H.check(not main:IsShown(), "and it goes when combat ends")
+WoW.flushTimers()
 
 ------------------------------------------------------------
 -- Events
@@ -255,18 +262,71 @@ H.check(T.AuraEventIsRelevant("player", secretInfo) == true,
 H.check(pcall(WoW.dispatch, "UNIT_AURA", "player", WoW.SecretUpdateInfo()),
     "UNIT_AURA with a secret payload is handled end to end")
 
--- Both frames are clamped to the screen, so parking has to drop the clamp or
--- the frame is dragged back to the edge - an invisible, still-clickable row.
+-- Closing during a fight cannot hide the window, so Priestly says when it
+-- will go - for every way of closing it. A command that looks ignored is
+-- worse than a slow one.
 T.UpdateUI()
 local mainFrame = T.mainFrame()
-mainFrame._clamped = true
 WoW.inCombat = true
-T.CloseUI(false)
-H.check(mainFrame._combatHidden == true, "parked during combat")
-H.eq(mainFrame._clamped, false, "and the screen clamp is dropped so it really goes offscreen")
+local hideAt = #WoW.messages
+SlashCmdList["PRIESTLY"]("hide")
+local hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
+H.check(mainFrame:IsShown(), "the window is still up during the fight")
+H.check(hideSaid:find("leave combat"), "and the player is told when it goes: " .. hideSaid)
+H.eq(PriestlyDB.visible, false, "the preference is saved straight away")
+
+-- The X button, the same way: it is the library's, and it reaches Priestly
+-- through the onCloseDeferred callback rather than a return value.
+WoW.inCombat = false
+T.UpdateUI()
+WoW.inCombat = true
+hideAt = #WoW.messages
+runScript(mainFrame.closeBtn, "OnClick")
+hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
+H.check(mainFrame:IsShown(), "clicking X in combat cannot hide it either")
+H.check(hideSaid:find("leave combat"), "and says the same thing: " .. hideSaid)
+
+-- The group empties mid-fight, so Priestly closes the window itself - but the
+-- client refuses to hide it, so it is still there. Clicking X on a window you
+-- can still see has to be answered, even though it is already closed as far
+-- as the addon is concerned.
 WoW.inCombat = false
 WoW.dispatch("PLAYER_REGEN_ENABLED")
-H.eq(mainFrame._clamped, true, "the clamp comes back when combat ends")
+WoW.flushTimers()
+T.UpdateUI()
+WoW.inCombat = true
+WoW.RemoveUnit("party1")
+WoW.groupMembers = 0
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+WoW.flushTimers()
+H.check(mainFrame:IsShown(), "the window is still on screen during the fight")
+H.check(not T.ui:IsVisible(), "though Priestly has closed it")
+hideAt = #WoW.messages
+runScript(mainFrame.closeBtn, "OnClick")
+hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
+H.check(hideSaid:find("leave combat"),
+    "clicking X on it is still answered: " .. hideSaid)
+
+-- Put the group back for what follows.
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+WoW.flushTimers()
+WoW.SetUnit("party1", { name = "Zoruka Mortalis", guid = "P1", class = "WARRIOR" })
+WoW.groupMembers = 2
+WoW.inCombat = true
+
+-- Out of combat, neither says anything.
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+WoW.flushTimers()
+T.UpdateUI()
+hideAt = #WoW.messages
+SlashCmdList["PRIESTLY"]("hide")
+H.eq(#WoW.messages, hideAt, "out of combat closing is silent")
+WoW.inCombat = true
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+H.check(not mainFrame:IsShown(), "combat's end hides it")
 WoW.flushTimers()
 
 -- A ready check is not a reason to reopen a window the user closed.

@@ -75,7 +75,7 @@ and about behaviour that differs:
 - Aura reads throw under combat secrecy, while `GetAuraDataBySpellName` returns nil.
 - Frame predicates (`IsMouseOver`, `IsShown`) are explicit, and underscore-prefixed keys return nil,
   because the catch-all `__index` returns a function for anything else — and a function is truthy,
-  so an unset `_combatHidden` would otherwise read as "parked".
+  so an unset `_active` would otherwise read as "this row is in use".
 - `WoW.dispatch(event, ...)` fires every frame registered for an event, the way the game does. The
   addon has three event frames; firing one leaves the others in a state that never occurs in play.
 

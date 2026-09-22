@@ -271,7 +271,7 @@ local function makeFrame(name)
     -- Anything else called as a method is a no-op returning the frame. But an
     -- underscore-prefixed key is one of the ADDON's own private fields, and the
     -- stub must not invent those: handing back a function makes every unset
-    -- flag (`_combatHidden`, `_active`, `_category`) read as true, which is how
+    -- flag (`_active`, `_category`) read as true, which is how
     -- a test can assert a state the addon is not actually in.
     setmetatable(f, {
         __index = function(_, k)

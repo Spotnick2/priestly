@@ -332,9 +332,48 @@ covers matching on it.
 The encounter journal is not a usable source on this client: `EJ_GetNumTiers()` returns **0** while
 `EJ_GetInstanceByIndex` works. Anything enumerating tiers first finds nothing.
 
-## 13. Still open
+## 13. A frame that parents secure buttons cannot be touched in combat
 
-- **Clicking in combat.** Casting works out of combat on both self and another player.
+Measured in game on 2026-09-22, build 69913, with BugGrabber watching.
+
+Priestly's window is a plain `Frame` whose children are `SecureActionButtonTemplate` buttons. That
+makes the parent **protected**: in combat the client refuses to hide it, move it, re-anchor it,
+unclamp it, or stop a drag on it. The refusal is not a Lua error. The call does nothing, and an
+`ADDON_ACTION_BLOCKED` is raised naming *whichever addon's taint the call path happens to carry* -
+in the capture below, an unrelated addon - so the code that actually made the call only shows up in
+the stack:
+
+```
+AddOn 'AltStable' tried to call the protected function 'Frame:SetClampedToScreen()'.
+[C]: in function 'SetClampedToScreen'
+[Priestly/Libs/LibGroupBuffs-1.0/UI.lua]:172: in function <...UI.lua:170>   -- CombatPark
+[Priestly/Libs/LibGroupBuffs-1.0/UI.lua]:1059: in function <...UI.lua:1056> -- Close
+
+AddOn 'AltStable' tried to call the protected function 'Frame:StopMovingOrSizing()'.
+[C]: in function 'StopMovingOrSizing'
+[Priestly/Libs/LibGroupBuffs-1.0/UI.lua]:763                                -- DragStop
+```
+
+**So "park it offscreen instead of hiding it" does not work here.** That workaround - drop the
+screen clamp, set alpha 0, re-anchor far off screen - was in Priestly from the Forever port
+onwards and is in every release up to v2.0.5. It was blocked at its first call, silently, and
+nothing on screen said so. It only surfaced when somebody finally closed the window mid-fight with
+an error display running.
+
+What works instead: do nothing while locked down, and do it on `PLAYER_REGEN_ENABLED`. The rows
+stay on screen for the rest of the fight, which is when they are worth having anyway. The library
+does this from r7: `Close`, `ResetPosition` and `DragStop` record what was asked for and return,
+`OnCombatEnd` carries it out, and `ui:Close()` returns false so the addon can say "when combat
+ends".
+
+A drag that combat interrupts keeps following the cursor until the fight ends, because the release
+is blocked too. Nothing can be done about that from an addon.
+
+## 14. Still open
+
+- **Clicking in combat.** Casting works out of combat on both self and another player, and the
+  rows still cast during a fight (measured 2026-09-22); what is unverified is a wired unit token
+  changing hands mid-fight.
 - **`ActionButtonUseKeyHeldSpell`**, and whether a live mouse click is CVar-gated — see the end of
   section 1. `/pprobe secure`.
 - **`INSTANCE_DB` names** against real `GetInstanceInfo()` output, once those zones are reachable.
