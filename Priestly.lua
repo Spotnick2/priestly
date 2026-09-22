@@ -30,36 +30,11 @@ if not API then return end
 
 local VERSION = API.AddonVersion(addonName)
 
--- ─── Layout constants ────────────────────────────────────────────────────────
-local ICON_W     = 16
-local BAR_W      = 91
-local ROW_H      = 15
-local ROW_W      = ICON_W + BAR_W       -- 107
-local GRP_HDR_H  = 10
-local FRAME_W    = ROW_W + 12           -- 119
-local ROW_X      = 5
-local HDR_H      = 24                   -- styled header bar height
-local FTR_H      = 14                   -- reagent footer height
-
--- Forever characters have a surname, so popover rows carry a full two-part
--- name – wider than any TBC name needed.
-local POP_W      = 236
-local POP_ROW_H  = 22
-local POP_HDR_H  = 24
-
--- The row and header pools are allocated once, so they have to cover the worst
--- roster the addon can actually produce. Pets are split into popover-sized
--- buckets (see GatherGroups), and a full raid can field one pet per raider - so
--- the bucket count is part of this arithmetic, not an afterthought. Getting it
--- wrong does not truncate gracefully: UpdateUI simply stops emitting rows, and
--- since pets sort last they are what disappears.
-local MAX_MEMBERS   = 8                                   -- popover rows, and so bucket size
-local MAX_RAID      = 40
-local MAX_SUBGROUPS = 8
-local MAX_PET_BUCKETS = math.ceil(MAX_RAID / MAX_MEMBERS) -- 5
-local MAX_GROUPS  = MAX_SUBGROUPS + MAX_PET_BUCKETS       -- 13
-local MAX_DEFS    = 3
-local MAX_ROWS    = MAX_GROUPS * MAX_DEFS                 -- 39
+-- ─── Sizes ───────────────────────────────────────────────────────────────────
+-- The window is LibGroupBuffs' UI.lua; it sizes its own pools from the worst
+-- roster the engine can produce. Priestly decides one number: how many members
+-- a popover lists, which is also how many pets share a pet row.
+local MAX_MEMBERS = 8
 
 -- Reagent item IDs
 local HOLY_CANDLE_ID   = 17028   -- rank 1 Prayer of Fortitude
@@ -75,33 +50,9 @@ local LIGHT_FEATHER_ID = 17056   -- Levitate
 -- tests/test_bridge.lua fails on a new capture.
 local function ItemIcon(...) return API.ItemIcon(...) end
 
--- Returns r,g,b for a percentage (0.0 – 1.0)
--- Matches PallyPower's GetSeverityColor: smooth green→yellow→red gradient
-local function TimerColor(pct)
-    if pct >= 0.5 then
-        return (1.0 - pct) * 2, 1.0, 0.0
-    else
-        return 1.0, pct * 2, 0.0
-    end
-end
-
--- ─── Class icon textures (modern engine, TBC Anniversary) ────────────────────
-local CLASS_ICONS = {
-    WARRIOR  = "Interface\\Icons\\ClassIcon_Warrior",
-    PALADIN  = "Interface\\Icons\\ClassIcon_Paladin",
-    HUNTER   = "Interface\\Icons\\ClassIcon_Hunter",
-    ROGUE    = "Interface\\Icons\\ClassIcon_Rogue",
-    PRIEST   = "Interface\\Icons\\ClassIcon_Priest",
-    SHAMAN   = "Interface\\Icons\\ClassIcon_Shaman",
-    MAGE     = "Interface\\Icons\\ClassIcon_Mage",
-    WARLOCK  = "Interface\\Icons\\ClassIcon_Warlock",
-    DRUID    = "Interface\\Icons\\ClassIcon_Druid",
-    PET_HUNTER  = "Interface\\Icons\\Ability_Hunter_BeastCall",
-    PET_WARLOCK = "Interface\\Icons\\Spell_Shadow_SummonImp",
-    PET_PRIEST  = "Interface\\Icons\\Spell_Shadow_Shadowfiend",
-    PET_MAGE    = "Interface\\Icons\\Spell_Frost_SummonWaterElemental_2",
-    PET         = "Interface\\Icons\\Ability_Hunter_BeastCall",
-}
+-- The priest class icon: the spec icon when no spec spell is known, and a
+-- popover member whose class the client does not report.
+local PRIEST_ICON = "Interface\\Icons\\ClassIcon_Priest"
 
 -- ─── Buff definitions ────────────────────────────────────────────────────────
 --
@@ -198,148 +149,15 @@ local function AuraEventIsRelevant(unit, updateInfo)
 end
 
 -- ─── State ───────────────────────────────────────────────────────────────────
-local g_Main, g_Pop
-local g_Vis      = false
-local g_Moved    = false
-local g_RefQ     = false
-local g_InitDone = false
-local g_Ticker   = 0
 local g_IsPriest = false
-local g_PendingShow  = false   -- a show request that arrived during combat
 local g_LastGroupSize = 0
 
 -- Settings writes go through PriestlyConfig's single write path (issue #35).
 -- Guarded like every other cross-file helper in this file: if PriestlyConfig
 -- failed to load, a bare call would throw from a drag or a refresh instead of
--- quietly doing nothing, as the direct writes it replaced used to.
+-- quietly doing nothing.
 local function SetConfig(key, value)
     if Priestly_SetConfig then Priestly_SetConfig(key, value) end
-end
--- What the position restore in UpdateUI decided, and why. Printed by
--- `/priestly pos`. Reading the code twice and consulting a second reviewer
--- both said this path is sound, while the frame demonstrably came back at the
--- default - so the next step is to make it say what it did.
---
--- This holds the last time the restore ACTUALLY RAN. Every refresh after that
--- skips it, correctly, because the window is already up - and a skip must not
--- overwrite the decision. Otherwise the one thing worth knowing is gone by the
--- time anyone asks: a single aura or roster event fires ScheduleRefresh, and
--- the answer becomes "SKIPPED" forever.
-local g_RestoreLog = "UpdateUI has not run yet"
-local g_RestoreSkips = 0
-
-local g_GHdrs = {}   -- FontStrings [1..MAX_GROUPS]
-local g_Rows  = {}   -- Buttons     [1..MAX_ROWS]
-local g_PRows = {}   -- Buttons     [1..MAX_MEMBERS]
-
-local CloseUI, UpdateUI, UpdatePopover, InitUI, RefreshTimers, ScheduleRefresh
-
--- ─── Deferral and combat parking ─────────────────────────────────────────────
-
--- C_Timer exists on this client; the OnUpdate frame is the fallback for one
--- that does not have it. Going through C_Timer also means deferred work is
--- reachable from the tests instead of needing a real frame to tick.
-local function After(delay, fn)
-    if C_Timer and C_Timer.After then
-        C_Timer.After(delay, fn)
-        return
-    end
-    local t = 0
-    local f = CreateFrame("Frame")
-    f:SetScript("OnUpdate", function(self, dt)
-        t = t + dt
-        if t >= delay then self:SetScript("OnUpdate", nil); fn() end
-    end)
-end
-
--- Hiding a frame that parents secure buttons is refused under combat lockdown,
--- so it gets moved out of sight instead. Both our frames are clamped to the
--- screen, which would drag them straight back to the edge - and an alpha-0
--- frame still takes mouse clicks, so a "hidden" row would stay a live,
--- invisible cast button for the rest of the fight. Drop the clamp first.
-local function CombatPark(f)
-    if not f then return end
-    f:SetClampedToScreen(false)
-    f:SetAlpha(0)
-    f:ClearAllPoints()
-    f:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT", 10000, -10000)
-    f._combatHidden = true
-end
-
--- Undo a park now that we are out of combat.
-local function CombatUnpark(f)
-    if not f or not f._combatHidden then return false end
-    f:Hide()
-    f:SetAlpha(1)
-    f:SetClampedToScreen(true)
-    f._combatHidden = false
-    return true
-end
-
--- ─── Global hooks for PriestlyConfig.lua ────────────────────────────────────
-
--- ScheduleRefresh is forward-declared above and assigned later; expose via wrapper
-function Priestly_ScheduleRefresh()
-    if ScheduleRefresh then ScheduleRefresh() end
-end
-
--- Force a full UI rebuild (used when config changes affect layout)
-function Priestly_ForceRebuild()
-    if InCombatLockdown() then return end
-    After(0.1, function()
-        if UpdateUI then UpdateUI() end
-    end)
-end
-
--- Called when the solo checkbox is toggled in config
-function Priestly_OnSoloToggle(enabled)
-    if InCombatLockdown() then return end
-    if enabled then
-        -- Solo enabled: show the frame immediately
-        if not g_Vis and g_IsPriest then
-            After(0.1, function()
-                SetConfig("visible", true)
-                if UpdateUI then UpdateUI() end
-            end)
-        end
-    else
-        -- Solo disabled: close if not in a group
-        if GetNumGroupMembers() == 0 then
-            if CloseUI then CloseUI() end
-        end
-    end
-end
-
--- Apply frame alpha from config
-function Priestly_ApplyAlpha()
-    local alpha = Priestly_GetFrameAlpha and Priestly_GetFrameAlpha() or 0.96
-    if g_Main then
-        g_Main:SetBackdropColor(0.04, 0.04, 0.10, alpha)
-    end
-    if g_Pop then
-        g_Pop:SetBackdropColor(0.05, 0.05, 0.12, alpha)
-    end
-end
-
--- ─── Utilities ───────────────────────────────────────────────────────────────
-
-local function FmtTime(s)
-    if not s or s <= 0 then return "" end
-    if s > 9998 then return "" end
-    return string.format("%d:%02d", math.floor(s / 60), math.floor(s % 60))
-end
-
-local function SpellIcon(...) return API.SpellIcon(...) end
-
-local function CountItem(...) return API.CountItem(...) end
-
--- "IN_RANGE" | "OUT_RANGE" | "OFFLINE" | "UNKNOWN"
-local function RangeStatus(...) return API.SpellRange(...) end
-
-local function ClassColor(classFile)
-    local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
-    if c then return c.r, c.g, c.b end
-    return 0.80, 0.80, 0.80
 end
 
 local function KnowsSpell(...) return API.KnowsSpell(...) end
@@ -358,7 +176,7 @@ local function GetSpecIcon()
     for _, s in ipairs(SPEC_ICON_SPELLS) do
         if KnowsSpell(s.id) then return s.icon end
     end
-    return CLASS_ICONS.PRIEST or "Interface\\Icons\\Spell_Holy_WordFortitude"
+    return PRIEST_ICON
 end
 
 -- ─── Data ────────────────────────────────────────────────────────────────────
@@ -381,1060 +199,98 @@ local function GetCandleInfo()
     end
 end
 
--- ─── Per-element visual updaters (used by both full rebuild and ticker) ───────
-
--- Fraction of the buff's duration still to run, clamped. A permanent aura
--- reports PERMANENT remaining, which would otherwise drive the gradient past
--- 1.0 and hand TimerColor a negative red channel.
-local function Pct(rem, dur)
-    if not rem or not dur or dur <= 0 or rem <= 0 then return 0 end
-    local p = rem / dur
-    if p > 1 then return 1 end
-    return p
-end
-
-local function ApplyRowVisuals(r, st, dur)
-    dur = st.minDur or dur or 3600
-    local pct = Pct(st.minR, dur)
-
-    -- Background: flat colors matching PallyPower defaults
-    -- cBuffGood     = (0, 0.7, 0)    everyone has the buff
-    -- cBuffNeedSome = (1, 1, 0.5)    some missing
-    -- cBuffNeedAll  = (1, 0, 0)      nobody has it
-    if st.nUnknown == st.nTotal then
-        -- Auras unreadable and nothing cached: say so rather than guess.
-        r.bg:SetColorTexture(0.30, 0.30, 0.30, 0.60)
-    elseif st.allHave then
-        r.bg:SetColorTexture(0.0, 0.70, 0.0, 0.50)
-    elseif st.nMiss == st.nTotal then
-        r.bg:SetColorTexture(1.0, 0.0, 0.0, 0.50)
-    else
-        r.bg:SetColorTexture(1.0, 1.0, 0.5, 0.50)
-    end
-
-    -- Text elements
-    r.timer:Hide()
-    r.missAll:Hide()
-    r.missCount:Hide()
-
-    -- Show miss count next to icon when anyone is missing
-    if st.nMiss > 0 then
-        r.missCount:SetText(st.nMiss)
-        r.missCount:Show()
-    end
-
-    if st.nUnknown == st.nTotal then
-        r.missAll:SetText("?")
-        r.missAll:SetTextColor(0.65, 0.65, 0.65)
-        r.missAll:Show()
-    elseif st.nMiss == st.nTotal then
-        -- Everyone missing: show MISS in bar area
-        r.missAll:SetText("MISS")
-        r.missAll:SetTextColor(1.0, 0.28, 0.28)
-        r.missAll:Show()
-    elseif st.minR > 0 then
-        -- Some buffed: show timer
-        local tr, tg, tb = TimerColor(pct)
-        r.timer:SetText(FmtTime(st.minR))
-        r.timer:SetTextColor(tr, tg, tb)
-        r.timer:Show()
-    end
-end
-
-local function ApplyPopRowVisuals(pr)
-    if not pr._active then return end
-    local unit  = pr._unit
-    local def   = pr._def
-    local rem, buffDur, state, spell = BuffRem(unit, def)
-    local has   = (state == ST_HAS) and rem > 0
-    -- The range dot has to describe the spell the LEFT-CLICK will cast: the
-    -- Prayers reach 40 yards where the single-target forms reach 30, so showing
-    -- the single spell's range marks members out of reach that a Prayer lands
-    -- on perfectly well.
-    local primarySpell = ClickSpells(def)
-    local range = RangeStatus(unit, primarySpell)
-    local dur   = DurationFor(def, buffDur, spell)
-    local pct   = has and Pct(rem, dur) or 0
-
-    -- Row background: flat color by state (matching PallyPower)
-    if not UnitIsConnected(unit) then
-        pr.bg:SetColorTexture(0.30, 0.30, 0.30, 0.70)   -- grey for offline
-    elseif state == ST_UNKNOWN then
-        pr.bg:SetColorTexture(0.30, 0.30, 0.30, 0.60)   -- grey = unreadable
-    elseif has then
-        pr.bg:SetColorTexture(0.0, 0.70, 0.0, 0.50)     -- green = buffed
-    else
-        pr.bg:SetColorTexture(1.0, 0.0, 0.0, 0.50)      -- red = missing
-    end
-
-    -- Range indicator: "R" coloured by status
-    if range == "IN_RANGE" then
-        pr.rangeTxt:SetText("R")
-        pr.rangeTxt:SetTextColor(0.15, 1.00, 0.15)
-    elseif range == "OUT_RANGE" then
-        pr.rangeTxt:SetText("R")
-        pr.rangeTxt:SetTextColor(1.00, 0.85, 0.10)
-    elseif range == "OFFLINE" then
-        pr.rangeTxt:SetText("R")
-        pr.rangeTxt:SetTextColor(0.50, 0.50, 0.50)
-    else
-        pr.rangeTxt:SetText("?")
-        pr.rangeTxt:SetTextColor(0.50, 0.50, 0.50)
-    end
-
-    -- Timer / MISS / unreadable
-    if has then
-        local tr, tg, tb = TimerColor(pct)
-        pr.timeTxt:SetText(FmtTime(rem))
-        pr.timeTxt:SetTextColor(tr, tg, tb)
-    elseif state == ST_UNKNOWN then
-        pr.timeTxt:SetText("?")
-        pr.timeTxt:SetTextColor(0.65, 0.65, 0.65)
-    else
-        pr.timeTxt:SetText("MISS")
-        pr.timeTxt:SetTextColor(1.00, 0.22, 0.22)
-    end
-end
-
--- ─── Ticker (called from OnUpdate every ~0.5 s) ───────────────────────────────
-
-RefreshTimers = function()
-    -- Update main-frame row colours and timers
-    for _, r in ipairs(g_Rows) do
-        if r._active then
-            ApplyRowVisuals(r, GroupStat(r._members, r._def), r._def.duration)
-        end
-    end
-    -- Update popover member rows
-    if g_Pop and g_Pop:IsShown() then
-        for _, pr in ipairs(g_PRows) do
-            if pr._active then ApplyPopRowVisuals(pr) end
-        end
-    end
-end
-
--- ─── Footer reagent display ──────────────────────────────────────────────────
-
-local g_CandleID, g_CandleName  -- set once at login/talent change
-local g_ShowCandle  = false
-local g_ShowFeather = false
+-- ─── Reagent footer ──────────────────────────────────────────────────────────
+-- What the footer shows, decided from what the priest actually knows. The old
+-- "level >= 48" gate was a TBC content assumption; knowing the spell at all is
+-- the real condition, and at the current cap nobody knows a Prayer. The
+-- library draws the buttons, counts and tooltips.
 
 local LEVITATE_ID = 1706
 
-local function RefreshFooterState()
-    -- Drive both entirely off what the priest actually knows. The old
-    -- "level >= 48" gate was a TBC content assumption; knowing the Prayer at
-    -- all is the real condition, and at the current cap nobody does.
-    local candleID, candleIcon, candleName = GetCandleInfo()
-    g_CandleID   = candleID
-    g_CandleName = candleName
-    g_ShowCandle  = (candleID ~= nil)
-    g_ShowFeather = KnowsSpell(LEVITATE_ID)
-
-    if g_Main and g_Main.candleBtn then
-        if g_ShowCandle then
-            g_Main.candleBtn.icon:SetTexture(candleIcon)
-            g_Main.candleBtn._itemID = candleID
-        end
+local function FooterItems()
+    local items = {}
+    local candleID, candleIcon = GetCandleInfo()
+    if candleID then
+        items[#items + 1] = {
+            itemID = candleID, icon = candleIcon, usedBy = "the group Prayers",
+            color = function(count)
+                if count >= 50 then return 0.20, 1.00, 0.20 end
+                if count >= 25 then return 1.00, 0.88, 0.10 end
+                return 1.00, 0.22, 0.10
+            end,
+        }
     end
+    if KnowsSpell(LEVITATE_ID) then
+        items[#items + 1] = {
+            itemID = LIGHT_FEATHER_ID, icon = ItemIcon(LIGHT_FEATHER_ID), usedBy = "Levitate",
+            color = function(count)
+                if count > 0 then return 1.00, 1.00, 1.00 end
+                return 0.50, 0.50, 0.50
+            end,
+        }
+    end
+    return items
 end
 
-local function RefreshFooter()
-    if not g_Main or not g_Main.candleBtn then return end
-
-    if g_ShowCandle then
-        local count = CountItem(g_CandleID)
-        g_Main.candleBtn.countTxt:SetText(count)
-        if count >= 50 then
-            g_Main.candleBtn.countTxt:SetTextColor(0.20, 1.00, 0.20)
-        elseif count >= 25 then
-            g_Main.candleBtn.countTxt:SetTextColor(1.00, 0.88, 0.10)
-        else
-            g_Main.candleBtn.countTxt:SetTextColor(1.00, 0.22, 0.10)
-        end
-        g_Main.candleBtn:Show()
-    else
-        g_Main.candleBtn:Hide()
-    end
-
-    if g_ShowFeather then
-        local count = CountItem(LIGHT_FEATHER_ID)
-        g_Main.featherBtn.countTxt:SetText(count)
-        if count > 0 then
-            g_Main.featherBtn.countTxt:SetTextColor(1.00, 1.00, 1.00)
-        else
-            g_Main.featherBtn.countTxt:SetTextColor(0.50, 0.50, 0.50)
-        end
-        g_Main.featherBtn:Show()
-    else
-        g_Main.featherBtn:Hide()
-    end
-end
-
--- ─── UI Init (runs once) ─────────────────────────────────────────────────────
-
-InitUI = function()
-    if g_InitDone then return end
-    g_InitDone = true
-
-    -- ── Main frame ───────────────────────────────────────────────────────────
-    g_Main = CreateFrame("Frame", "PriestlyMain", UIParent, "BackdropTemplate")
-    g_Main:SetFrameStrata("HIGH")
-    g_Main:SetClampedToScreen(true)
-    g_Main:SetMovable(true)
-    g_Main:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 14,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    g_Main:SetBackdropColor(0.04, 0.04, 0.10, Priestly_GetFrameAlpha())
-    g_Main:SetBackdropBorderColor(0.40, 0.40, 0.65, 0.85)
-    g_Main:Hide()
-
-    -- ── Styled header bar ────────────────────────────────────────────────────
-    -- Dark accent strip inside the border
-    local hdrBg = g_Main:CreateTexture(nil, "ARTWORK")
-    hdrBg:SetColorTexture(0.07, 0.07, 0.18, 0.98)
-    hdrBg:SetPoint("TOPLEFT",  g_Main, "TOPLEFT",  4, -4)
-    hdrBg:SetPoint("TOPRIGHT", g_Main, "TOPRIGHT", -4, -4)
-    hdrBg:SetHeight(HDR_H)
-
-    -- Thin accent line under header
-    local hdrLine = g_Main:CreateTexture(nil, "ARTWORK")
-    hdrLine:SetColorTexture(0.40, 0.40, 0.65, 0.55)
-    hdrLine:SetHeight(1)
-    hdrLine:SetPoint("TOPLEFT",  hdrBg, "BOTTOMLEFT",  0, 0)
-    hdrLine:SetPoint("TOPRIGHT", hdrBg, "BOTTOMRIGHT", 0, 0)
-
-    -- Spec icon (left side of header bar)
-    g_Main.specIcon = g_Main:CreateTexture(nil, "OVERLAY")
-    g_Main.specIcon:SetSize(HDR_H - 6, HDR_H - 6)
-    g_Main.specIcon:SetPoint("LEFT", hdrBg, "LEFT", 4, 0)
-    g_Main.specIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-
-    -- Title: "Priestly"
-    local titTxt = g_Main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    titTxt:SetPoint("LEFT",  g_Main.specIcon, "RIGHT", 3,  0)
-    titTxt:SetText("|cff99ddffPriestly|r")
-
-    -- Version: small, right of title
-    local verTxt = g_Main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    verTxt:SetPoint("LEFT",  titTxt, "RIGHT", 2, 0)
-    verTxt:SetText("|cff555577" .. VERSION .. "|r")
-
-    -- Close button
-    local xBtn = CreateFrame("Button", "PriestlyCloseButton", g_Main, "UIPanelCloseButton")
-    xBtn:SetPoint("TOPRIGHT", g_Main, "TOPRIGHT", 3, 3)
-    xBtn:SetScale(0.6)
-    xBtn:SetScript("OnClick", function() CloseUI(true) end)
-    g_Main.closeBtn = xBtn
-
-    -- ── Drag handle (covers header only, so row buttons get clicks) ───────
-    local drag = CreateFrame("Frame", "PriestlyDragHandle", g_Main)
-    drag:SetPoint("TOPLEFT",  hdrBg, "TOPLEFT",  0, 0)
-    drag:SetPoint("TOPRIGHT", hdrBg, "TOPRIGHT", -16, 0)  -- leave room for X
-    drag:SetHeight(HDR_H)
-    drag:EnableMouse(true)
-    drag:RegisterForDrag("LeftButton")
-    -- Gated rather than unregistered: leaving RegisterForDrag in place keeps
-    -- this clear of the secure-frame rules, so the lock can be toggled in
-    -- combat like any other setting.
-    drag:SetScript("OnDragStart", function()
-        -- `Priestly_FrameLocked and` is not decoration. If PriestlyConfig ever
-        -- fails to load, or a half-deployed build leaves the helper behind,
-        -- calling a nil global throws - and this client has errors OFF by
-        -- default, so the whole drag dies in silence. Short-circuiting leaves
-        -- the window draggable, which is the safe way to be wrong.
-        if Priestly_FrameLocked and Priestly_FrameLocked() then return end
-        g_Main:StartMoving()
-    end)
-    g_Main.dragHandle = drag
-    drag:SetScript("OnDragStop",  function()
-        -- Release first: StopMovingOrSizing is harmless on a frame that was
-        -- never moving, and skipping it would leave a frame locked mid-drag
-        -- stuck to the cursor.
-        --
-        -- What the bail below protects is the SAVED position, not where the
-        -- frame currently sits. A drag interrupted by the lock leaves the
-        -- window wherever the cursor was, and it stays there for the session:
-        -- the restore in UpdateUI only runs while g_Moved is false, and a
-        -- completed drag or an earlier restore has already set it true.
-        -- CloseUI does not clear it. So the saved spot comes back on the next
-        -- login, not on the next hide and show. Narrow enough to accept - the
-        -- lock has to flip during an active drag - but worth stating
-        -- correctly, because the wrong version reads as a guarantee.
-        g_Main:StopMovingOrSizing()
-        -- Guarded for the same reason as OnDragStart, and it matters more
-        -- here: an error between the stop above and the save below loses the
-        -- position silently. The frame moves, stays put, and is back at the
-        -- default next login with nothing on screen to explain it.
-        if Priestly_FrameLocked and Priestly_FrameLocked() then return end
-        g_Moved = true
-        -- Save position.
-        --
-        -- GetPoint reports relativeTo as nil after StopMovingOrSizing, while
-        -- the restore anchors explicitly to UIParent. That looks like a
-        -- mismatch and is not: g_Main is PARENTED to UIParent, and a nil
-        -- relativeTo means "my parent". Measured in game - saved and restored
-        -- values match to the decimal. It would be a real drift for a frame
-        -- parented anywhere else, which is why Blizzard's Edit Mode code
-        -- compensates when it converts nil to UIParent.
-        local point, _, relPoint, x, y = g_Main:GetPoint()
-        SetConfig("pos", { point = point, relPoint = relPoint, x = x, y = y })
-    end)
-
-    -- ── Group header labels (pre-alloc) ──────────────────────────────────────
-    for i = 1, MAX_GROUPS do
-        local fs = g_Main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetTextColor(0.52, 0.52, 0.70)
-        fs:Hide()
-        g_GHdrs[i] = fs
-    end
-
-    -- ── Row buttons (pre-alloc) ───────────────────────────────────────────────
-    for i = 1, MAX_ROWS do
-        local r = CreateFrame("Button", "PriestlyRow"..i, g_Main, "SecureActionButtonTemplate")
-        r:SetSize(ROW_W, ROW_H)
-        r:EnableMouse(true)
-        r:RegisterForClicks(API.ClickEdges())
-
-        r.bg = r:CreateTexture(nil, "BACKGROUND")
-        r.bg:SetAllPoints()
-
-        -- Spell icon (left)
-        r.icon = r:CreateTexture(nil, "ARTWORK")
-        r.icon:SetSize(ICON_W - 2, ICON_W - 2)
-        r.icon:SetPoint("LEFT", r, "LEFT", 1, 0)
-        r.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-
-        -- Timer text (right-aligned)
-        r.timer = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        r.timer:SetPoint("RIGHT", r, "RIGHT", -3, 0)
-
-        -- Missing count (bottom of bar, right of icon)
-        r.missCount = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        r.missCount:SetPoint("LEFT", r, "LEFT", ICON_W + 2, 0)
-        r.missCount:SetTextColor(1.0, 1.0, 1.0)
-
-        -- "MISS" all-absent label (centred in bar area)
-        r.missAll = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        r.missAll:SetPoint("CENTER", r, "CENTER", ICON_W / 2, 0)
-        r.missAll:SetTextColor(1.0, 0.28, 0.28)
-        r.missAll:SetText("MISS")
-
-        r._active = false
-        r:Hide()
-        g_Rows[i] = r
-    end
-
-    -- ── Popover frame (pre-alloc) ─────────────────────────────────────────────
-    g_Pop = CreateFrame("Frame", "PriestlyPopover", UIParent, "BackdropTemplate")
-    g_Pop:SetFrameStrata("DIALOG")
-    g_Pop:SetFrameLevel(200)
-    g_Pop:SetClampedToScreen(true)
-    g_Pop:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    g_Pop:SetBackdropColor(0.05, 0.05, 0.12, Priestly_GetFrameAlpha())
-    g_Pop:SetBackdropBorderColor(0.42, 0.42, 0.65, 1)
-    -- NOTE: no EnableMouse — lets child SecureActionButtons receive clicks
-    g_Pop:Hide()
-
-    -- Popover header: buff icon
-    g_Pop.hdrIcon = g_Pop:CreateTexture(nil, "ARTWORK")
-    g_Pop.hdrIcon:SetSize(POP_HDR_H - 6, POP_HDR_H - 6)
-    g_Pop.hdrIcon:SetPoint("TOPLEFT", g_Pop, "TOPLEFT", 7, -6)
-    g_Pop.hdrIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-
-    -- Popover header: buff name text
-    g_Pop.hdrTxt = g_Pop:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    g_Pop.hdrTxt:SetPoint("LEFT",  g_Pop.hdrIcon, "RIGHT", 5, 0)
-    g_Pop.hdrTxt:SetPoint("RIGHT", g_Pop,         "RIGHT", -6, 0)
-    g_Pop.hdrTxt:SetPoint("TOP",   g_Pop,         "TOP",   0, -8)
-    g_Pop.hdrTxt:SetJustifyH("LEFT")
-    g_Pop.hdrTxt:SetTextColor(1.0, 0.82, 0.22)
-
-    -- Thin divider under popover header
-    local hdiv = g_Pop:CreateTexture(nil, "ARTWORK")
-    hdiv:SetColorTexture(0.32, 0.32, 0.55, 0.55)
-    hdiv:SetHeight(1)
-    hdiv:SetPoint("TOPLEFT",  g_Pop, "TOPLEFT",  5, -(POP_HDR_H + 2))
-    hdiv:SetPoint("TOPRIGHT", g_Pop, "TOPRIGHT", -5, -(POP_HDR_H + 2))
-
-    -- Member rows in popover
-    for i = 1, MAX_MEMBERS do
-        local pr = CreateFrame("Button", "PriestlyPop"..i, g_Pop, "SecureActionButtonTemplate")
-        pr:SetSize(POP_W - 10, POP_ROW_H)
-        pr:SetPoint("TOPLEFT", g_Pop, "TOPLEFT",
-            5, -(POP_HDR_H + 5) - (i - 1) * (POP_ROW_H + 2))
-        pr:EnableMouse(true)
-        pr:RegisterForClicks(API.ClickEdges())
-        pr:SetFrameLevel(202)  -- above g_Pop's level 200
-
-        pr.bg = pr:CreateTexture(nil, "BACKGROUND")
-        pr.bg:SetAllPoints()
-
-        -- Range indicator ("R") — leftmost
-        pr.rangeTxt = pr:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        pr.rangeTxt:SetPoint("LEFT", pr, "LEFT", 3, 0)
-        pr.rangeTxt:SetWidth(13)
-        pr.rangeTxt:SetJustifyH("CENTER")
-
-        -- Class icon
-        pr.classIcon = pr:CreateTexture(nil, "ARTWORK")
-        pr.classIcon:SetSize(POP_ROW_H - 6, POP_ROW_H - 6)
-        pr.classIcon:SetPoint("LEFT", pr.rangeTxt, "RIGHT", 2, 0)
-        pr.classIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-
-        -- Player name (class coloured)
-        pr.nameTxt = pr:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        pr.nameTxt:SetPoint("LEFT",  pr.classIcon, "RIGHT", 3,  0)
-        pr.nameTxt:SetPoint("RIGHT", pr,           "RIGHT", -44, 0)
-        pr.nameTxt:SetJustifyH("LEFT")
-
-        -- Timer / "MISS"
-        pr.timeTxt = pr:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        pr.timeTxt:SetPoint("RIGHT", pr, "RIGHT", -3, 0)
-        pr.timeTxt:SetWidth(40)
-        pr.timeTxt:SetJustifyH("RIGHT")
-
-        -- PreClick: block cast if target is offline/dead
-        pr:SetScript("PreClick", function(self, btn)
-            if InCombatLockdown() then return end
-            if not IsValidTarget(self._unit) then
-                self:SetAttribute("spell1", nil)
-                self:SetAttribute("spell2", nil)
-            end
-        end)
-
-        -- PostClick: restore spells + refresh
-        pr:SetScript("PostClick", function(self, btn)
-            if InCombatLockdown() then return end
-            local df = self._def
-            if df then
-                -- Same rule as the main rows: do not re-arm a click aimed at
-                -- someone who is dead, offline or gone.
-                local valid = IsValidTarget(self._unit)
-                local primary, secondary = ClickSpells(df)
-                self:SetAttribute("spell1", valid and primary or nil)
-                self:SetAttribute("spell2", valid and secondary or nil)
-            end
-            ScheduleRefresh()
-        end)
-
-        -- Tooltip for offline players
-        pr:SetScript("OnEnter", function(self)
-            if self._unit and not UnitIsConnected(self._unit) then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText(API.UnitDisplayName(self._unit, "Unknown"), 0.6, 0.6, 0.6)
-                GameTooltip:AddLine("This player is offline", 1, 0.5, 0.5)
-                GameTooltip:Show()
-            end
-        end)
-        pr:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
-
-        pr._active = false
-        pr:Hide()
-        g_PRows[i] = pr
-    end
-
-    -- Popover hover polling: hide when mouse isn't over popover or its anchor row
-    -- This replaces fragile OnLeave handlers
-    g_Pop._hoverTimer = 0
-    g_Pop._combatHidden = false   -- track if we visually hid during combat
-    g_Pop:SetScript("OnUpdate", function(self, dt)
-        if not self:IsShown() then return end
-        -- Parking does not Hide(), so without this the poll re-parks an
-        -- already-parked popover on every tick until combat ends.
-        if self._combatHidden then return end
-        self._hoverTimer = self._hoverTimer + dt
-        if self._hoverTimer < 0.15 then return end
-        self._hoverTimer = 0
-        local overPop = API.IsMouseOver(self)
-        local overAnchor = self._anchorRow and API.IsMouseOver(self._anchorRow)
-        -- Also check if mouse is over any visible popup button
-        local overChild = false
-        for _, pr in ipairs(g_PRows) do
-            if pr._active and pr:IsShown() and API.IsMouseOver(pr) then
-                overChild = true
-                break
-            end
-        end
-        if not overPop and not overAnchor and not overChild then
-            if InCombatLockdown() then
-                CombatPark(self)
-            else
-                self:Hide()
-            end
-        end
-    end)
-
-    -- ── Reagent footer ───────────────────────────────────────────────────────
-    -- Thin divider
-    g_Main.ftrLine = g_Main:CreateTexture(nil, "ARTWORK")
-    g_Main.ftrLine:SetColorTexture(0.40, 0.40, 0.65, 0.40)
-    g_Main.ftrLine:SetHeight(1)
-
-    -- Helper: create a small reagent button with icon, count, and tooltip
-    local function MakeReagentBtn(name, iconPath, itemID, usedBy)
-        local btn = CreateFrame("Button", name, g_Main)
-        btn:SetSize(FTR_H - 2 + 24, FTR_H)  -- icon + room for count text
-        btn:EnableMouse(true)
-        btn._itemID = itemID
-        -- What consumes it. The stock item tooltip never said this, and it is
-        -- the question someone hovering a reagent count actually has.
-        btn._usedBy = usedBy
-
-        btn.icon = btn:CreateTexture(nil, "ARTWORK")
-        btn.icon:SetSize(FTR_H - 4, FTR_H - 4)
-        btn.icon:SetPoint("LEFT", btn, "LEFT", 0, 0)
-        btn.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-        btn.icon:SetTexture(iconPath)
-
-        btn.countTxt = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        btn.countTxt:SetPoint("LEFT", btn.icon, "RIGHT", 2, 0)
-
-        -- Built by hand because this client's GameTooltip has no item setter
-        -- at all - see API.ItemInfo. The old SetItemByID call would have
-        -- thrown from here the day a Prayer became learnable and the footer
-        -- first appeared.
-        btn:SetScript("OnEnter", function(self)
-            if not self._itemID then return end
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-
-            local name, r, g, b = API.ItemInfo(self._itemID)
-            -- A cache miss is not an error: ItemInfo has asked the client for
-            -- the item, so the next hover will have it. Say something rather
-            -- than showing an empty frame.
-            GameTooltip:SetText(name or "Loading...", r or 1, g or 1, b or 1)
-
-            local have = CountItem(self._itemID)
-            GameTooltip:AddLine(
-                (have == 1 and "1 in your bags" or (have .. " in your bags")),
-                0.85, 0.85, 0.85)
-            if self._usedBy then
-                GameTooltip:AddLine("Used by " .. self._usedBy, 0.55, 0.75, 1.0)
-            end
-            GameTooltip:Show()
-        end)
-        btn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
-
-        btn:Hide()
-        return btn
-    end
-
-    g_Main.candleBtn  = MakeReagentBtn("PriestlyCandleBtn",  ItemIcon(SACRED_CANDLE_ID),
-        SACRED_CANDLE_ID, "the group Prayers")
-    g_Main.featherBtn = MakeReagentBtn("PriestlyFeatherBtn", ItemIcon(LIGHT_FEATHER_ID),
-        LIGHT_FEATHER_ID, "Levitate")
-
-    -- Seed the reagent state once; after this only SPELLS_CHANGED and talent
-    -- changes can alter it, and both call RefreshFooterState themselves.
-    RefreshFooterState()
-
-    -- ── Timer ticker (0.5 s) ─────────────────────────────────────────────────
-    local ftrTick = 0
-    g_Main:SetScript("OnUpdate", function(self, dt)
-        if not g_Vis then return end
-        g_Ticker = g_Ticker + dt
-        ftrTick  = ftrTick  + dt
-        if g_Ticker >= 0.5 then
-            g_Ticker = 0
-            RefreshTimers()
-        end
-        if ftrTick >= 3.0 then
-            ftrTick = 0
-            RefreshFooter()
-        end
-    end)
-end
-
--- ─── CloseUI ─────────────────────────────────────────────────────────────────
-
-CloseUI = function(manual)
-    -- g_Main parents the secure row buttons just as g_Pop parents the popover
-    -- rows, so it needs the same combat treatment.
-    if g_Main then
-        if InCombatLockdown() then
-            CombatPark(g_Main)
-        else
-            g_Main:Hide()
-        end
-    end
-    if g_Pop then
-        if InCombatLockdown() then
-            CombatPark(g_Pop)
-        else
-            g_Pop:Hide()
-        end
-    end
-    g_Vis = false
-    -- Cancel any show that was queued while we were in combat: the user has
-    -- since asked for the window to be closed, and honouring the older request
-    -- would reopen it and overwrite the saved preference.
-    g_PendingShow = false
-    -- Only save "closed" state if user manually closed (not from leaving group)
-    if manual then SetConfig("visible", false) end
-end
-
--- ─── PopoverSide ──────────────────────────────────────────────────────
--- Which side of its row the popover opens on.
+-- ─── The window (LibGroupBuffs-1.0's UI.lua) ─────────────────────────────────
 --
--- It used to be hard-anchored to the left, so a frame parked on the left of
--- the screen - which is where Pally Power sits, and therefore where a Pally
--- Power user puts this - opened its popover off-screen, taking per-member
--- click casting with it.
---
--- Auto is the default and needs no explanation: the popover goes wherever
--- there is room. Recomputed every time it opens, because the frame is
--- draggable and a side chosen at login is wrong after the first move.
-local function PopoverSide(anchorRow)
-    local pref = Priestly_PopoverSide()
-    if pref == "left" or pref == "right" then return pref end
+-- Rows, popover, clicks, combat parking, dragging and the ticker are shared
+-- with Wildly and Magely. Priestly supplies its title, spec icon, reagents and
+-- config, and decides when the window opens; the events and slash commands
+-- below call the ui's methods.
+local ui = Priestly.UI.New({
+    engine  = engine,
+    owner   = addonName,
+    title   = "|cff99ddffPriestly|r",
+    version = VERSION,
+    appearance = function() return { icon = GetSpecIcon() } end,
+    unknownClassIcon = PRIEST_ICON,
+    footerItems = FooterItems,
+    alpha       = function() return Priestly_GetFrameAlpha and Priestly_GetFrameAlpha() or 0.96 end,
+    -- `Priestly_FrameLocked and` is not decoration: if PriestlyConfig fails to
+    -- load, calling a nil global would throw - silently, errors are off by
+    -- default here - and kill the drag. Short-circuiting leaves the window
+    -- draggable, which is the safe way to be wrong.
+    locked      = function() return Priestly_FrameLocked and Priestly_FrameLocked() or false end,
+    popoverSide = function() return Priestly_PopoverSide and Priestly_PopoverSide() or "auto" end,
+    showClickHints = function() return not Priestly_ShowClickHints or Priestly_ShowClickHints() end,
+    getPos = function()
+        if not PriestlyDB then return nil, "PriestlyDB was nil" end
+        if not PriestlyDB.pos then return nil, "PriestlyDB.pos was nil" end
+        return PriestlyDB.pos
+    end,
+    setPos     = function(pos) SetConfig("pos", pos) end,
+    setVisible = function(visible) SetConfig("visible", visible) end,
+})
 
-    -- GetCenter returns nil before a frame has been laid out, and screen width
-    -- can be 0 during a UI scale change - which is TRUTHY in Lua, so it has to
-    -- be tested for by value. Either way, fall back to the old left-hand
-    -- behaviour rather than guessing.
-    local rowX = anchorRow and anchorRow:GetCenter()
-    local screenW = UIParent and UIParent:GetWidth()
-    if not rowX or not screenW or screenW == 0 then return "left" end
+-- ─── Global hooks for PriestlyConfig.lua ────────────────────────────────────
 
-    return (rowX < screenW / 2) and "right" or "left"
+function Priestly_ScheduleRefresh()
+    ui:ScheduleRefresh()
 end
 
--- ─── Click hints ────────────────────────────────────────────────────
--- What a row's clicks will actually cast, shown on hover.
---
--- The controls used to be discoverable only from the addon page or
--- /priestly help, and getting them wrong COSTS A REAGENT - casting the group
--- Prayer when you meant a single buff burns a candle every time. Somebody
--- reported doing exactly that.
---
--- It matters more here than it would have on TBC, because the mapping is no
--- longer fixed: while no group Prayer is known - the whole current level range
--- - left-click casts the single spell instead. So "left is group, right is
--- single" is not something a static description can promise. The addon knows;
--- it should say.
-
--- How a group reads in a sentence. The header says "-- Group 3 --"; a tooltip
--- wants "group 3", and wants an answer even where there is no header at all.
---
--- nil for the pet buckets, deliberately. They are a display grouping, not a
--- subgroup: a Prayer cast on a pet buffs whatever party that pet is in, so
--- "on the pets" describes an outcome the click cannot produce. The caller
--- names the target unit instead, which is literally what happens.
-local function GroupLabel(gNum)
-    if not gNum then return "this group" end
-    if gNum >= PET_GROUP then return nil end
-    if IsInRaid() then return "group " .. gNum end
-    return "your party"
-end
-
-local function HideClickHint()
-    GameTooltip:Hide()
-end
-
-local function ShowClickHint(row)
-    if not Priestly_ShowClickHints() then return end
-    local def = row and row._def
-    if not def then return end
-
-    -- The popover opens on this same hover, so sit on the other side of the
-    -- row rather than on top of it.
-    local side = (PopoverSide(row) == "right") and "ANCHOR_LEFT" or "ANCHOR_RIGHT"
-    GameTooltip:SetOwner(row, side)
-    GameTooltip:SetText(def.hasGroup and def.grp or def.sngl, 0.62, 0.85, 1.0)
-
-    -- Resolve each click the way the click itself resolves it.
-    --
-    -- Out of combat the wired attributes are NOT the answer, which is where I
-    -- had this wrong: PreClick calls PickTarget again at click time and can
-    -- retarget, so a hover between a rebuild and a buff falling off would name
-    -- one person while the click buffs another. Range moves without a rebuild
-    -- too. A hint that can disagree with the click is worse than no hint,
-    -- because it gets trusted.
-    --
-    -- In combat PreClick deliberately bails - it cannot write attributes under
-    -- lockdown - so there the wired values ARE what the click will use, and
-    -- re-picking would be the thing that lies.
-    local function resolve(which)
-        if InCombatLockdown() then
-            return row:GetAttribute("spell" .. which), row:GetAttribute("unit" .. which)
-        end
-        local spell = (which == 1) and row._primary or row._secondary
-        if not spell or not row._members then return nil end
-        -- The same call PreClick makes, groupMode argument and all.
-        local unit = PickTarget(row._members, def, (which == 1) and row._groupMode or false)
-        if not unit then return nil end   -- PreClick clears the spell here too
-        return spell, unit
-    end
-
-    local function describe(label, spell, unit)
-        if not spell then
-            GameTooltip:AddLine(label .. "  |cff888888nothing to buff|r", 1, 1, 1)
-            return
-        end
-        -- Decided from the spell this button actually carries, never from
-        -- which button it is. When a priest knows a Prayer but not the single
-        -- form, ClickSpells hands the group spell to BOTH clicks - and calling
-        -- that a single-target cast on a named person is the exact mistake
-        -- this tooltip exists to stop, reagent and all.
-        local target = (def.hasGroup and spell == def.grp and GroupLabel(row._gNum))
-                        or API.UnitDisplayName(unit, "whoever needs it")
-        GameTooltip:AddLine(label .. "  |cffffffff" .. spell .. "|r on " .. target, 1, 1, 1)
-    end
-
-    describe("|cffaaaaaaLeft|r ", resolve(1))
-    describe("|cffaaaaaaRight|r", resolve(2))
-    GameTooltip:Show()
-end
-
--- ─── UpdatePopover ───────────────────────────────────────────────────────────
-
-UpdatePopover = function(anchorRow, members, def)
+-- Force a full UI rebuild (used when config changes affect layout)
+function Priestly_ForceRebuild()
     if InCombatLockdown() then return end
-
-    -- If popover was visually hidden during combat, properly restore it first
-    CombatUnpark(g_Pop)
-
-    -- Header
-    g_Pop.hdrIcon:SetTexture(SpellIcon(def.hasSingle and def.snglID or def.grpID, def.fallbackIcon))
-    local popPrimary, popSecondary = ClickSpells(def)
-
-    -- Name whatever the primary click actually casts, not the Prayer we wish
-    -- existed.
-    g_Pop.hdrTxt:SetText(popPrimary or def.sngl)
-
-    -- Track which row we're anchored to (for hover polling)
-    g_Pop._anchorRow = anchorRow
-
-    local cnt = math.min(#members, MAX_MEMBERS)
-    for i = 1, cnt do
-        local m  = members[i]
-        local pr = g_PRows[i]
-
-        -- Store state so the ticker can refresh this row
-        pr._active = true
-        pr._unit   = m.unit
-        pr._def    = def
-
-        -- Left-click  → group Prayer targeting this person, or the single buff
-        --               when no Prayer exists
-        pr:SetAttribute("type1",  "spell")
-        pr:SetAttribute("spell1", popPrimary)
-        pr:SetAttribute("unit1",  m.unit)
-        -- Right-click → single buff on this specific person
-        pr:SetAttribute("type2",  "spell")
-        pr:SetAttribute("spell2", popSecondary)
-        pr:SetAttribute("unit2",  m.unit)
-
-        -- Class icon
-        local cls = m.class or "PRIEST"
-        pr.classIcon:SetTexture(CLASS_ICONS[cls] or CLASS_ICONS.PRIEST)
-
-        -- Name with class colour
-        local cr, cg, cb = ClassColor(cls)
-        pr.nameTxt:SetText(m.name)
-        pr.nameTxt:SetTextColor(cr, cg, cb)
-
-        ApplyPopRowVisuals(pr)
-        pr:Show()
-    end
-    for i = cnt + 1, MAX_MEMBERS do
-        g_PRows[i]._active = false
-        g_PRows[i]:Hide()
-    end
-
-    local popH = POP_HDR_H + 7 + cnt * (POP_ROW_H + 2) + 6
-    g_Pop:SetSize(POP_W, popH)
-    g_Pop:ClearAllPoints()
-    if PopoverSide(anchorRow) == "right" then
-        g_Pop:SetPoint("LEFT", anchorRow, "RIGHT", 4, 0)
-    else
-        g_Pop:SetPoint("RIGHT", anchorRow, "LEFT", -4, 0)
-    end
-    g_Pop:Show()
+    ui:Open(0.1)
 end
 
--- ─── UpdateUI (full layout rebuild) ──────────────────────────────────────────
-
-UpdateUI = function()
-    -- SetAttribute silently fails during combat lockdown; defer until combat ends
-    if InCombatLockdown() then
-        -- Just refresh visuals; full rebuild will happen on combat end
-        if g_Vis then
-            RefreshTimers()
-        else
-            -- Somebody asked for the window while it was closed - /priestly
-            -- show, or joining a group mid-fight. Remember it, or the request
-            -- is simply dropped.
-            g_PendingShow = true
+-- Called when the solo checkbox is toggled in config
+function Priestly_OnSoloToggle(enabled)
+    if InCombatLockdown() then return end
+    if enabled then
+        if not ui:IsVisible() and g_IsPriest then
+            SetConfig("visible", true)
+            ui:Open(0.1)
         end
-        return
-    end
-    InitUI()
-
-    local groups, ord = GatherGroups()
-    if #ord == 0 then CloseUI(); return end
-
-    local defs = ActiveDefs(groups, ord)
-    if #defs == 0 then CloseUI(); return end
-
-    -- Refresh spec icon (handles talent respec)
-    g_Main.specIcon:SetTexture(GetSpecIcon())
-
-    -- Hide all reusable elements
-    for _, r in ipairs(g_Rows)  do r._active = false; r:Hide() end
-    for _, h in ipairs(g_GHdrs) do h:Hide() end
-
-    local rowIdx = 0
-    local hdrIdx = 0
-    -- Start below header bar + inset padding
-    local y = -(HDR_H + 6)
-
-    for _, gNum in ipairs(ord) do
-        if rowIdx >= MAX_ROWS then break end
-        local groupMembers = groups[gNum]
-
-        -- Group label (raid groups + pet group always)
-        local inRaid = IsInRaid()
-        if inRaid or gNum >= PET_GROUP then
-            hdrIdx = hdrIdx + 1
-            if hdrIdx <= MAX_GROUPS then
-                local hdr = g_GHdrs[hdrIdx]
-                y = y - 1
-                hdr:ClearAllPoints()
-                hdr:SetPoint("TOPLEFT", g_Main, "TOPLEFT", ROW_X + 2, y)
-                if gNum >= PET_GROUP then
-                    local n = gNum - PET_GROUP + 1
-                    hdr:SetText(n > 1 and ("-- Pets " .. n .. " --") or "-- Pets --")
-                else
-                    hdr:SetText("-- Group " .. gNum .. " --")
-                end
-                hdr:Show()
-                y = y - GRP_HDR_H
-            end
-        end
-
-        -- One row per active buff, over the members that buff covers. The
-        -- engine narrows the list only if the host asks it to (Priestly does
-        -- not); an empty list means no row. The same list drives the stats,
-        -- the targets, the popover and the clicks, so they cannot disagree.
-        for _, def in ipairs(defs) do
-          local members = MembersFor(def, groupMembers)
-          if #members > 0 then
-            rowIdx = rowIdx + 1
-            if rowIdx > MAX_ROWS then break end
-
-            local r   = g_Rows[rowIdx]
-            local st  = GroupStat(members, def)
-            local primary, secondary = ClickSpells(def)
-            local groupMode = def.hasGroup and true or false
-
-            local primaryUnit   = primary   and PickTarget(members, def, groupMode, st) or nil
-            local secondaryUnit = secondary and PickTarget(members, def, false, st) or nil
-
-            r:ClearAllPoints()
-            r:SetPoint("TOPLEFT", g_Main, "TOPLEFT", ROW_X, y)
-            r:SetSize(ROW_W, ROW_H)
-
-            r.icon:SetTexture(SpellIcon(def.hasSingle and def.snglID or def.grpID, def.fallbackIcon))
-
-            -- Store for ticker + PreClick target lookup
-            r._active     = true
-            r._members    = members
-            r._def        = def
-            r._primary    = primary
-            r._secondary  = secondary
-            r._groupMode  = groupMode
-            r._gNum       = gNum
-
-            ApplyRowVisuals(r, st, def.duration)
-
-            -- Left-click  → group Prayer on the member who needs it most (it
-            --               covers their subgroup; a pet row spans several),
-            --               or the single buff when no Prayer exists
-            r:SetAttribute("type1",  "spell")
-            r:SetAttribute("spell1", primaryUnit and primary or nil)
-            r:SetAttribute("unit1",  primaryUnit or "player")
-            -- Right-click → single buff on the first valid missing person
-            r:SetAttribute("type2",  "spell")
-            r:SetAttribute("spell2", secondaryUnit and secondary or nil)
-            r:SetAttribute("unit2",  secondaryUnit or "player")
-
-            -- PreClick: re-pick the target, skipping offline/dead.
-            -- Silently does nothing in combat: SetAttribute is refused under
-            -- lockdown, so the click uses whatever was wired before the pull.
-            r:SetScript("PreClick", function(self, btn)
-                if InCombatLockdown() then return end
-                local ms = self._members
-                local df = self._def
-                if not ms or not df then return end
-
-                -- Write the spell from the pick EVERY time, not only when
-                -- clearing it. Setting just the unit left a button that an
-                -- earlier PreClick had disarmed disarmed for good: the whole
-                -- group is dead or offline, the click clears spell1, somebody
-                -- comes back, and the next click writes unit1 over a spell1
-                -- that is still nil. A dead button, which is the complaint
-                -- that started #17 - and nothing on screen says so.
-                --
-                -- Range is NOT a trigger: PickTarget makes a second pass that
-                -- ignores range, so out-of-range members still return a unit.
-                -- Only an invalid one - dead, offline, gone - gives nil.
-                if btn == "LeftButton" then
-                    if not self._primary then
-                        self:SetAttribute("spell1", nil)
-                        return
-                    end
-                    -- Nobody valid clears the spell, so a click cannot fall
-                    -- back to casting on yourself.
-                    local unit = PickTarget(ms, df, self._groupMode)
-                    self:SetAttribute("spell1", unit and self._primary or nil)
-                    if unit then self:SetAttribute("unit1", unit) end
-                else
-                    if not self._secondary then
-                        self:SetAttribute("spell2", nil)
-                        return
-                    end
-                    local unit = PickTarget(ms, df, false)
-                    self:SetAttribute("spell2", unit and self._secondary or nil)
-                    if unit then self:SetAttribute("unit2", unit) end
-                end
-            end)
-
-            -- PostClick: re-arm, but only where there is still somewhere to
-            -- cast. Restoring the spell unconditionally put it back while
-            -- unit1 was still the build-time "player" fallback, so the next
-            -- click - the first one in combat, where PreClick cannot re-aim -
-            -- buffed yourself.
-            r:SetScript("PostClick", function(self, btn)
-                if InCombatLockdown() then return end
-                local df, ms = self._def, self._members
-                if not df or not ms then return end
-                local pUnit = self._primary   and PickTarget(ms, df, self._groupMode) or nil
-                local sUnit = self._secondary and PickTarget(ms, df, false) or nil
-                self:SetAttribute("spell1", pUnit and self._primary or nil)
-                self:SetAttribute("unit1",  pUnit or "player")
-                self:SetAttribute("spell2", sUnit and self._secondary or nil)
-                self:SetAttribute("unit2",  sUnit or "player")
-                ScheduleRefresh()
-            end)
-
-            -- Mouseover: open popover
-            do
-                local cm, cd = members, def
-                r:SetScript("OnEnter", function(self)
-                    UpdatePopover(self, cm, cd)
-                    ShowClickHint(self)
-                end)
-                -- The popover's own hide is handled by the polling ticker -
-                -- an OnLeave would fire on the way TO the popover. Dropping
-                -- the tooltip there is right either way.
-                r:SetScript("OnLeave", HideClickHint)
-            end
-
-            r:Show()
-            y = y - ROW_H - 1
-          end
-        end
-    end
-
-    y = y - 2
-
-    -- ── Position reagent footer (only if something to show) ──────────────
-    local showFooter = g_ShowCandle or g_ShowFeather
-    if showFooter then
-        g_Main.ftrLine:ClearAllPoints()
-        g_Main.ftrLine:SetPoint("TOPLEFT",  g_Main, "TOPLEFT",  ROW_X, y)
-        g_Main.ftrLine:SetPoint("TOPRIGHT", g_Main, "TOPRIGHT", -ROW_X, y)
-        g_Main.ftrLine:Show()
-        y = y - 2
-
-        local xOff = ROW_X + 2
-        if g_ShowCandle then
-            g_Main.candleBtn:ClearAllPoints()
-            g_Main.candleBtn:SetPoint("TOPLEFT", g_Main, "TOPLEFT", xOff, y)
-            -- Update tooltip item ID dynamically
-            g_Main.candleBtn._itemID = g_CandleID
-            xOff = xOff + g_Main.candleBtn:GetWidth() + 4
-        end
-        if g_ShowFeather then
-            g_Main.featherBtn:ClearAllPoints()
-            g_Main.featherBtn:SetPoint("TOPLEFT", g_Main, "TOPLEFT", xOff, y)
-        end
-
-        y = y - FTR_H
-        RefreshFooter()
-    else
-        g_Main.ftrLine:Hide()
-        g_Main.candleBtn:Hide()
-        g_Main.featherBtn:Hide()
-    end
-
-    g_Main:SetSize(FRAME_W, math.abs(y) + 2)
-
-    if not g_Moved and not g_Main:IsShown() then
-        g_Main:ClearAllPoints()
-        if PriestlyDB and PriestlyDB.pos then
-            local p = PriestlyDB.pos
-            g_Main:SetPoint(p.point or "CENTER", UIParent, p.relPoint or "CENTER", p.x or 300, p.y or 50)
-            g_Moved = true
-            g_RestoreLog = string.format("applied saved %s/%s %.1f,%.1f",
-                tostring(p.point), tostring(p.relPoint), tonumber(p.x) or 0/0, tonumber(p.y) or 0/0)
-        else
-            g_Main:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
-            g_RestoreLog = "used the DEFAULT - PriestlyDB." ..
-                (PriestlyDB and "pos was nil" or "was nil")
-        end
-    else
-        -- Counted, not recorded over the decision above.
-        g_RestoreSkips = g_RestoreSkips + 1
-    end
-
-    g_Main:Show()
-    g_Vis = true
-    SetConfig("visible", true)
-
-    -- A rebuild rewires the rows but not an open popover: its member list and
-    -- its secure attributes still name the previous roster's unit tokens. The
-    -- popover only refreshes on a row's OnEnter, which does not fire again if
-    -- the mouse is already resting on that row while the raid reshuffles - so
-    -- it would keep showing one player's buff state under another's name, and
-    -- a click would cast at the stale token.
-    if g_Pop and g_Pop:IsShown() and not g_Pop._combatHidden then
-        local anchor = g_Pop._anchorRow
-        if anchor and anchor._active and anchor._members and anchor._def then
-            UpdatePopover(anchor, anchor._members, anchor._def)
-        else
-            g_Pop:Hide()    -- the row it belonged to is gone
-        end
+    elseif GetNumGroupMembers() == 0 then
+        ui:Close()
     end
 end
 
--- ─── Throttled roster/aura refresh ───────────────────────────────────────────
-
-ScheduleRefresh = function()
-    if g_RefQ or not g_Vis then return end
-    g_RefQ = true
-    After(0.35, function()
-        g_RefQ = false
-        if not g_Vis then return end
-        if InCombatLockdown() then
-            RefreshTimers()  -- visual only, no SetAttribute
-        else
-            UpdateUI()
-        end
-    end)
+-- Apply frame alpha from config
+function Priestly_ApplyAlpha()
+    ui:ApplyAppearance()
 end
 
 -- ─── Events ──────────────────────────────────────────────────────────────────
@@ -1473,7 +329,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- before anything reads DEFS.
         RefreshSpellData()
 
-        InitUI()
+        ui:Init()
 
         -- Apply configured opacity
         Priestly_ApplyAlpha()
@@ -1485,7 +341,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         if g_IsPriest and PriestlyDB.visible ~= false
             and (g_LastGroupSize > 0 or Priestly_ShowSolo())
         then
-            After(0.6, UpdateUI)
+            ui:Open(0.6)
         end
 
         DEFAULT_CHAT_FRAME:AddMessage(
@@ -1499,15 +355,15 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- A ready check is a good moment to rebuff, but not a reason to
         -- override someone who closed the window.
         if g_IsPriest and (not PriestlyDB or PriestlyDB.visible ~= false) then
-            After(0.4, UpdateUI)
+            ui:Open(0.4)
         end
 
     elseif event == "UNIT_AURA" then
-        if AuraEventIsRelevant(arg1, arg2) then ScheduleRefresh() end
+        if AuraEventIsRelevant(arg1, arg2) then ui:ScheduleRefresh() end
 
     elseif event == "UNIT_PET" then
         -- Pet summoned or dismissed: rebuild to add/remove pet rows
-        ScheduleRefresh()
+        ui:ScheduleRefresh()
 
     elseif event == "RAID_ROSTER_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
         PruneAuraCache()
@@ -1518,49 +374,35 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         local joined = (g_LastGroupSize == 0 and n > 0)
         g_LastGroupSize = n
         if joined then SetConfig("visible", true) end
-        if n > 0 and not g_Vis and g_IsPriest
+        if n > 0 and not ui:IsVisible() and g_IsPriest
             and (joined or not PriestlyDB or PriestlyDB.visible ~= false)
         then
-            After(0.5, UpdateUI)
+            ui:Open(0.5)
         elseif n == 0 and not Priestly_ShowSolo() then
-            CloseUI()  -- auto-close, not manual (unless solo mode)
-        elseif n == 0 and Priestly_ShowSolo() then
-            ScheduleRefresh()  -- still solo, just refresh
+            ui:Close()  -- auto-close, not manual (unless solo mode)
         else
-            ScheduleRefresh()
+            ui:ScheduleRefresh()  -- including staying solo: just refresh
         end
 
     elseif event == "PLAYER_TALENT_UPDATE" or event == "SPELLS_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
         -- Newly learned spells change which rows exist and how they cast.
         RefreshSpellData()
-        if g_Main and g_Main.specIcon then
-            g_Main.specIcon:SetTexture(GetSpecIcon())
-        end
-        RefreshFooterState()
-        -- Full rebuild: available buffs may change on respec/dual spec swap
-        if g_Vis and not InCombatLockdown() then
-            After(0.3, UpdateUI)
-        elseif g_Vis then
-            RefreshFooter()
+        ui:ApplyAppearance()      -- the spec icon
+        -- Full rebuild: available buffs and reagents may change on a respec.
+        -- In combat only the counts can move; the rebuild follows the fight.
+        if ui:IsVisible() and not InCombatLockdown() then
+            ui:Open(0.3)
+        elseif ui:IsVisible() then
+            ui:RefreshFooter()
         end
 
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Combat ended: properly hide anything we only parked offscreen
-        CombatUnpark(g_Pop)
-        if CombatUnpark(g_Main) then
-            -- Parking cleared its anchors; let the next UpdateUI re-apply the
-            -- saved position instead of leaving the frame unanchored.
-            g_Moved = false
-        end
-        -- Combat ended: full rebuild so SetAttribute calls actually work, and
-        -- honour any show that was asked for while we were locked down.
-        if g_Vis or g_PendingShow then
-            g_PendingShow = false
-            After(0.2, UpdateUI)
-        end
+        -- Unpark, then the rebuild combat deferred - including a show asked
+        -- for while locked down.
+        ui:OnCombatEnd()
 
     elseif event == "BAG_UPDATE" then
-        if g_Vis then RefreshFooter() end
+        if ui:IsVisible() then ui:RefreshFooter() end
     end
 end)
 
@@ -1610,13 +452,14 @@ SlashCmdList["PRIESTLY"] = function(msg)
         if Priestly_OpenConfig then Priestly_OpenConfig() end
 
     elseif cmd == "reset" then
-        SetConfig("pos", nil)
-        g_Moved = false
-        if g_Main then
-            g_Main:ClearAllPoints()
-            g_Main:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
+        if ui:ResetPosition() then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Window position reset.")
+        else
+            -- Moving the window in combat could bring parked, invisible
+            -- buttons back on screen, so the move waits for the fight to end.
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cff99ddff[Priestly]|r Window position reset - it moves when combat ends.")
         end
-        DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Window position reset.")
         -- Reset deliberately ignores the lock, so a locked window dragged
         -- somewhere unreachable can always be recovered. The trap is what
         -- comes next: the window is now centred AND still locked, so dragging
@@ -1635,14 +478,16 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  saved: " .. (p and string.format(
             "%s/%s  %.1f, %.1f", tostring(p.point), tostring(p.relPoint),
             tonumber(p.x) or 0/0, tonumber(p.y) or 0/0) or "|cffff6666nothing saved|r"))
-        DEFAULT_CHAT_FRAME:AddMessage("  last restore: " .. tostring(g_RestoreLog))
-        if g_RestoreSkips > 0 then
+        local restore = ui:RestoreInfo()
+        DEFAULT_CHAT_FRAME:AddMessage("  last restore: " .. tostring(restore.log))
+        if restore.skips > 0 then
             DEFAULT_CHAT_FRAME:AddMessage(string.format(
                 "    (%d refresh%s since, which leave the position alone)",
-                g_RestoreSkips, g_RestoreSkips == 1 and "" or "es"))
+                restore.skips, restore.skips == 1 and "" or "es"))
         end
-        if g_Main then
-            local pt, rel, relPt, x, y = g_Main:GetPoint()
+        local main = ui:MainFrame()
+        if main then
+            local pt, rel, relPt, x, y = main:GetPoint()
             DEFAULT_CHAT_FRAME:AddMessage(string.format(
                 "  frame now: %s/%s  %.1f, %.1f  (relativeTo %s)",
                 tostring(pt), tostring(relPt), tonumber(x) or 0/0, tonumber(y) or 0/0,
@@ -1654,18 +499,18 @@ SlashCmdList["PRIESTLY"] = function(msg)
             tostring(Priestly_FrameLocked and Priestly_FrameLocked() or false))
 
     elseif cmd == "hide" or cmd == "close" then
-        CloseUI(true)
+        ui:Close(true)
 
     elseif cmd == "show" then
         SetConfig("visible", true)
-        UpdateUI()
+        ui:Update()
 
     else
-        if g_Vis then
-            CloseUI(true)
+        if ui:IsVisible() then
+            ui:Close(true)
         else
             SetConfig("visible", true)
-            UpdateUI()
+            ui:Update()
         end
     end
 end
@@ -1683,31 +528,40 @@ Priestly._test = {
     BuffRem          = BuffRem,
     PickTarget       = PickTarget,
     DurationFor      = DurationFor,
-    PopoverSide      = PopoverSide,
-    ShowClickHint    = ShowClickHint,
-    GroupLabel       = GroupLabel,
     PruneAuraCache   = PruneAuraCache,
     IsValidTarget    = IsValidTarget,
-    TimerColor       = TimerColor,
-    Pct              = Pct,
-    FmtTime          = FmtTime,
     GetPrayerRank    = GetPrayerRank,
     GetCandleInfo    = GetCandleInfo,
+    FooterItems      = FooterItems,
     AuraEventIsRelevant = AuraEventIsRelevant,
     auraCache        = function() return engine.cache end,
     engine           = engine,
+    ui               = ui,
     MembersFor       = MembersFor,
     states           = { HAS = ST_HAS, MISSING = ST_MISSING, UNKNOWN = ST_UNKNOWN },
+    -- The library's formatting helpers, under the names the tests use.
+    TimerColor       = function(...) return Priestly.UI.TimerColor(...) end,
+    Pct              = function(...) return Priestly.UI.Pct(...) end,
+    FmtTime          = function(...) return Priestly.UI.FmtTime(...) end,
     -- Whole-UI seam: tests drive a rebuild and then read the secure
     -- attributes off the rows to see what a click would actually cast.
-    UpdateUI         = function() return UpdateUI() end,
-    UpdatePopover    = function(...) return UpdatePopover(...) end,
-    rows             = function() return g_Rows end,
-    popRows          = function() return g_PRows end,
-    mainFrame        = function() return g_Main end,
-    popFrame         = function() return g_Pop end,
+    UpdateUI         = function() return ui:Update() end,
+    UpdatePopover    = function(...) return ui:UpdatePopover(...) end,
+    PopoverSide      = function(row) return ui:PopoverSide(row) end,
+    ShowClickHint    = function(row) return ui:ShowClickHint(row) end,
+    GroupLabel       = function(gNum) return ui:GroupLabel(gNum) end,
+    rows             = function() return ui.rows end,
+    popRows          = function() return ui.popRows end,
+    mainFrame        = function() return ui.main end,
+    popFrame         = function() return ui.pop end,
     eventFrame       = function() return evtFrame end,
-    CloseUI          = function(...) return CloseUI(...) end,
-    RefreshTimers    = function() return RefreshTimers() end,
-    RefreshFooter    = function() return RefreshFooter() end,
+    CloseUI          = function(...) return ui:Close(...) end,
+    RefreshTimers    = function() return ui:RefreshTimers() end,
+    RefreshFooter    = function() return ui:RefreshFooter() end,
+    -- The footer's buttons are anonymous; find one by the item it shows.
+    footerButton     = function(itemID)
+        for _, btn in ipairs(ui.footerBtns) do
+            if btn._itemID == itemID and btn:IsShown() then return btn end
+        end
+    end,
 }

@@ -59,7 +59,9 @@ for name, file in pairs(used) do
             file .. " calls API." .. name .. ", so the library must provide it")
     end
 end
-H.check(count >= 10, "the scan found Priestly's API calls: " .. count)
+-- Most API calls moved into the library with the engine and the window, so
+-- this is only a floor proving the scan reads the files at all.
+H.check(count >= 5, "the scan found Priestly's API calls: " .. count)
 
 ------------------------------------------------------------
 -- No library function is copied into a local

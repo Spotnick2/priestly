@@ -39,13 +39,19 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 - `PriestlyCompat.lua` — the bridge to the shared library: exposes its compat layer as
   `Priestly.API` and reports rejected events in chat. No API code lives here any more.
 - `PriestlyConfig.lua` — options panel, defaults, instance database, exported config helpers.
-- `Priestly.lua` — main UI, secure buttons, event handling, slash commands, and `DEFS`. The buff
-  logic itself (aura cache, roster, stats, targeting, click mapping, `UNIT_AURA` filtering) is
-  LibGroupBuffs' `Engine.lua`: Priestly builds one engine with `DEFS`, `MAX_MEMBERS` as the pet
-  bucket size, its config accessors, the Shadow Protection mode as `isVisible` and its duration
-  store, and calls it through thin locals (`BuffRem`, `GroupStat`, `PickTarget`, ...) that look the
-  method up at call time. A change to how buffs are read, counted or targeted belongs in the
-  library.
+- `Priestly.lua` — `DEFS`, the reagent footer items, the spec icon, event handling, slash commands
+  and the test seam. Everything else is LibGroupBuffs:
+  - `Engine.lua` is the buff logic (aura cache, roster, stats, targeting, click mapping,
+    `UNIT_AURA` filtering). Priestly builds one engine with `DEFS`, `MAX_MEMBERS` as the pet
+    bucket size, its config accessors, the Shadow Protection mode as `isVisible` and its duration
+    store, and calls it through thin locals (`BuffRem`, `GroupStat`, `PickTarget`, ...).
+  - `UI.lua` is the window (rows, popover, secure buttons, combat parking, dragging, ticker).
+    Priestly builds one `ui` with its title, spec icon (`appearance`), `FooterItems()` and config
+    accessors, and its events and slash commands call `ui:Update()`, `ui:Open(delay)`,
+    `ui:Close(manual)`, `ui:ScheduleRefresh()`, `ui:OnCombatEnd()`, `ui:ResetPosition()` and so on.
+    Priestly decides WHEN the window opens (class, groups, the saved `visible`); the library decides
+    how it behaves.
+  A change to how buffs are read, targeted or drawn belongs in the library.
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
 - `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, library included.
 - `Tools/PriestlyProbe/` — throwaway in-game API probe. Delete once `docs/FOREVER-PROBE.md` is
@@ -125,8 +131,8 @@ empty today; it is the one place the SavedVariables fix, or a migration, will la
 looks it up at call time, so replacing it works. It fires once per instance during Select All, so
 anything put in it must be cheap.
 
-`UpdateUI` runs each buff's members through `MembersFor` once and uses that list for the row's
-stats, targets, `_members` and popover — keep it that way, so a host filter can never make them
+The library's `ui:Update()` runs each buff's members through `MembersFor` once and uses that list
+for the row's stats, targets, `_members` and popover, so a host filter can never make them
 disagree.
 
 `Priestly.lua` exposes: `Priestly_ScheduleRefresh`, `Priestly_ForceRebuild`,
@@ -240,9 +246,12 @@ not by buff id: the single and group forms of one buff share an id and do not sh
 Combat lockdown matters. Any code that changes secure frame attributes, shows or hides a frame that
 parents secure buttons, or rebuilds secure UI must guard with `InCombatLockdown()` and defer.
 
-Both `g_Main` and `g_Pop` parent secure buttons, so both use `CombatPark()` (move offscreen at
-alpha 0) instead of `Hide()` during combat, and are properly hidden again on
-`PLAYER_REGEN_ENABLED`. Unparking clears `g_Moved` so the saved position is re-applied.
+The window is LibGroupBuffs' `UI.lua`, which owns these rules: both its frames parent secure
+buttons, so both are parked offscreen (clamp dropped first) instead of `Hide()`n in combat, and
+hidden properly by `ui:OnCombatEnd()`, which Priestly calls on `PLAYER_REGEN_ENABLED`. Unparking
+lets the saved position be re-applied. Anything that opens the window later goes through
+`ui:Open(delay)`, so a close always beats an older queued show. The frames are anonymous — look
+them up through the `ui` object (`ui.main`, `ui.rows`, `ui.popRows`, `ui.footerBtns`), not `_G`.
 
 **Known limitation, do not try to "fix" it.** Row click targets are unit tokens, wired during
 `UpdateUI`. If the roster changes during combat, `party2`/`raid3` can be handed to a different
