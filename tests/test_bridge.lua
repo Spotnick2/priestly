@@ -191,6 +191,28 @@ loaded, err, chat = loadWithout(r4Shaped)
 H.check(not loaded, "a library without Engine is refused")
 H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
 
+-- Engine.lua threw after defining Engine.New but before its methods, so its
+-- last line - the engineMinor marker - never ran. Accepting it would fail
+-- later as "attempt to call method 'GroupStat' (a nil value)" mid-refresh.
+local halfEngine = setmetatable({}, { __call = function()
+    return { API = { RegisterEventsReported = function() return true end,
+                     ClickEdges = function() end },
+             Settings = { New = function() end }, settingsMinor = 5,
+             Engine = { New = function() end } }
+end })
+loaded, err, chat = loadWithout(halfEngine)
+H.check(not loaded, "an Engine.lua that did not load to the end is refused")
+H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
+
+local halfSettings = setmetatable({}, { __call = function()
+    return { API = { RegisterEventsReported = function() return true end,
+                     ClickEdges = function() end },
+             Settings = { New = function() end },
+             Engine = { New = function() end }, engineMinor = 5 }
+end })
+loaded, err, chat = loadWithout(halfSettings)
+H.check(not loaded, "and so is a Settings.lua that did not")
+
 -- The other two files stop before building anything, so a missing library is
 -- one message rather than a cascade of errors and half-made frames.
 Priestly = {}

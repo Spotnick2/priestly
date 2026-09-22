@@ -20,7 +20,10 @@ Priestly = Priestly or {}
 -- is caught here rather than as a nil call somewhere far from the cause.
 -- RegisterEventsReported arrived in r3, Settings in r4 and Engine in r5, so an
 -- older copy is refused too - here, with a message, rather than as a nil call
--- later.
+-- later. Settings.lua and Engine.lua each set their marker (settingsMinor,
+-- engineMinor) on their LAST line, so a file that threw partway is caught
+-- here too, not as a missing method in the middle of a refresh: New is
+-- defined near the top of each file, the methods after it.
 local lib = LibStub and LibStub("LibGroupBuffs-1.0", true)
 local problem
 if not lib then
@@ -28,7 +31,9 @@ if not lib then
 elseif not (type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
             and type(lib.API.ClickEdges) == "function"
             and type(lib.Settings) == "table" and type(lib.Settings.New) == "function"
-            and type(lib.Engine) == "table" and type(lib.Engine.New) == "function") then
+            and lib.settingsMinor ~= nil
+            and type(lib.Engine) == "table" and type(lib.Engine.New) == "function"
+            and lib.engineMinor ~= nil) then
     problem = "the LibGroupBuffs-1.0 library failed to load completely"
 end
 
