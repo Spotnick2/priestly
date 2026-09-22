@@ -186,6 +186,22 @@ So the group-buff concept is present in this client's spell database — the Pra
 learnable at the current cap. Building the rows from what the player knows, and switching the click
 mapping over the moment a Prayer is learned, is the right shape.
 
+**The Prayers buff the whole raid here, not one subgroup.** The in-game tooltip for Prayer of
+Fortitude (level 60, 3400 mana, Sacred Candle, 40 yd) reads: *"Power infuses all party and raid
+members, increasing their Stamina by 70 for 1 hour."* On Vanilla and TBC a Prayer covered only the
+party of whoever it was cast on, which is the assumption behind per-subgroup rows, the
+`groupMode` target pick and the click hint that names "group 3" or "your party". Read from the
+tooltip at the current cap; **not castable yet**, so the behaviour is unverified. When the cap
+reaches 60:
+
+- the hint wording is wrong as it stands - it would promise a subgroup where the spell covers
+  everyone in range
+- which member a Prayer is aimed at stops mattering, except for range: 40 yards, so anybody out of
+  it is missed and the row's count is what tells you
+- the rows stay useful for what is still true - who is missing it, who is out of range, whether a
+  candle is worth spending - but the addon is worth much less at 60 than at 40 with single-target
+  buffs only
+
 **`C_Spell.GetSpellInfo(name)` only resolves spells the player KNOWS.** By ID it always works; by
 name it returned nothing for Divine Spirit, Shadow Protection and all three Prayers, while working
 for Power Word: Fortitude. This is why `RefreshSpellData` resolves names *from IDs* — the reverse
