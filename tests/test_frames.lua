@@ -286,6 +286,35 @@ hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
 H.check(mainFrame:IsShown(), "clicking X in combat cannot hide it either")
 H.check(hideSaid:find("leave combat"), "and says the same thing: " .. hideSaid)
 
+-- The group empties mid-fight, so Priestly closes the window itself - but the
+-- client refuses to hide it, so it is still there. Clicking X on a window you
+-- can still see has to be answered, even though it is already closed as far
+-- as the addon is concerned.
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+WoW.flushTimers()
+T.UpdateUI()
+WoW.inCombat = true
+WoW.RemoveUnit("party1")
+WoW.groupMembers = 0
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+WoW.flushTimers()
+H.check(mainFrame:IsShown(), "the window is still on screen during the fight")
+H.check(not T.ui:IsVisible(), "though Priestly has closed it")
+hideAt = #WoW.messages
+runScript(mainFrame.closeBtn, "OnClick")
+hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
+H.check(hideSaid:find("leave combat"),
+    "clicking X on it is still answered: " .. hideSaid)
+
+-- Put the group back for what follows.
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+WoW.flushTimers()
+WoW.SetUnit("party1", { name = "Zoruka Mortalis", guid = "P1", class = "WARRIOR" })
+WoW.groupMembers = 2
+WoW.inCombat = true
+
 -- Out of combat, neither says anything.
 WoW.inCombat = false
 WoW.dispatch("PLAYER_REGEN_ENABLED")
