@@ -478,4 +478,42 @@ H.eq(T.GroupLabel(1), "your party", "and a party is a party")
 H.eq(T.GroupLabel(99), nil, "the pet bucket names no group")
 H.eq(T.GroupLabel(103), nil, "nor do the later pet buckets")
 
+------------------------------------------------------------
+-- In combat the hint lists who still needs the buff
+--
+-- The popover cannot open then - it parents secure buttons - so this is the
+-- only way to see who is missing it mid-fight. Under real secrecy, which is
+-- the only in-combat state this client has: every aura read is refused, so
+-- the list is what was last seen and says so.
+------------------------------------------------------------
+
+rows = setup({ "FORT_SINGLE" })
+WoW.SetAura("player", "Power Word: Fortitude", 3600, 1500)
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+
+H.secrecy(true)
+WoW.clearTooltip()
+T.ShowClickHint(row)
+local combatHint = WoW.tooltipText()
+H.check(combatHint:find("Needs it, when last readable"),
+    "the hint lists them in combat, as last known: " .. combatHint)
+-- The list only, not the click lines: in combat those name whoever the button
+-- is still wired to, which is deliberate.
+local needsList = combatHint:match("[Nn]eeds it[^:]*:(.*)$") or ""
+-- Neither was ever seen buffed, and no aura can be read now, so they are
+-- unreadable rather than confidently missing - the same distinction the rows
+-- and the popover make.
+H.check(needsList:find("Sten Thornbeard") and needsList:find("?", 1, true),
+    "naming who might need Fortitude: " .. needsList)
+H.check(not needsList:find("Karuzo Elegia", 1, true),
+    "and leaving out the one who has it: " .. needsList)
+H.check(needsList:find("Mirel Dawnsong"), "while naming the rest: " .. needsList)
+H.secrecy(false)
+
+WoW.clearTooltip()
+T.ShowClickHint(row)
+H.check(not WoW.tooltipText():find("Needs it"),
+    "out of combat the popover shows it instead: " .. WoW.tooltipText())
+
 H.done("test_clicks")
