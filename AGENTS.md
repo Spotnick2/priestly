@@ -45,7 +45,8 @@ There is no build system, compiler or package manager. The BigWigs packager hand
     `UNIT_AURA` filtering). Priestly builds one engine with `DEFS`, `MAX_MEMBERS` as the pet
     bucket size, its config accessors, the Shadow Protection mode as `isVisible` and its duration
     store, and calls it through thin locals (`BuffRem`, `GroupStat`, `PickTarget`, ...).
-  - `UI.lua` is the window (rows, popover, secure buttons, combat parking, dragging, ticker).
+  - `UI.lua` is the window (rows, popover, secure buttons, dragging, ticker, and what combat
+    defers).
     Priestly builds one `ui` with its title, spec icon (`appearance`), `FooterItems()` and config
     accessors, and its events and slash commands call `ui:Update()`, `ui:Open(delay)`,
     `ui:Close(manual)`, `ui:ScheduleRefresh()`, `ui:OnCombatEnd()`, `ui:ResetPosition()` and so on.

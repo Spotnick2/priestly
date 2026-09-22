@@ -267,11 +267,11 @@ H.check(pcall(WoW.dispatch, "UNIT_AURA", "player", WoW.SecretUpdateInfo()),
 T.UpdateUI()
 local mainFrame = T.mainFrame()
 WoW.inCombat = true
-before = #WoW.messages
+local hideAt = #WoW.messages
 SlashCmdList["PRIESTLY"]("hide")
-said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+local hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
 H.check(mainFrame:IsShown(), "the window is still up during the fight")
-H.check(said:find("leave combat"), "and the player is told when it goes: " .. said)
+H.check(hideSaid:find("leave combat"), "and the player is told when it goes: " .. hideSaid)
 H.eq(PriestlyDB.visible, false, "the preference is saved straight away")
 WoW.inCombat = false
 WoW.dispatch("PLAYER_REGEN_ENABLED")

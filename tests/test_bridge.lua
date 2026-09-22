@@ -225,20 +225,28 @@ local function shaped(minor, markers)
     for k, v in pairs(markers) do l[k] = v end
     return setmetatable({}, { __call = function() return l, minor end })
 end
-local ALL6 = { compatMinor = 6, settingsMinor = 6, engineMinor = 6, uiMinor = 6 }
-loaded = loadWithout(shaped(6, ALL6))
+local ALL7 = { compatMinor = 7, settingsMinor = 7, engineMinor = 7, uiMinor = 7 }
+loaded = loadWithout(shaped(7, ALL7))
 H.check(loaded, "a library whose every marker equals its MINOR is accepted")
+
+-- A complete, self-consistent copy that is simply too old. ui:Close() gained
+-- its return value in r7, and a return value cannot be feature-detected: on r6
+-- `not nil` is true, so every close would claim to be waiting for combat.
+loaded, err, chat = loadWithout(shaped(6,
+    { compatMinor = 6, settingsMinor = 6, engineMinor = 6, uiMinor = 6 }))
+H.check(not loaded, "a complete library older than the one this build needs is refused")
+H.check(chat:find("completely", 1, true), "with the reinstall message: " .. chat)
 
 -- Another addon loaded r7 first, and its UI.lua threw partway: LibStub says 7,
 -- but uiMinor is still the r6 copy's, over a half-replaced UI. Present is not
 -- enough - it has to be the ACTIVE copy's.
-loaded, err, chat = loadWithout(shaped(7,
-    { compatMinor = 7, settingsMinor = 7, engineMinor = 7, uiMinor = 6 }))
+loaded, err, chat = loadWithout(shaped(8,
+    { compatMinor = 8, settingsMinor = 8, engineMinor = 8, uiMinor = 7 }))
 H.check(not loaded, "a marker left by an older copy is refused")
 H.check(chat:find("completely", 1, true), "as a library that failed to load completely: " .. chat)
-loaded = loadWithout(shaped(7, { compatMinor = 6, settingsMinor = 7, engineMinor = 7, uiMinor = 7 }))
+loaded = loadWithout(shaped(8, { compatMinor = 7, settingsMinor = 8, engineMinor = 8, uiMinor = 8 }))
 H.check(not loaded, "including Compat.lua's own marker")
-loaded = loadWithout(shaped(6, { settingsMinor = 6, engineMinor = 6, uiMinor = 6 }))
+loaded = loadWithout(shaped(7, { settingsMinor = 7, engineMinor = 7, uiMinor = 7 }))
 H.check(not loaded, "and a Compat.lua that never reached its last line")
 
 -- The other two files stop before building anything, so a missing library is
