@@ -33,6 +33,7 @@ H.check(lib ~= nil, "LibGroupBuffs-1.0 is loaded")
 H.check(API == lib.API, "Priestly.API is the library's API table itself")
 H.check(Priestly.Settings == lib.Settings, "and Priestly.Settings its Settings")
 H.check(Priestly.Engine == lib.Engine, "and Priestly.Engine its Engine")
+H.check(Priestly.UI == lib.UI, "and Priestly.UI its UI")
 
 ------------------------------------------------------------
 -- Every API function Priestly calls exists in the library
@@ -59,7 +60,9 @@ for name, file in pairs(used) do
             file .. " calls API." .. name .. ", so the library must provide it")
     end
 end
-H.check(count >= 10, "the scan found Priestly's API calls: " .. count)
+-- Most API calls moved into the library with the engine and the window, so
+-- this is only a floor proving the scan reads the files at all.
+H.check(count >= 5, "the scan found Priestly's API calls: " .. count)
 
 ------------------------------------------------------------
 -- No library function is copied into a local
@@ -212,6 +215,31 @@ local halfSettings = setmetatable({}, { __call = function()
 end })
 loaded, err, chat = loadWithout(halfSettings)
 H.check(not loaded, "and so is a Settings.lua that did not")
+
+-- A complete library, as LibStub reports it: its markers equal its MINOR.
+local function shaped(minor, markers)
+    local l = { API = { RegisterEventsReported = function() return true end,
+                        ClickEdges = function() end },
+                Settings = { New = function() end }, Engine = { New = function() end },
+                UI = { New = function() end } }
+    for k, v in pairs(markers) do l[k] = v end
+    return setmetatable({}, { __call = function() return l, minor end })
+end
+local ALL6 = { compatMinor = 6, settingsMinor = 6, engineMinor = 6, uiMinor = 6 }
+loaded = loadWithout(shaped(6, ALL6))
+H.check(loaded, "a library whose every marker equals its MINOR is accepted")
+
+-- Another addon loaded r7 first, and its UI.lua threw partway: LibStub says 7,
+-- but uiMinor is still the r6 copy's, over a half-replaced UI. Present is not
+-- enough - it has to be the ACTIVE copy's.
+loaded, err, chat = loadWithout(shaped(7,
+    { compatMinor = 7, settingsMinor = 7, engineMinor = 7, uiMinor = 6 }))
+H.check(not loaded, "a marker left by an older copy is refused")
+H.check(chat:find("completely", 1, true), "as a library that failed to load completely: " .. chat)
+loaded = loadWithout(shaped(7, { compatMinor = 6, settingsMinor = 7, engineMinor = 7, uiMinor = 7 }))
+H.check(not loaded, "including Compat.lua's own marker")
+loaded = loadWithout(shaped(6, { settingsMinor = 6, engineMinor = 6, uiMinor = 6 }))
+H.check(not loaded, "and a Compat.lua that never reached its last line")
 
 -- The other two files stop before building anything, so a missing library is
 -- one message rather than a cascade of errors and half-made frames.

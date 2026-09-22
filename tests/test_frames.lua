@@ -118,13 +118,10 @@ H.check(pcall(T.RefreshTimers), "RefreshTimers runs")
 H.check(pcall(T.RefreshFooter), "RefreshFooter runs")
 
 -- The reagent buttons only exist once the priest knows the spells that need
--- them, so drive them directly.
-for _, name in ipairs({ "candleBtn", "featherBtn" }) do
-    local btn = main[name]
-    if btn then
-        runScript(btn, "OnEnter")
-        runScript(btn, "OnLeave")
-    end
+-- them (checked further down); drive whichever are built.
+for _, btn in ipairs(T.ui.footerBtns) do
+    runScript(btn, "OnEnter")
+    runScript(btn, "OnLeave")
 end
 
 ------------------------------------------------------------
@@ -451,9 +448,16 @@ H.check(said:find("refresh"), "while saying refreshes have happened since: " .. 
 -- client does not have was invisible to the whole suite. Run them.
 ------------------------------------------------------------
 
-local candle = _G["PriestlyCandleBtn"]
-local feather = _G["PriestlyFeatherBtn"]
-H.check(candle ~= nil and feather ~= nil, "the reagent buttons exist")
+-- The buttons are built from Priestly's footer items when there is something
+-- to show, so teach the spells that need them: a rank 2 Prayer (Sacred
+-- Candle) and Levitate (Light Feather).
+WoW.Know(21562, "Prayer of Fortitude", "Rank 2")
+WoW.Know(1706, "Levitate")
+T.RefreshSpellData()
+T.UpdateUI()
+local candle = T.footerButton(17029)
+local feather = T.footerButton(17056)
+H.check(candle ~= nil and feather ~= nil, "the reagent buttons exist once the spells are known")
 
 WoW.clearTooltip()
 runScript(candle, "OnEnter")
