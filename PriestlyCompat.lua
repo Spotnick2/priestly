@@ -15,25 +15,28 @@
 
 Priestly = Priestly or {}
 
--- Is the library here, and did it load to the end? ClickEdges is the last
--- function Compat.lua defines, and Settings.lua, Engine.lua and UI.lua each set
--- a marker (settingsMinor, engineMinor, uiMinor) on their LAST line - their
--- New() sits near the top - so a file that threw partway is caught here rather
--- than as a missing method in the middle of a refresh. An older copy is
--- refused the same way: RegisterEventsReported arrived in r3, Settings in r4,
--- Engine in r5 and UI in r6.
-local lib = LibStub and LibStub("LibGroupBuffs-1.0", true)
+-- Is the library here, and did the ACTIVE copy load to the end? Each runtime
+-- file (Compat, Settings, Engine, UI) sets a marker on its LAST line - their
+-- New() sits near the top - so a file that threw partway leaves its marker
+-- unset. The marker must EQUAL the active MINOR, not merely be set: several
+-- addons embed the library, and if a newer copy throws partway through UI.lua,
+-- the older copy's uiMinor and half its functions are still on the shared
+-- table. Checked here, with a message, rather than failing as a missing
+-- method in the middle of a refresh. The markers arrived with r6, so any older
+-- copy is refused the same way.
+local lib, minor
+if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
 local problem
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
-elseif not (type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
+elseif not (minor ~= nil
+            and lib.compatMinor == minor and lib.settingsMinor == minor
+            and lib.engineMinor == minor and lib.uiMinor == minor
+            and type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
             and type(lib.API.ClickEdges) == "function"
             and type(lib.Settings) == "table" and type(lib.Settings.New) == "function"
-            and lib.settingsMinor ~= nil
             and type(lib.Engine) == "table" and type(lib.Engine.New) == "function"
-            and lib.engineMinor ~= nil
-            and type(lib.UI) == "table" and type(lib.UI.New) == "function"
-            and lib.uiMinor ~= nil) then
+            and type(lib.UI) == "table" and type(lib.UI.New) == "function") then
     problem = "the LibGroupBuffs-1.0 library failed to load completely"
 end
 
