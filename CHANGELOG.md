@@ -1,5 +1,25 @@
 # Priestly Changelog
 
+## v2.0.5 - 2026-09-22
+
+### Known issue
+- **Your settings still reset every time you reload.** Unchanged from v2.0.4: a client bug that
+  affects every addon, reported to Blizzard. Priestly will say so in chat once a game update fixes
+  it.
+
+### Changed
+- **A group Prayer now lands on whoever needs it most.** Left-clicking a row casts the Prayer on a
+  member who is missing the buff, or on whoever has the least time left, instead of on the first
+  person in the list. A Prayer only covers its target's own party, and a raid's pet row mixes pets
+  from several parties - so on that row the first pet kept getting the Prayer while the others
+  stayed unbuffed. Nothing changes until your priest learns the Prayers.
+
+### Under the hood
+- **Priestly now runs on a shared library, LibGroupBuffs**, which the druid and mage versions
+  (Wildly and Magely) will use too. It comes inside Priestly's download, in its `Libs` folder -
+  there is nothing extra to install. If Priestly ever says in chat that it *cannot start*, that
+  folder is missing or damaged: reinstalling Priestly fixes it.
+
 ## v2.0.4 - 2026-09-21
 
 ### Known issue
