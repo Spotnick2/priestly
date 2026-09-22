@@ -32,6 +32,7 @@ local lib = LibStub("LibGroupBuffs-1.0")
 H.check(lib ~= nil, "LibGroupBuffs-1.0 is loaded")
 H.check(API == lib.API, "Priestly.API is the library's API table itself")
 H.check(Priestly.Settings == lib.Settings, "and Priestly.Settings its Settings")
+H.check(Priestly.Engine == lib.Engine, "and Priestly.Engine its Engine")
 
 ------------------------------------------------------------
 -- Every API function Priestly calls exists in the library
@@ -171,8 +172,8 @@ loaded, err, chat = loadWithout(halfLoaded)
 H.check(not loaded, "a library that failed to load completely is refused too")
 H.check(chat:find("completely", 1, true), "and reported as that, not as missing: " .. chat)
 
--- An older copy that loaded completely but predates Settings (r3): refused at
--- the door, not as a nil call when PriestlyConfig builds its settings.
+-- An older copy that loaded completely but predates Settings (r3) or Engine
+-- (r4): refused at the door, not as a nil call when Priestly builds them.
 local r3Shaped = setmetatable({}, { __call = function()
     return { API = { RegisterEventsReported = function() return true end,
                      ClickEdges = function() end } }
@@ -180,6 +181,37 @@ end })
 loaded, err, chat = loadWithout(r3Shaped)
 H.check(not loaded, "a library without Settings is refused")
 H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
+
+local r4Shaped = setmetatable({}, { __call = function()
+    return { API = { RegisterEventsReported = function() return true end,
+                     ClickEdges = function() end },
+             Settings = { New = function() end } }
+end })
+loaded, err, chat = loadWithout(r4Shaped)
+H.check(not loaded, "a library without Engine is refused")
+H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
+
+-- Engine.lua threw after defining Engine.New but before its methods, so its
+-- last line - the engineMinor marker - never ran. Accepting it would fail
+-- later as "attempt to call method 'GroupStat' (a nil value)" mid-refresh.
+local halfEngine = setmetatable({}, { __call = function()
+    return { API = { RegisterEventsReported = function() return true end,
+                     ClickEdges = function() end },
+             Settings = { New = function() end }, settingsMinor = 5,
+             Engine = { New = function() end } }
+end })
+loaded, err, chat = loadWithout(halfEngine)
+H.check(not loaded, "an Engine.lua that did not load to the end is refused")
+H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
+
+local halfSettings = setmetatable({}, { __call = function()
+    return { API = { RegisterEventsReported = function() return true end,
+                     ClickEdges = function() end },
+             Settings = { New = function() end },
+             Engine = { New = function() end }, engineMinor = 5 }
+end })
+loaded, err, chat = loadWithout(halfSettings)
+H.check(not loaded, "and so is a Settings.lua that did not")
 
 -- The other two files stop before building anything, so a missing library is
 -- one message rather than a cascade of errors and half-made frames.
