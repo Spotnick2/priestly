@@ -208,14 +208,16 @@ this table as unconfirmed.
 
 What this changes, when the cap gets there:
 
-- **The reagent footer would show the wrong candle, silently.** `GetCandleInfo` derives the candle
+- **The reagent footer would show the wrong candle, silently** (issue #49). `GetCandleInfo`
+  derives the candle
   from `GetPrayerRank()`, which reads the rank of **Prayer of Fortitude only**. A priest at 56-59
   knows the Shadow Prayer (Sacred Candle) while Fortitude is still rank 1 (Holy Candle), so the
   footer counts Holy Candles, labels them "used by the group Prayers", plural, and says nothing
   about the Sacred Candles the Shadow Prayer is burning. Running out mid-raid with a full stack of
   the other candle on screen is the failure. The footer needs to be driven by the reagents of every
   Prayer the priest knows, not by one def's rank.
-- **Per-subgroup rows would offer the same cast eight times, at a candle each.** Rows are built per
+- **Per-subgroup rows would offer the same cast eight times, at a candle each** (issue #50). Rows
+  are built per
   subgroup per buff, and each one's left click casts the Prayer. If a Prayer covers the whole raid,
   a priest working down a frame of eight red rows can spend eight candles where one cast would have
   done. That is the strongest argument against keeping the per-subgroup model at 60, and it costs
