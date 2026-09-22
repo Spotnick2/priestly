@@ -262,8 +262,9 @@ H.check(T.AuraEventIsRelevant("player", secretInfo) == true,
 H.check(pcall(WoW.dispatch, "UNIT_AURA", "player", WoW.SecretUpdateInfo()),
     "UNIT_AURA with a secret payload is handled end to end")
 
--- /priestly hide during a fight cannot hide the window, so it says when it
--- will go. A command that looks ignored is worse than a slow one.
+-- Closing during a fight cannot hide the window, so Priestly says when it
+-- will go - for every way of closing it. A command that looks ignored is
+-- worse than a slow one.
 T.UpdateUI()
 local mainFrame = T.mainFrame()
 WoW.inCombat = true
@@ -273,6 +274,27 @@ local hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
 H.check(mainFrame:IsShown(), "the window is still up during the fight")
 H.check(hideSaid:find("leave combat"), "and the player is told when it goes: " .. hideSaid)
 H.eq(PriestlyDB.visible, false, "the preference is saved straight away")
+
+-- The X button, the same way: it is the library's, and it reaches Priestly
+-- through the onCloseDeferred callback rather than a return value.
+WoW.inCombat = false
+T.UpdateUI()
+WoW.inCombat = true
+hideAt = #WoW.messages
+runScript(mainFrame.closeBtn, "OnClick")
+hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
+H.check(mainFrame:IsShown(), "clicking X in combat cannot hide it either")
+H.check(hideSaid:find("leave combat"), "and says the same thing: " .. hideSaid)
+
+-- Out of combat, neither says anything.
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+WoW.flushTimers()
+T.UpdateUI()
+hideAt = #WoW.messages
+SlashCmdList["PRIESTLY"]("hide")
+H.eq(#WoW.messages, hideAt, "out of combat closing is silent")
+WoW.inCombat = true
 WoW.inCombat = false
 WoW.dispatch("PLAYER_REGEN_ENABLED")
 H.check(not mainFrame:IsShown(), "combat's end hides it")

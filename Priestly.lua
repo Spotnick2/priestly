@@ -261,6 +261,14 @@ local ui = Priestly.UI.New({
     end,
     setPos     = function(pos) SetConfig("pos", pos) end,
     setVisible = function(visible) SetConfig("visible", visible) end,
+    -- The window parents secure buttons, so in combat the client refuses to
+    -- hide it (docs/FOREVER-PROBE.md section 13). Every way of closing - the X
+    -- button, /priestly hide, the toggle - lands here, so none of them looks
+    -- ignored.
+    onCloseDeferred = function()
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "|cff99ddff[Priestly]|r The window closes when you leave combat.")
+    end,
 })
 
 -- ─── Global hooks for PriestlyConfig.lua ────────────────────────────────────
@@ -499,15 +507,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
             tostring(Priestly_FrameLocked and Priestly_FrameLocked() or false))
 
     elseif cmd == "hide" or cmd == "close" then
-        -- The window parents secure buttons, so in combat the client refuses
-        -- to hide it (docs/FOREVER-PROBE.md section 13). Saying so beats a
-        -- command that looks ignored - but only when there is a window on
-        -- screen to close, which is the same guard the toggle below uses.
-        local wasVisible = ui:IsVisible()
-        if not ui:Close(true) and wasVisible then
-            DEFAULT_CHAT_FRAME:AddMessage(
-                "|cff99ddff[Priestly]|r The window closes when you leave combat.")
-        end
+        ui:Close(true)      -- onCloseDeferred says so if combat refuses it
 
     elseif cmd == "show" then
         SetConfig("visible", true)
@@ -515,10 +515,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
 
     else
         if ui:IsVisible() then
-            if not ui:Close(true) then
-                DEFAULT_CHAT_FRAME:AddMessage(
-                    "|cff99ddff[Priestly]|r The window closes when you leave combat.")
-            end
+            ui:Close(true)
         else
             SetConfig("visible", true)
             ui:Update()
