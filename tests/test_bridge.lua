@@ -225,16 +225,16 @@ local function shaped(minor, markers)
     for k, v in pairs(markers) do l[k] = v end
     return setmetatable({}, { __call = function() return l, minor end })
 end
-local ALL9 = { compatMinor = 9, settingsMinor = 9, engineMinor = 9, uiMinor = 9 }
-loaded = loadWithout(shaped(9, ALL9))
+local ALL10 = { compatMinor = 10, settingsMinor = 10, engineMinor = 10, uiMinor = 10 }
+loaded = loadWithout(shaped(10, ALL10))
 H.check(loaded, "a library whose every marker equals its MINOR is accepted")
 
 -- A complete, self-consistent copy that is simply too old: one MINOR behind
 -- what this build needs (NEEDS_MINOR). Behaviour is what changes between
 -- them - r9 lists who still needs the buff while the popover cannot open -
 -- and behaviour cannot be feature-detected, so the floor is a version check.
-loaded, err, chat = loadWithout(shaped(8,
-    { compatMinor = 8, settingsMinor = 8, engineMinor = 8, uiMinor = 8 }))
+loaded, err, chat = loadWithout(shaped(9,
+    { compatMinor = 9, settingsMinor = 9, engineMinor = 9, uiMinor = 9 }))
 H.check(not loaded, "a complete library older than the one this build needs is refused")
 H.check(chat:find("completely", 1, true), "with the reinstall message: " .. chat)
 
