@@ -191,7 +191,10 @@ Fortitude (level 60, 3400 mana, Sacred Candle, 40 yd) reads: *"Power infuses all
 members, increasing their Stamina by 70 for 1 hour."* On Vanilla and TBC a Prayer covered only the
 party of whoever it was cast on, which is the assumption behind per-subgroup rows, the
 `groupMode` target pick and the click hint that names "group 3" or "your party". Read from the
-tooltip at the current cap; **not castable yet**, so the behaviour is unverified. When the cap
+tooltip at the current cap, and datamining so far agrees: the one-hour, raid-wide version.
+**Not castable yet**, so the behaviour is still unverified in play - and the duration is the part
+that needs no trust, because the first live aura teaches it (the 3600 seeds in `DEFS` only cover
+the gap until then). When the cap
 reaches 60:
 
 - the hint wording is wrong as it stands - it would promise a subgroup where the spell covers
