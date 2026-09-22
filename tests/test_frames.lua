@@ -77,13 +77,16 @@ WoW.mouseOver[row] = nil
 runScript(pop, "OnUpdate", 5.0)
 H.check(not pop:IsShown(), "and closes once the mouse leaves both")
 
--- ...and in combat it parks offscreen instead of hiding, because it parents
--- secure buttons.
+-- ...and in combat it stays: it parents secure buttons, so the client refuses
+-- to hide it. It goes when the fight ends (docs/FOREVER-PROBE.md section 13).
 runScript(row, "OnEnter")
 WoW.inCombat = true
 runScript(pop, "OnUpdate", 5.0)
-H.check(pop._combatHidden == true, "in combat it parks offscreen rather than hiding")
+H.check(pop:IsShown(), "in combat the popover stays up rather than being hidden")
 WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+H.check(not pop:IsShown(), "and closes when combat ends")
+WoW.flushTimers()
 
 ------------------------------------------------------------
 -- Row and popover-row handlers
@@ -155,9 +158,13 @@ H.eq(PriestlyDB.visible, false, "and records that as deliberate")
 H.check(pcall(T.CloseUI, true), "CloseUI out of combat")
 T.UpdateUI()
 WoW.inCombat = true
-H.check(pcall(T.CloseUI, false), "CloseUI in combat takes the park branch")
-H.check(main._combatHidden == true, "the main frame is parked, not hidden")
+T.UpdateUI()
+H.check(pcall(T.CloseUI, false), "CloseUI in combat")
+H.check(main:IsShown(), "the main frame stays up: the client refuses to hide it")
 WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+H.check(not main:IsShown(), "and it goes when combat ends")
+WoW.flushTimers()
 
 ------------------------------------------------------------
 -- Events
@@ -255,18 +262,20 @@ H.check(T.AuraEventIsRelevant("player", secretInfo) == true,
 H.check(pcall(WoW.dispatch, "UNIT_AURA", "player", WoW.SecretUpdateInfo()),
     "UNIT_AURA with a secret payload is handled end to end")
 
--- Both frames are clamped to the screen, so parking has to drop the clamp or
--- the frame is dragged back to the edge - an invisible, still-clickable row.
+-- /priestly hide during a fight cannot hide the window, so it says when it
+-- will go. A command that looks ignored is worse than a slow one.
 T.UpdateUI()
 local mainFrame = T.mainFrame()
-mainFrame._clamped = true
 WoW.inCombat = true
-T.CloseUI(false)
-H.check(mainFrame._combatHidden == true, "parked during combat")
-H.eq(mainFrame._clamped, false, "and the screen clamp is dropped so it really goes offscreen")
+before = #WoW.messages
+SlashCmdList["PRIESTLY"]("hide")
+said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+H.check(mainFrame:IsShown(), "the window is still up during the fight")
+H.check(said:find("leave combat"), "and the player is told when it goes: " .. said)
+H.eq(PriestlyDB.visible, false, "the preference is saved straight away")
 WoW.inCombat = false
 WoW.dispatch("PLAYER_REGEN_ENABLED")
-H.eq(mainFrame._clamped, true, "the clamp comes back when combat ends")
+H.check(not mainFrame:IsShown(), "combat's end hides it")
 WoW.flushTimers()
 
 -- A ready check is not a reason to reopen a window the user closed.

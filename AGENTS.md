@@ -246,12 +246,15 @@ not by buff id: the single and group forms of one buff share an id and do not sh
 Combat lockdown matters. Any code that changes secure frame attributes, shows or hides a frame that
 parents secure buttons, or rebuilds secure UI must guard with `InCombatLockdown()` and defer.
 
-The window is LibGroupBuffs' `UI.lua`, which owns these rules: both its frames parent secure
-buttons, so both are parked offscreen (clamp dropped first) instead of `Hide()`n in combat, and
-hidden properly by `ui:OnCombatEnd()`, which Priestly calls on `PLAYER_REGEN_ENABLED`. Unparking
-lets the saved position be re-applied. Anything that opens the window later goes through
-`ui:Open(delay)`, so a close always beats an older queued show. The frames are anonymous — look
-them up through the `ui` object (`ui.main`, `ui.rows`, `ui.popRows`, `ui.footerBtns`), not `_G`.
+The window is LibGroupBuffs' `UI.lua`, which owns these rules. **In combat it touches neither
+frame.** Both parent secure buttons, which makes them protected: hiding, moving, re-anchoring,
+unclamping or stopping a drag on one is refused (`ADDON_ACTION_BLOCKED`, silent, blamed on some
+other addon's taint - measured in game, see `docs/FOREVER-PROBE.md`). Closing, resetting the
+position and releasing a drag are remembered and done by `ui:OnCombatEnd()`, which Priestly calls
+on `PLAYER_REGEN_ENABLED`. `ui:Close()` returns false when it could not hide the window, and
+`/priestly hide` says so. Anything that opens the window later goes through `ui:Open(delay)`, so a
+close always beats an older queued show. The frames are anonymous — look them up through the `ui`
+object (`ui.main`, `ui.rows`, `ui.popRows`, `ui.footerBtns`), not `_G`.
 
 **Known limitation, do not try to "fix" it.** Row click targets are unit tokens, wired during
 `UpdateUI`. If the roster changes during combat, `party2`/`raid3` can be handed to a different

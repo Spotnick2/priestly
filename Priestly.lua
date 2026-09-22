@@ -499,7 +499,13 @@ SlashCmdList["PRIESTLY"] = function(msg)
             tostring(Priestly_FrameLocked and Priestly_FrameLocked() or false))
 
     elseif cmd == "hide" or cmd == "close" then
-        ui:Close(true)
+        -- The window parents secure buttons, so in combat the client refuses
+        -- to hide it (docs/FOREVER-PROBE.md section 13). Saying so beats a
+        -- command that looks ignored.
+        if not ui:Close(true) then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cff99ddff[Priestly]|r The window closes when you leave combat.")
+        end
 
     elseif cmd == "show" then
         SetConfig("visible", true)
@@ -507,7 +513,10 @@ SlashCmdList["PRIESTLY"] = function(msg)
 
     else
         if ui:IsVisible() then
-            ui:Close(true)
+            if not ui:Close(true) then
+                DEFAULT_CHAT_FRAME:AddMessage(
+                    "|cff99ddff[Priestly]|r The window closes when you leave combat.")
+            end
         else
             SetConfig("visible", true)
             ui:Update()

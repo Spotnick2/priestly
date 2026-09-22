@@ -29,9 +29,12 @@ local function setup(groupSize)
     WoW.groupMembers = groupSize or 2
 end
 
+-- Logically open, which is what the addon's policy is about. In combat the
+-- frame can still be on screen after a close, because the client refuses to
+-- hide a frame that parents secure buttons.
 local function shown()
     local main = T.mainFrame()
-    return main ~= nil and main:IsShown() and not main._combatHidden
+    return main ~= nil and main:IsShown() and T.ui:IsVisible()
 end
 
 local function settle()
