@@ -186,45 +186,55 @@ So the group-buff concept is present in this client's spell database — the Pra
 learnable at the current cap. Building the rows from what the player knows, and switching the click
 mapping over the moment a Prayer is learned, is the right shape.
 
-**The Prayers buff the whole raid here, not one subgroup.** The in-game tooltip for Prayer of
-Fortitude (level 60, 3400 mana, Sacred Candle, 40 yd) reads: *"Power infuses all party and raid
-members, increasing their Stamina by 70 for 1 hour."* On Vanilla and TBC a Prayer covered only the
-party of whoever it was cast on, which is the assumption behind per-subgroup rows, the
-`groupMode` target pick and the click hint that names "group 3" or "your party". Read from the
-tooltip at the current cap, and datamining so far agrees. **All three Prayers read that way, at
-every rank**, so it is the spell's design here rather than a rank-60 upgrade:
+**The Prayers buff the whole raid here, not one subgroup.** Every Prayer, at every rank, reads
+*"Power infuses all party and raid members"*. On Vanilla and TBC a Prayer covered only the party of
+whoever it was cast on, which is the assumption behind per-subgroup rows, the `groupMode` target
+pick and the click hint that names "group 3" or "your party". Read from the tooltips at the current
+cap, and datamining agrees so far. **Not castable yet** - the cap is 20 - so none of it is verified
+in play.
 
 | Prayer | Rank | Level | Mana | Reagent | Effect | Duration |
 |---|---|---|---|---|---|---|
-| Fortitude | 1 | 48 | 2600 | **Holy Candle** (17028) | +56 Stamina | 1 h |
-| Fortitude | 2 | 60 | 3400 | **Sacred Candle** (17029) | +70 Stamina | 1 h |
+| Fortitude | 1 | 48 | 2600 | Holy Candle (17028) | +56 Stamina | 1 h |
+| Fortitude | 2 | 60 | 3400 | Sacred Candle (17029) | +70 Stamina | 1 h |
 | Spirit | 1 | 60 | 1940 | Sacred Candle | +40 Spirit | 1 h |
 | Shadow Protection | 1 | 56 | 1300 | Sacred Candle | +60 Shadow resistance | **20 min** |
 
+**Unreconciled: the Shadow Prayer needs level 56 and a Sacred Candle, but section 6 records the
+client's own item database reporting the Sacred Candle as required level 60.** A level-56 spell
+cannot consume a level-60 reagent, so one of the two readings is wrong, and both were read from the
+client rather than inferred. Re-check both when a priest can reach 56; until then treat the 56 in
+this table as unconfirmed.
+
+What this changes, when the cap gets there:
+
+- **The reagent footer would show the wrong candle, silently.** `GetCandleInfo` derives the candle
+  from `GetPrayerRank()`, which reads the rank of **Prayer of Fortitude only**. A priest at 56-59
+  knows the Shadow Prayer (Sacred Candle) while Fortitude is still rank 1 (Holy Candle), so the
+  footer counts Holy Candles, labels them "used by the group Prayers", plural, and says nothing
+  about the Sacred Candles the Shadow Prayer is burning. Running out mid-raid with a full stack of
+  the other candle on screen is the failure. The footer needs to be driven by the reagents of every
+  Prayer the priest knows, not by one def's rank.
+- **Per-subgroup rows would offer the same cast eight times, at a candle each.** Rows are built per
+  subgroup per buff, and each one's left click casts the Prayer. If a Prayer covers the whole raid,
+  a priest working down a frame of eight red rows can spend eight candles where one cast would have
+  done. That is the strongest argument against keeping the per-subgroup model at 60, and it costs
+  the player real reagents, not just clarity.
+- **The click hint would promise a subgroup**, naming "group 3" or "your party" for a spell that
+  covers everyone in range.
+- **Range becomes the thing that matters**: 40 yards. Anybody outside it is missed by the one cast,
+  and the row's missing count is what says so.
+
 **The Shadow Prayer runs 20 minutes where the single-target form runs 10.** The group form is not
-just wider, it is longer, and `DEFS[].duration` is one seed per buff - 600 for shadow - so the
-Prayer's bar is under-scaled until a live aura teaches it. It clamps to full rather than
-misreporting, and the learned-duration cache is keyed by the **spell name** for exactly this
-reason, so the Prayer learns 1200 while the single keeps 600. If the cap reaches 56 before a
-priest has seen one, a `grpDuration` seed per def would close the gap; nothing else needs to
-change.
-
-That reagent split is what `GetCandleInfo` already assumes, keyed on the rank parsed from the
-spellbook - rank 1 takes the Holy Candle, rank 2 the Sacred one. The level column is also why the
-port dropped its `UnitLevel >= 48` gate: 48 is where rank 1 appears, but knowing the spell is the
-real condition, and that is what the footer keys off.
-**Not castable yet**, so the behaviour is still unverified in play - and the duration is the part
-that needs no trust, because the first live aura teaches it (the 3600 seeds in `DEFS` only cover
-the gap until then). When the cap
-reaches 60:
-
-- the hint wording is wrong as it stands - it would promise a subgroup where the spell covers
-  everyone in range
-- which member a Prayer is aimed at stops mattering, except for range: 40 yards, so anybody out of
-  it is missed and the row's count is what tells you
-- the rows stay useful for what is still true - who is missing it, who is out of range, whether a
-  candle is worth spending - but the addon is worth much less at 60 than at 40 with single-target
-  buffs only
+just wider, it is longer. `DEFS[].duration` is one seed per buff - 600 for shadow - so until a live
+aura is seen the Prayer's bar is scaled against the single form's length. It clamps to full rather
+than misreporting, and the learned-duration cache keys on the **spell name** for exactly this
+reason, so the Prayer learns 1200 while the single keeps 600. Closing the gap before anything is
+seen means a per-form seed, and that is a LIBRARY change: `DurationFor` lives in
+LibGroupBuffs' `Engine.lua` and ends in `return def.duration or 3600`, taking only
+`(def, observed, spellName)`. A `grpDuration` field added to Priestly's `DEFS` alone would be
+ignored - the engine would have to prefer it when `spellName == def.grp`, and Priestly would have
+to re-pin.
 
 **`C_Spell.GetSpellInfo(name)` only resolves spells the player KNOWS.** By ID it always works; by
 name it returned nothing for Divine Spirit, Shadow Protection and all three Prayers, while working
