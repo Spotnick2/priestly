@@ -238,8 +238,10 @@ WoW.SetAura("party2", "Power Word: Fortitude", 3600, 500)
 H.eq(T.PickTarget(members, fort, false), "party2",
     "with nobody missing it picks the lowest remaining")
 
-H.eq(T.PickTarget(members, fort, true), "party1",
-    "a group Prayer just needs any valid member")
+-- A group Prayer covers only its target's subgroup, and a raid's pet row
+-- mixes pets from several parties, so it too aims at whoever needs it most.
+H.eq(T.PickTarget(members, fort, true), "party2",
+    "a group Prayer also goes to whoever has the least time left")
 
 -- Range matters: casting at somebody out of range just fails, and a group
 -- Prayer covers the subgroup whichever member it lands on.

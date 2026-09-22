@@ -1260,8 +1260,9 @@ UpdateUI = function()
 
             ApplyRowVisuals(r, st, def.duration)
 
-            -- Left-click  → group Prayer on any valid member (it covers their
-            --               subgroup), or the single buff when no Prayer exists
+            -- Left-click  → group Prayer on the member who needs it most (it
+            --               covers their subgroup; a pet row spans several),
+            --               or the single buff when no Prayer exists
             r:SetAttribute("type1",  "spell")
             r:SetAttribute("spell1", primaryUnit and primary or nil)
             r:SetAttribute("unit1",  primaryUnit or "player")
