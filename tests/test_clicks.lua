@@ -498,8 +498,12 @@ local combatHint = WoW.tooltipText()
 H.check(combatHint:find("Needs it"), "the hint lists them in combat: " .. combatHint)
 H.check(combatHint:find("Sten Thornbeard") and combatHint:find("MISS"),
     "naming who is missing Fortitude: " .. combatHint)
-H.check(not combatHint:find("Karuzo Elegia  24", 1, true),
-    "and leaving out the one who has it")
+-- The list only, not the click lines: in combat those name whoever the button
+-- is still wired to, which is deliberate.
+local needsList = combatHint:match("Needs it:(.*)$") or ""
+H.check(not needsList:find("Karuzo Elegia", 1, true),
+    "and leaving out the one who has it: " .. needsList)
+H.check(needsList:find("Mirel Dawnsong"), "while naming the rest: " .. needsList)
 WoW.inCombat = false
 
 WoW.clearTooltip()

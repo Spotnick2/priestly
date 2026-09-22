@@ -229,17 +229,19 @@ local ALL9 = { compatMinor = 9, settingsMinor = 9, engineMinor = 9, uiMinor = 9 
 loaded = loadWithout(shaped(9, ALL9))
 H.check(loaded, "a library whose every marker equals its MINOR is accepted")
 
--- A complete, self-consistent copy that is simply too old. ui:Close() gained
--- its return value in r7, and a return value cannot be feature-detected: on r6
--- `not nil` is true, so every close would claim to be waiting for combat.
+-- A complete, self-consistent copy that is simply too old: one MINOR behind
+-- what this build needs (NEEDS_MINOR). Behaviour is what changes between
+-- them - r9 lists who still needs the buff while the popover cannot open -
+-- and behaviour cannot be feature-detected, so the floor is a version check.
 loaded, err, chat = loadWithout(shaped(8,
     { compatMinor = 8, settingsMinor = 8, engineMinor = 8, uiMinor = 8 }))
 H.check(not loaded, "a complete library older than the one this build needs is refused")
 H.check(chat:find("completely", 1, true), "with the reinstall message: " .. chat)
 
--- Another addon loaded r7 first, and its UI.lua threw partway: LibStub says 7,
--- but uiMinor is still the r6 copy's, over a half-replaced UI. Present is not
--- enough - it has to be the ACTIVE copy's.
+-- Another addon loaded a newer copy first, and its UI.lua threw partway:
+-- LibStub reports that newer MINOR, but uiMinor is still the older copy's,
+-- over a half-replaced UI. Present is not enough - it has to be the ACTIVE
+-- copy's.
 loaded, err, chat = loadWithout(shaped(8,
     { compatMinor = 8, settingsMinor = 8, engineMinor = 8, uiMinor = 7 }))
 H.check(not loaded, "a marker left by an older copy is refused")
