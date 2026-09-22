@@ -478,4 +478,33 @@ H.eq(T.GroupLabel(1), "your party", "and a party is a party")
 H.eq(T.GroupLabel(99), nil, "the pet bucket names no group")
 H.eq(T.GroupLabel(103), nil, "nor do the later pet buckets")
 
+------------------------------------------------------------
+-- In combat the hint lists who still needs the buff
+--
+-- The popover cannot open then - it parents secure buttons - so this is the
+-- only way to see who is missing it mid-fight. Wired through Priestly's own
+-- rows and definitions.
+------------------------------------------------------------
+
+rows = setup({ "FORT_SINGLE" })
+WoW.SetAura("player", "Power Word: Fortitude", 3600, 1500)
+T.UpdateUI()
+row = activeRows(T.rows())[1]
+
+WoW.inCombat = true
+WoW.clearTooltip()
+T.ShowClickHint(row)
+local combatHint = WoW.tooltipText()
+H.check(combatHint:find("Needs it"), "the hint lists them in combat: " .. combatHint)
+H.check(combatHint:find("Sten Thornbeard") and combatHint:find("MISS"),
+    "naming who is missing Fortitude: " .. combatHint)
+H.check(not combatHint:find("Karuzo Elegia  24", 1, true),
+    "and leaving out the one who has it")
+WoW.inCombat = false
+
+WoW.clearTooltip()
+T.ShowClickHint(row)
+H.check(not WoW.tooltipText():find("Needs it"),
+    "out of combat the popover shows it instead: " .. WoW.tooltipText())
+
 H.done("test_clicks")

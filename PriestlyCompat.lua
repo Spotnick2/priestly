@@ -28,10 +28,11 @@ Priestly = Priestly or {}
 -- feature check: behaviour changes cannot be feature-detected. r7's
 -- ui:Close() returns whether the window is hidden NOW, where r6's returned
 -- nothing (`not nil` is true, so every close would have claimed to be waiting
--- for combat), and r8 answers the player who closes a window that is still on
--- screen after Priestly closed it itself. Keep this equal to the tag
--- .pkgmeta pins; tests/test_manifest.lua checks that.
-local NEEDS_MINOR = 8
+-- for combat), r8 answers the player who closes a window that is still on
+-- screen after Priestly closed it itself, and r9 lists who still needs the
+-- buff while the popover cannot open. Keep this equal to the tag .pkgmeta
+-- pins; tests/test_manifest.lua checks that.
+local NEEDS_MINOR = 9
 
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end

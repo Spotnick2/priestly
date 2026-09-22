@@ -225,15 +225,15 @@ local function shaped(minor, markers)
     for k, v in pairs(markers) do l[k] = v end
     return setmetatable({}, { __call = function() return l, minor end })
 end
-local ALL8 = { compatMinor = 8, settingsMinor = 8, engineMinor = 8, uiMinor = 8 }
-loaded = loadWithout(shaped(8, ALL8))
+local ALL9 = { compatMinor = 9, settingsMinor = 9, engineMinor = 9, uiMinor = 9 }
+loaded = loadWithout(shaped(9, ALL9))
 H.check(loaded, "a library whose every marker equals its MINOR is accepted")
 
 -- A complete, self-consistent copy that is simply too old. ui:Close() gained
 -- its return value in r7, and a return value cannot be feature-detected: on r6
 -- `not nil` is true, so every close would claim to be waiting for combat.
-loaded, err, chat = loadWithout(shaped(7,
-    { compatMinor = 7, settingsMinor = 7, engineMinor = 7, uiMinor = 7 }))
+loaded, err, chat = loadWithout(shaped(8,
+    { compatMinor = 8, settingsMinor = 8, engineMinor = 8, uiMinor = 8 }))
 H.check(not loaded, "a complete library older than the one this build needs is refused")
 H.check(chat:find("completely", 1, true), "with the reinstall message: " .. chat)
 
