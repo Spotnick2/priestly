@@ -89,14 +89,14 @@ rem, dur, state = T.BuffRem("party1", fort)
 H.eq(state, MISSING,
     "a readable aura list beats the cache: losing the buff is seen, not masked by stale state")
 
--- With nothing readable at all, though, secrecy means we genuinely cannot tell
--- the difference between "unbuffed" and "hidden" - so fall back rather than
--- assert a MISS.
+-- An empty aura list under secrecy is not evidence of being unbuffed, so the
+-- read itself is refused - but the absence confirmed a moment ago is
+-- remembered, which is what the combat list reports (LibGroupBuffs r10).
 WoW.ClearAuras("party1")
 rem, dur, state = T.BuffRem("party1", fort)
-H.eq(state, UNKNOWN,
-    "an empty aura list under secrecy is not evidence of being unbuffed - and the "
-    .. "cache was already cleared by the definite read above, so: unknown")
+H.eq(state, MISSING, "the absence just confirmed still stands under secrecy")
+H.eq(select(5, T.BuffRem("party1", fort)), "remembered",
+    "as remembered, never as a fresh read")
 H.secrecy(false)
 
 ------------------------------------------------------------

@@ -496,19 +496,23 @@ H.secrecy(true)
 WoW.clearTooltip()
 T.ShowClickHint(row)
 local combatHint = WoW.tooltipText()
-H.check(combatHint:find("Needs it, when last readable"),
-    "the hint lists them in combat, as last known: " .. combatHint)
+H.check(combatHint:find("Needs it, from what can still be seen"),
+    "the hint says how current the list is: " .. combatHint)
 -- The list only, not the click lines: in combat those name whoever the button
 -- is still wired to, which is deliberate.
-local needsList = combatHint:match("[Nn]eeds it[^:]*:(.*)$") or ""
--- Neither was ever seen buffed, and no aura can be read now, so they are
--- unreadable rather than confidently missing - the same distinction the rows
--- and the popover make.
-H.check(needsList:find("Sten Thornbeard") and needsList:find("?", 1, true),
-    "naming who might need Fortitude: " .. needsList)
+local needsList = combatHint:match("Needs it, from what can still be seen:(.*)$") or ""
+-- Both were read as unbuffed before the pull, and that is remembered now, so
+-- each is named WITH its marker - the pairing is the point. Asserting the
+-- name and the marker separately would pass with one of them reading "?",
+-- which is the symptom this whole change exists to remove.
+H.check(needsList:find("Sten Thornbeard  was missing", 1, true),
+    "naming who was missing Fortitude, and when that was seen: " .. needsList)
+H.check(needsList:find("Mirel Dawnsong  was missing", 1, true),
+    "for every one of them: " .. needsList)
+H.check(not needsList:find("?", 1, true),
+    "and nobody is shrugged at with a question mark: " .. needsList)
 H.check(not needsList:find("Karuzo Elegia", 1, true),
-    "and leaving out the one who has it: " .. needsList)
-H.check(needsList:find("Mirel Dawnsong"), "while naming the rest: " .. needsList)
+    "while leaving out the one who has it: " .. needsList)
 H.secrecy(false)
 
 WoW.clearTooltip()
