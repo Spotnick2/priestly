@@ -496,15 +496,15 @@ H.secrecy(true)
 WoW.clearTooltip()
 T.ShowClickHint(row)
 local combatHint = WoW.tooltipText()
-H.check(combatHint:find("Missing when the fight started"),
-    "the hint lists them in combat, as what was known then: " .. combatHint)
+H.check(combatHint:find("Needs it, from what can still be seen"),
+    "the hint says how current the list is: " .. combatHint)
 -- The list only, not the click lines: in combat those name whoever the button
 -- is still wired to, which is deliberate.
-local needsList = combatHint:match("Missing when the fight started:(.*)$") or ""
+local needsList = combatHint:match("Needs it, from what can still be seen:(.*)$") or ""
 -- Both were read as unbuffed before the pull, and that is remembered now, so
 -- they are named rather than shrugged at with a question mark.
-H.check(needsList:find("Sten Thornbeard") and needsList:find("MISS"),
-    "naming who was missing Fortitude: " .. needsList)
+H.check(needsList:find("Sten Thornbeard") and needsList:find("was missing"),
+    "naming who was missing Fortitude, and when that was seen: " .. needsList)
 H.check(not needsList:find("Karuzo Elegia", 1, true),
     "and leaving out the one who has it: " .. needsList)
 H.check(needsList:find("Mirel Dawnsong"), "while naming the rest: " .. needsList)
@@ -512,7 +512,7 @@ H.secrecy(false)
 
 WoW.clearTooltip()
 T.ShowClickHint(row)
-H.check(not WoW.tooltipText():find("Missing when"),
+H.check(not WoW.tooltipText():find("Needs it"),
     "out of combat the popover shows it instead: " .. WoW.tooltipText())
 
 H.done("test_clicks")
