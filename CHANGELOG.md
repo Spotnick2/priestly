@@ -1,5 +1,40 @@
 # Priestly Changelog
 
+## v2.0.6 - 2026-09-23
+
+### Known issue
+- **Your settings still reset every time you reload.** Unchanged: a client bug that affects every
+  addon, reported to Blizzard. Priestly says so in chat once a game update fixes it.
+
+### Fixed
+- **Closing or dragging the window during a fight no longer throws an error.** If you have an error
+  display installed, closing Priestly mid-combat produced a "tried to call the protected function"
+  message, and so did dragging it. The window holds the buttons you click to cast, which the game
+  protects in combat: it cannot be hidden or moved until the fight ends. Priestly now waits instead
+  of trying. Close it during a fight and it says *"The window closes when you leave combat"*, then
+  does exactly that.
+
+### Added
+- **Hovering a row in combat now lists who still needs the buff.** The per-member panel cannot open
+  during a fight - same protection as above - so the hover text carries it instead:
+
+      Needs it, from what can still be seen:
+      Zoruka Mortalis    was missing
+      Sten Thornbeard    ran out
+      Mirel Dawnsong     offline
+
+  Each line says how current it is, because the game hides auras in combat: *was missing* is what
+  was seen at the last look, *ran out* is a buff whose timer expired during the fight, and *?* is
+  somebody never seen at all, such as a player who joined mid-fight. A buff that somebody strips or
+  that another priest casts cannot be seen, so nothing here claims to know about it.
+
+### Under the hood
+- **The buff logic and the window itself now live in the shared library** that the druid and mage
+  versions will use, which is most of what changed in this release. Priestly's own file is a third
+  of the size. Nothing about it should look different to you: the rows, the panel, the clicks, the
+  timers and the settings all behave as before. If anything does look different, that is a bug -
+  please report it.
+
 ## v2.0.5 - 2026-09-22
 
 ### Known issue
