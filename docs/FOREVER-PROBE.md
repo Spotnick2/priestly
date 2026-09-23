@@ -200,13 +200,14 @@ in play.
 | Spirit | 1 | 60 | 1940 | Sacred Candle | +40 Spirit | 1 h |
 | Shadow Protection | 1 | 56 | 1300 | Sacred Candle | +60 Shadow resistance | **20 min** |
 
-**Unreconciled: the Shadow Prayer needs level 56 and a Sacred Candle, but section 6 records the
-client's own item database reporting the Sacred Candle as required level 60.** A level-56 spell
-cannot consume a level-60 reagent, so one of the two readings is wrong, and both were read from the
-client rather than inferred. Re-check both when a priest can reach 56; until then treat the 56 in
-this table as unconfirmed.
+**Unreconciled, and possibly not a conflict: the Shadow Prayer needs level 56 and a Sacred Candle,
+while section 6 records the client's item database reporting that candle as required level 60.**
+Both numbers come from the client. Whether an item's minimum level gates its use *as a spell
+reagent* is not something this probe has measured - it may not, in which case both readings stand.
+Test the cast at 56 when it is reachable; do not assume either number is wrong until then.
 
-What this changes, when the cap gets there:
+What this changes, **from level 48** - the first learnable rank, which the tooltips say is already
+raid-wide - not from 60:
 
 - **The reagent footer would show the wrong candle, silently** (issue #49). `GetCandleInfo`
   derives the candle
@@ -220,12 +221,15 @@ What this changes, when the cap gets there:
   are built per
   subgroup per buff, and each one's left click casts the Prayer. If a Prayer covers the whole raid,
   a priest working down a frame of eight red rows can spend eight candles where one cast would have
-  done. That is the strongest argument against keeping the per-subgroup model at 60, and it costs
-  the player real reagents, not just clarity.
-- **The click hint would promise a subgroup**, naming "group 3" or "your party" for a spell that
-  covers everyone in range.
-- **Range becomes the thing that matters**: 40 yards. Anybody outside it is missed by the one cast,
-  and the row's missing count is what says so.
+  done - Holy Candles from 48, Sacred ones later. That is the strongest argument against keeping
+  the per-subgroup model, and it costs the player real reagents, not just clarity.
+- **The click hint would promise a subgroup**, naming "group 3" or "your party" for a spell whose
+  text says it covers party and raid.
+- **Unmeasured, and needed before any targeting decision: what the buff actually reaches.** The 40
+  yards from `C_Spell.GetSpellInfo` is `maxRange`, the range at which the spell can be cast at a
+  target. It says nothing about how far the raid-wide effect extends, or whether that radius is
+  centred on the caster or on the target. A probe at 48 should establish both, because "aim it at
+  anyone" and "aim it to cover the most people" are different behaviours.
 
 **The Shadow Prayer runs 20 minutes where the single-target form runs 10.** The group form is not
 just wider, it is longer. `DEFS[].duration` is one seed per buff - 600 for shadow - so until a live
