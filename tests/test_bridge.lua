@@ -230,9 +230,10 @@ loaded = loadWithout(shaped(10, ALL10))
 H.check(loaded, "a library whose every marker equals its MINOR is accepted")
 
 -- A complete, self-consistent copy that is simply too old: one MINOR behind
--- what this build needs (NEEDS_MINOR). Behaviour is what changes between
--- them - r9 lists who still needs the buff while the popover cannot open -
--- and behaviour cannot be feature-detected, so the floor is a version check.
+-- what this build needs (NEEDS_MINOR). Behaviour is what separates them -
+-- r10 remembers a confirmed absence, where r9 would report a member checked
+-- seconds before the pull as unreadable - and behaviour cannot be
+-- feature-detected, so the floor is a version check.
 loaded, err, chat = loadWithout(shaped(9,
     { compatMinor = 9, settingsMinor = 9, engineMinor = 9, uiMinor = 9 }))
 H.check(not loaded, "a complete library older than the one this build needs is refused")
