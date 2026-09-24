@@ -34,9 +34,18 @@ local NEEDS_MINOR = 12
 -- library with no Status would be called incomplete, and Priestly would
 -- refuse to start for everyone. tests/test_manifest.lua holds the floor at 12
 -- or above for exactly that reason.
+-- Called under pcall: it is library code, reading a shared table that another
+-- copy may have left half-built, and a throw here would skip the chat message
+-- below - leaving Priestly silently dead, since this client hides Lua errors
+-- by default. That is the one failure this file exists to prevent. What it
+-- threw goes to the developers' error, not the player's line.
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
-local status = lib and lib.Status and lib.Status(NEEDS_MINOR)
+local status, statusError
+if lib and type(lib.Status) == "function" then
+    local asked, answer = pcall(lib.Status, NEEDS_MINOR)
+    if asked then status = answer else status, statusError = "incomplete", answer end
+end
 if lib and not status then
     status = (type(minor) == "number" and minor < NEEDS_MINOR) and "too-old" or "incomplete"
 end
@@ -70,7 +79,9 @@ if problem then
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Priestly cannot start:|r "
             .. problem .. ". " .. advice)
     end
-    error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0). Developers: check out "
+    error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0"
+        .. (statusError and ("; lib.Status threw: " .. tostring(statusError)) or "")
+        .. "). Developers: check out "
         .. "LibGroupBuffs next to the repository and run Tools/deploy.ps1.")
 end
 
