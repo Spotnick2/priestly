@@ -366,7 +366,8 @@ and is invisible from this side.
    which CI cannot run, and **the two do not behave the same**. Download the published file and
    check `Priestly/Libs/LibGroupBuffs-1.0/` with
    `lua tests/libfiles.lua <unzipped>/Priestly/Libs/LibGroupBuffs-1.0 ship`, then count the files
-   in it: seven, the six the XML loads plus `LICENSE`. A zip without them is an addon that does not
+   in it: seven - the six that command lists, which are the XML itself and the five files it
+   loads, plus `LICENSE`. A zip without them is an addon that does not
    start for everyone who updates.
 
    **CurseForge does not apply an external's own `.pkgmeta`.** Measured on the v2.0.6 download: the

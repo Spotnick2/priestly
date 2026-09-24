@@ -33,8 +33,13 @@ ignore:
   # 7, including 824 KB of test fixtures. Nothing there loads, so it was noise
   # rather than breakage, but the paths have to be named from HERE, where that
   # packager does apply the list. Checked in the published zip, not inferred.
+  #
+  # Only the library's NON-DOT ignores need repeating: both packagers prune
+  # dot-paths themselves, and the published zip proves it - its 46 files were
+  # exactly the 46 non-dot files at that tag, with .github, .gitignore,
+  # .claude and .pkgmeta all absent. tests/test_manifest.lua mirrors this list
+  # from the library's own, so a new dev file there cannot quietly re-ship.
   - Libs/LibGroupBuffs-1.0/tests
   - Libs/LibGroupBuffs-1.0/AGENTS.md
   - Libs/LibGroupBuffs-1.0/CLAUDE.md
   - Libs/LibGroupBuffs-1.0/README.md
-  - Libs/LibGroupBuffs-1.0/.pkgmeta
