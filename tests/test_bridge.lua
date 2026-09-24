@@ -169,79 +169,54 @@ H.check(err:find("Libs\\LibGroupBuffs-1.0", 1, true),
 H.check(chat:find("cannot start", 1, true) and chat:find("missing", 1, true),
     "and a player is told in chat, where they will see it: " .. chat)
 
--- Each case below is a library COMPLETE except for one piece, and newer than
--- the floor, so that piece is the only reason it can be refused. The previous
--- fakes returned no MINOR at all, so the first check refused them whatever
--- else was wrong: every later check could be deleted from PriestlyCompat.lua
--- and this file stayed green. Found while porting the bridge to Wildly
--- (Spotnick2/priestly#52).
+-- What the bridge does with each answer.
+--
+-- Which copies are usable is the library's question now: lib.Status walks its
+-- own list of files and says "ok", "incomplete" or "too-old". Priestly's job
+-- is to react - refuse, and say the right thing to the player - and that is
+-- all this file tests. The twelve "complete except one piece" cases moved to
+-- the library, where a new runtime file gets covered without editing any
+-- consumer (LibGroupBuffs#20).
 local FLOOR = tonumber((H.readFile("PriestlyCompat.lua") or ""):match("NEEDS_MINOR = (%d+)"))
 H.check(FLOOR ~= nil, "the bridge declares the oldest library it works against")
-local NEWER = FLOOR + 2
 
-local function markers(n)
-    return { compatMinor = n, settingsMinor = n, engineMinor = n, uiMinor = n }
-end
-
-local function shaped(minor, marks, drop)
+local function answering(status, minor)
     local l = { API = { RegisterEventsReported = function() return true end,
                         ClickEdges = function() end },
                 Settings = { New = function() end }, Engine = { New = function() end },
-                UI = { New = function() end } }
-    for k, v in pairs(marks) do l[k] = v end
-    if drop then drop(l) end
+                UI = { New = function() end },
+                Status = status and function() return status, minor end or nil }
     return setmetatable({}, { __call = function() return l, minor end })
 end
 
-loaded = loadWithout(shaped(NEWER, markers(NEWER)))
-H.check(loaded, "a complete library newer than the floor is accepted - the baseline for the rest")
+loaded = loadWithout(answering("ok", FLOOR))
+H.check(loaded, "a library that says it is ok is accepted")
 
--- One piece missing at a time. A file that threw before its last line leaves
--- its marker unset, which is why the markers are in this list too.
-local MISSING_PIECES = {
-    { "API.RegisterEventsReported", function(l) l.API.RegisterEventsReported = nil end },
-    { "API.ClickEdges", function(l) l.API.ClickEdges = nil end },
-    { "Settings", function(l) l.Settings = nil end },
-    { "Settings.New", function(l) l.Settings.New = nil end },
-    { "Engine", function(l) l.Engine = nil end },
-    { "Engine.New", function(l) l.Engine.New = nil end },
-    { "UI", function(l) l.UI = nil end },
-    { "UI.New", function(l) l.UI.New = nil end },
-    { "compatMinor", function(l) l.compatMinor = nil end },
-    { "settingsMinor", function(l) l.settingsMinor = nil end },
-    { "engineMinor", function(l) l.engineMinor = nil end },
-    { "uiMinor", function(l) l.uiMinor = nil end },
-}
-for _, case in ipairs(MISSING_PIECES) do
-    loaded, err, chat = loadWithout(shaped(NEWER, markers(NEWER), case[2]))
-    H.check(not loaded, "a library without " .. case[1] .. " is refused")
-    H.check(chat:find("completely", 1, true),
-        "as one that failed to load completely: " .. chat)
-end
+loaded, err, chat = loadWithout(answering("incomplete", FLOOR))
+H.check(not loaded, "one that says it is incomplete is refused")
+H.check(chat:find("completely", 1, true), "as a failed load: " .. chat)
 
--- Another addon loaded a newer copy first and one of its files threw partway:
--- LibStub reports the newer MINOR while that file's marker is still the older
--- copy's, over a half-replaced table. Present is not enough.
-for _, key in ipairs({ "compatMinor", "settingsMinor", "engineMinor", "uiMinor" }) do
-    local m = markers(NEWER)
-    m[key] = NEWER - 1
-    loaded, err, chat = loadWithout(shaped(NEWER, m))
-    H.check(not loaded, "an older copy's " .. key .. " under a newer MINOR is refused")
-    H.check(chat:find("completely", 1, true), "as a failed load: " .. chat)
-end
-
--- A complete, self-consistent copy that is simply too old. Nothing crashed -
--- most likely another addon embeds an older copy and loaded first - so the
--- message must not say something broke, and must name both versions.
-loaded, err, chat = loadWithout(shaped(FLOOR - 1, markers(FLOOR - 1)))
-H.check(not loaded, "a complete library older than this build needs is refused")
+loaded, err, chat = loadWithout(answering("too-old", FLOOR - 1))
+H.check(not loaded, "and one that says it is too old")
 H.check(chat:find("r" .. (FLOOR - 1), 1, true) and chat:find("r" .. FLOOR, 1, true),
     "naming the version in use and the one needed: " .. chat)
-H.check(not chat:find("completely", 1, true), "and not claiming a failed load: " .. chat)
-loaded = loadWithout(shaped(FLOOR, markers(FLOOR)))
-H.check(loaded, "exactly the floor is enough")
+H.check(not chat:find("completely", 1, true), "without claiming a failed load: " .. chat)
+H.check(chat:find("Reinstalling", 1, true),
+    "and pointing at Priestly's own copy, which is the only thing that can be behind: " .. chat)
 
-------------------------------------------------------------
+-- A copy too old to have Status at all. Its absence is the answer, and which
+-- answer depends on the version: behind the floor is too-old, at or above it
+-- means the file that installs Status threw.
+loaded, err, chat = loadWithout(answering(nil, FLOOR - 1))
+H.check(not loaded, "a copy without Status, below the floor, is refused")
+H.check(chat:find("r" .. (FLOOR - 1), 1, true) and not chat:find("completely", 1, true),
+    "as too old rather than broken: " .. chat)
+
+loaded, err, chat = loadWithout(answering(nil, FLOOR))
+H.check(not loaded, "a copy without Status at the floor is refused too")
+H.check(chat:find("completely", 1, true),
+    "as a failed load, because the file that installs Status is the last one: " .. chat)
+
 -- The real load order: an older copy loaded first is UPGRADED, not refused
 --
 -- The fakes above call the bridge directly, which is not how the game gets

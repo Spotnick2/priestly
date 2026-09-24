@@ -15,51 +15,42 @@
 
 Priestly = Priestly or {}
 
--- Is the library here, and did the ACTIVE copy load to the end? Each runtime
--- file (Compat, Settings, Engine, UI) sets a marker on its LAST line - their
--- New() sits near the top - so a file that threw partway leaves its marker
--- unset. The marker must EQUAL the active MINOR, not merely be set: several
--- addons embed the library, and if a newer copy throws partway through UI.lua,
--- the older copy's uiMinor and half its functions are still on the shared
--- table. Checked here, with a message, rather than failing as a missing
--- method in the middle of a refresh. The markers arrived with r6, so any older
--- copy is refused the same way.
 -- The oldest library this build of Priestly works against. A floor, not a
--- feature check: behaviour changes cannot be feature-detected. r7's
--- ui:Close() returns whether the window is hidden NOW, where r6's returned
--- nothing (`not nil` is true, so every close would have claimed to be waiting
--- for combat), r8 answers the player who closes a window that is still on
--- screen after Priestly closed it itself, r9 lists who still needs the buff while the
--- popover cannot open, and r10 remembers a confirmed absence so that list can
--- say who was missing. Keep this equal to the tag .pkgmeta pins;
+-- feature check: behaviour changes cannot be feature-detected. r10 remembers
+-- a confirmed absence, so the in-combat list can name who was missing rather
+-- than shrugging; r12 answers for itself whether a copy is usable, which is
+-- what lib.Status below is. Keep this equal to the tag .pkgmeta pins;
 -- tests/test_manifest.lua checks that.
-local NEEDS_MINOR = 10
+local NEEDS_MINOR = 12
 
+-- Is this copy usable? The library answers, from its own list of files, so
+-- the marker names and entry points are no longer Priestly's business - this
+-- file used to carry them, and got it wrong (#52). A copy older than r12 has
+-- no Status to ask, which is itself an answer: either it is too old for this
+-- build, or its last file threw before installing it.
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
+local status = lib and lib.Status and lib.Status(NEEDS_MINOR)
+if lib and not status then
+    status = (type(minor) == "number" and minor < NEEDS_MINOR) and "too-old" or "incomplete"
+end
+
 local problem, advice
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
     advice = "Reinstalling Priestly should fix it."
-elseif type(minor) == "number" and minor < NEEDS_MINOR then
+elseif status == "too-old" then
     -- The TOC loads Priestly's own copy of the library before this file, and
     -- LibStub UPGRADES an older copy another addon loaded first - so a lower
     -- version here cannot be another addon's doing. It means Priestly's own
     -- bundled copy never registered: the Libs folder is missing, damaged, or
     -- stale. Nothing crashed, though, so this must not read as a crash, and it
     -- must not send the player off to update other addons.
-    problem = "the LibGroupBuffs-1.0 library in Priestly's Libs folder is r" .. minor
+    problem = "the LibGroupBuffs-1.0 library in Priestly's Libs folder is r" .. tostring(minor)
         .. ", and this version of Priestly needs r" .. NEEDS_MINOR
         .. " - its own copy did not load"
     advice = "Reinstalling Priestly should fix it."
-elseif not (type(minor) == "number"
-            and lib.compatMinor == minor and lib.settingsMinor == minor
-            and lib.engineMinor == minor and lib.uiMinor == minor
-            and type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
-            and type(lib.API.ClickEdges) == "function"
-            and type(lib.Settings) == "table" and type(lib.Settings.New) == "function"
-            and type(lib.Engine) == "table" and type(lib.Engine.New) == "function"
-            and type(lib.UI) == "table" and type(lib.UI.New) == "function") then
+elseif status ~= "ok" then
     problem = "the LibGroupBuffs-1.0 library failed to load completely"
     advice = "Reinstalling Priestly should fix it."
 end
