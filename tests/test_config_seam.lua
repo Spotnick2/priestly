@@ -13,9 +13,21 @@ dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 local T, TC = H.loadAddon()
 
-local BROKEN = TC.SV_BROKEN_ON_BUILD
-local MEASURED = TC.MEASURED_ON_BUILD
+-- Pinned here as LITERALS, not read from the source. Every check below takes
+-- its builds from the constants, so a stale constant satisfies all of them
+-- while the addon warns at every real login on the build people are actually
+-- running - and, worse, treats that build as one where saved settings work,
+-- so a relog to character select can announce a fix that never happened.
+-- Moving the client forward has to be a two-file edit, and this is the file
+-- that says so.
+local MEASURED = "69977"
+local BROKEN = "69977"
 local FIXED = "70123"   -- any build other than the two above
+
+H.eq(TC.MEASURED_ON_BUILD, MEASURED,
+    "the source says Priestly was measured on the build these tests measure it on")
+H.eq(TC.SV_BROKEN_ON_BUILD, BROKEN,
+    "and on the build where saved settings are known not to come back")
 
 ------------------------------------------------------------
 -- The setters

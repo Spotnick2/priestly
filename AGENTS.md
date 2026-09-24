@@ -140,7 +140,8 @@ disagree.
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
 Protection aura names, which the config's "detect" mode reads).
 
-**NO SavedVariables load back on this client — per-character included.** Re-measured on build
+**NO SavedVariables load back on this client — per-character included.** Still true on 69977, the
+installed build (shared notes, `PORTING-TBC-TO-FOREVER.md` section 0). Re-measured on build
 1.60.1.69913 (2026-09-21 01:14) with two independent instruments: `/pprobe sv` reports
 `launches=0` before every session on *both* the account-wide and per-character tables, and
 Priestly's own `pos` sits on disk while `PriestlyDB.pos` is nil in the next session.

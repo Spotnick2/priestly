@@ -8,6 +8,13 @@ arity, return order, or whether the underlying system is wired up on a Vanilla-c
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
 Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercity.
 
+**Still current on build 69977** (`Sep 22 2026`), which is what is installed as of 2026-09-24 and
+what `MEASURED_ON_BUILD` now says. Nothing below was re-run with `/pprobe`; what carries it over
+is that the two builds' API dumps are **identical sets** - documented functions, events, enums and
+structures, widget methods, namespace functions - and that the SavedVariables bug survives both
+(`PORTING-TBC-TO-FOREVER.md` section 0). A finding here that stops matching the game is a bug
+report, not a surprise: re-run the probe rather than assuming the note was always wrong.
+
 ---
 
 ## 1. Secure click-casting — the blocking question
