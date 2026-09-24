@@ -65,20 +65,31 @@ try {
 
     # Syntax-check everything that ships, the library included: a parse error
     # there would show up as a confusing load failure inside every test.
+    # Skipping this quietly was how the syntax check could look green while
+    # never running: say so, loudly, rather than printing nothing at all.
     $luac = Join-Path (Split-Path -Parent $Lua) "luac.exe"
-    if (Test-Path $luac) {
-        # The library's files come from tests/libfiles.lua, the one reader of
-        # its XML that the harness, deploy.ps1 and CI also use.
+    if (-not (Test-Path $luac)) {
+        Write-Host "luac -p SKIPPED: no luac.exe beside $Lua - syntax was NOT checked" -ForegroundColor Yellow
+    }
+    else {
+        # Priestly's files come from the TOC and the library's from
+        # tests/libfiles.lua, the one reader of its XML that the harness,
+        # deploy.ps1 and CI use too. Neither list is written out here, so a new
+        # file cannot be left unchecked.
+        $tocFiles = Get-Content (Join-Path $RepoRoot "Priestly.toc") |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -notmatch "^#" -and $_ -match "[.]lua$" }
+        if (-not $tocFiles) { Write-Host "Priestly.toc lists no Lua files" -ForegroundColor Red; exit 1 }
         $libFiles = & $Lua (Join-Path $PSScriptRoot "libfiles.lua") $Library load
         if ($LASTEXITCODE -ne 0) { Write-Host "LibGroupBuffs file list FAILED" -ForegroundColor Red; exit 1 }
         $libFiles = $libFiles | ForEach-Object { Join-Path $Library $_ }
-        & $luac -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua @libFiles
+        & $luac -p @tocFiles @libFiles
         if ($LASTEXITCODE -ne 0) {
             Write-Host "luac -p FAILED" -ForegroundColor Red
             exit 1
         }
         Remove-Item -LiteralPath (Join-Path $RepoRoot "luac.out") -ErrorAction SilentlyContinue
-        Write-Host "luac -p: ok" -ForegroundColor DarkGray
+        Write-Host "luac -p: ok ($($tocFiles.Count) addon + $($libFiles.Count) library files)" -ForegroundColor DarkGray
     }
 
     Get-ChildItem (Join-Path $PSScriptRoot "test_*.lua") | Sort-Object Name | ForEach-Object {

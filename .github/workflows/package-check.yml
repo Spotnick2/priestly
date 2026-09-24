@@ -37,7 +37,10 @@ jobs:
           # harness, run.ps1 and deploy.ps1 use it too.
           lib=../LibGroupBuffs
           files=$(lua5.1 tests/libfiles.lua "$lib" load) || exit 1
-          luac5.1 -p PriestlyCompat.lua PriestlyConfig.lua Priestly.lua \
+          # The TOC is the list, so a new file cannot go unchecked here.
+          toc=$(grep -E '^[^#].*[.]lua$' Priestly.toc | tr -d '\r')
+          test -n "$toc" || { echo "Priestly.toc lists no Lua files"; exit 1; }
+          luac5.1 -p $toc \
             $(printf '%s\n' $files | sed "s|^|$lib/|")
 
       - name: Unit tests

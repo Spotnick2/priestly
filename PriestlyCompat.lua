@@ -37,10 +37,18 @@ local NEEDS_MINOR = 10
 
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
-local problem
+local problem, advice
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
-elseif not (type(minor) == "number" and minor >= NEEDS_MINOR
+    advice = "Reinstalling Priestly should fix it."
+elseif type(minor) == "number" and minor < NEEDS_MINOR then
+    -- Nothing crashed: an older copy loaded first, most likely inside another
+    -- addon that embeds this library. Saying "failed to load completely"
+    -- would send the player hunting a fault that is not there.
+    problem = "another addon has loaded LibGroupBuffs-1.0 r" .. minor
+        .. ", and this version of Priestly needs r" .. NEEDS_MINOR .. " or newer"
+    advice = "Updating your other addons - or Priestly - should fix it."
+elseif not (type(minor) == "number"
             and lib.compatMinor == minor and lib.settingsMinor == minor
             and lib.engineMinor == minor and lib.uiMinor == minor
             and type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
@@ -49,6 +57,7 @@ elseif not (type(minor) == "number" and minor >= NEEDS_MINOR
             and type(lib.Engine) == "table" and type(lib.Engine.New) == "function"
             and type(lib.UI) == "table" and type(lib.UI.New) == "function") then
     problem = "the LibGroupBuffs-1.0 library failed to load completely"
+    advice = "Reinstalling Priestly should fix it."
 end
 
 if problem then
@@ -58,7 +67,7 @@ if problem then
     -- before building anything, so there is exactly one message.
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Priestly cannot start:|r "
-            .. problem .. ". Reinstalling Priestly should fix it.")
+            .. problem .. ". " .. advice)
     end
     error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0). Developers: check out "
         .. "LibGroupBuffs next to the repository and run Tools/deploy.ps1.")

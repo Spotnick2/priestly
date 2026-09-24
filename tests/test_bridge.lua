@@ -76,7 +76,10 @@ H.check(count >= 5, "the scan found Priestly's API calls: " .. count)
 local captures = {}
 for file, lines in pairs(SOURCES) do
     for n, code in ipairs(lines) do
-        if code:find("=%s*API%.[%a_][%w_]*%s*$") or code:find("=%s*API%.[%a_][%w_]*%s*;") then
+        -- Qualified forms count too: `local F = Priestly.API.F` and
+        -- `local F = lib.API.F` copy exactly the same function.
+        if code:find("=%s*[%w_%.]-%f[%w_]API%.[%a_][%w_]*%s*$")
+            or code:find("=%s*[%w_%.]-%f[%w_]API%.[%a_][%w_]*%s*;") then
             captures[#captures + 1] = file .. ":" .. n .. "  " .. code
         end
     end
@@ -166,91 +169,77 @@ H.check(err:find("Libs\\LibGroupBuffs-1.0", 1, true),
 H.check(chat:find("cannot start", 1, true) and chat:find("missing", 1, true),
     "and a player is told in chat, where they will see it: " .. chat)
 
--- A library that threw partway through its compat layer: registered, but
--- without the functions defined after the error.
-local halfLoaded = setmetatable({}, { __call = function()
-    return { API = { RegisterEventsReported = function() return true end } }
-end })
-loaded, err, chat = loadWithout(halfLoaded)
-H.check(not loaded, "a library that failed to load completely is refused too")
-H.check(chat:find("completely", 1, true), "and reported as that, not as missing: " .. chat)
+-- Each case below is a library COMPLETE except for one piece, and newer than
+-- the floor, so that piece is the only reason it can be refused. The previous
+-- fakes returned no MINOR at all, so the first check refused them whatever
+-- else was wrong: every later check could be deleted from PriestlyCompat.lua
+-- and this file stayed green. Found while porting the bridge to Wildly
+-- (Spotnick2/priestly#52).
+local FLOOR = tonumber((H.readFile("PriestlyCompat.lua") or ""):match("NEEDS_MINOR = (%d+)"))
+H.check(FLOOR ~= nil, "the bridge declares the oldest library it works against")
+local NEWER = FLOOR + 2
 
--- An older copy that loaded completely but predates Settings (r3) or Engine
--- (r4): refused at the door, not as a nil call when Priestly builds them.
-local r3Shaped = setmetatable({}, { __call = function()
-    return { API = { RegisterEventsReported = function() return true end,
-                     ClickEdges = function() end } }
-end })
-loaded, err, chat = loadWithout(r3Shaped)
-H.check(not loaded, "a library without Settings is refused")
-H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
+local function markers(n)
+    return { compatMinor = n, settingsMinor = n, engineMinor = n, uiMinor = n }
+end
 
-local r4Shaped = setmetatable({}, { __call = function()
-    return { API = { RegisterEventsReported = function() return true end,
-                     ClickEdges = function() end },
-             Settings = { New = function() end } }
-end })
-loaded, err, chat = loadWithout(r4Shaped)
-H.check(not loaded, "a library without Engine is refused")
-H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
-
--- Engine.lua threw after defining Engine.New but before its methods, so its
--- last line - the engineMinor marker - never ran. Accepting it would fail
--- later as "attempt to call method 'GroupStat' (a nil value)" mid-refresh.
-local halfEngine = setmetatable({}, { __call = function()
-    return { API = { RegisterEventsReported = function() return true end,
-                     ClickEdges = function() end },
-             Settings = { New = function() end }, settingsMinor = 5,
-             Engine = { New = function() end } }
-end })
-loaded, err, chat = loadWithout(halfEngine)
-H.check(not loaded, "an Engine.lua that did not load to the end is refused")
-H.check(chat:find("completely", 1, true), "with the same message: " .. chat)
-
-local halfSettings = setmetatable({}, { __call = function()
-    return { API = { RegisterEventsReported = function() return true end,
-                     ClickEdges = function() end },
-             Settings = { New = function() end },
-             Engine = { New = function() end }, engineMinor = 5 }
-end })
-loaded, err, chat = loadWithout(halfSettings)
-H.check(not loaded, "and so is a Settings.lua that did not")
-
--- A complete library, as LibStub reports it: its markers equal its MINOR.
-local function shaped(minor, markers)
+local function shaped(minor, marks, drop)
     local l = { API = { RegisterEventsReported = function() return true end,
                         ClickEdges = function() end },
                 Settings = { New = function() end }, Engine = { New = function() end },
                 UI = { New = function() end } }
-    for k, v in pairs(markers) do l[k] = v end
+    for k, v in pairs(marks) do l[k] = v end
+    if drop then drop(l) end
     return setmetatable({}, { __call = function() return l, minor end })
 end
-local ALL10 = { compatMinor = 10, settingsMinor = 10, engineMinor = 10, uiMinor = 10 }
-loaded = loadWithout(shaped(10, ALL10))
-H.check(loaded, "a library whose every marker equals its MINOR is accepted")
 
--- A complete, self-consistent copy that is simply too old: one MINOR behind
--- what this build needs (NEEDS_MINOR). Behaviour is what separates them -
--- r10 remembers a confirmed absence, where r9 would report a member checked
--- seconds before the pull as unreadable - and behaviour cannot be
--- feature-detected, so the floor is a version check.
-loaded, err, chat = loadWithout(shaped(9,
-    { compatMinor = 9, settingsMinor = 9, engineMinor = 9, uiMinor = 9 }))
-H.check(not loaded, "a complete library older than the one this build needs is refused")
-H.check(chat:find("completely", 1, true), "with the reinstall message: " .. chat)
+loaded = loadWithout(shaped(NEWER, markers(NEWER)))
+H.check(loaded, "a complete library newer than the floor is accepted - the baseline for the rest")
 
--- Another addon loaded a newer copy first, and its UI.lua threw partway:
--- LibStub reports that newer MINOR, but uiMinor is still the older copy's,
--- over a half-replaced UI. Present is not enough - it has to be the ACTIVE
--- copy's.
-loaded, err, chat = loadWithout(shaped(8,
-    { compatMinor = 8, settingsMinor = 8, engineMinor = 8, uiMinor = 7 }))
-H.check(not loaded, "a marker left by an older copy is refused")
-H.check(chat:find("completely", 1, true), "as a library that failed to load completely: " .. chat)
-loaded = loadWithout(shaped(8, { compatMinor = 7, settingsMinor = 8, engineMinor = 8, uiMinor = 8 }))
-H.check(not loaded, "including Compat.lua's own marker")
-loaded = loadWithout(shaped(7, { settingsMinor = 7, engineMinor = 7, uiMinor = 7 }))
-H.check(not loaded, "and a Compat.lua that never reached its last line")
+-- One piece missing at a time. A file that threw before its last line leaves
+-- its marker unset, which is why the markers are in this list too.
+local MISSING_PIECES = {
+    { "API.RegisterEventsReported", function(l) l.API.RegisterEventsReported = nil end },
+    { "API.ClickEdges", function(l) l.API.ClickEdges = nil end },
+    { "Settings", function(l) l.Settings = nil end },
+    { "Settings.New", function(l) l.Settings.New = nil end },
+    { "Engine", function(l) l.Engine = nil end },
+    { "Engine.New", function(l) l.Engine.New = nil end },
+    { "UI", function(l) l.UI = nil end },
+    { "UI.New", function(l) l.UI.New = nil end },
+    { "compatMinor", function(l) l.compatMinor = nil end },
+    { "settingsMinor", function(l) l.settingsMinor = nil end },
+    { "engineMinor", function(l) l.engineMinor = nil end },
+    { "uiMinor", function(l) l.uiMinor = nil end },
+}
+for _, case in ipairs(MISSING_PIECES) do
+    loaded, err, chat = loadWithout(shaped(NEWER, markers(NEWER), case[2]))
+    H.check(not loaded, "a library without " .. case[1] .. " is refused")
+    H.check(chat:find("completely", 1, true),
+        "as one that failed to load completely: " .. chat)
+end
+
+-- Another addon loaded a newer copy first and one of its files threw partway:
+-- LibStub reports the newer MINOR while that file's marker is still the older
+-- copy's, over a half-replaced table. Present is not enough.
+for _, key in ipairs({ "compatMinor", "settingsMinor", "engineMinor", "uiMinor" }) do
+    local m = markers(NEWER)
+    m[key] = NEWER - 1
+    loaded, err, chat = loadWithout(shaped(NEWER, m))
+    H.check(not loaded, "an older copy's " .. key .. " under a newer MINOR is refused")
+    H.check(chat:find("completely", 1, true), "as a failed load: " .. chat)
+end
+
+-- A complete, self-consistent copy that is simply too old. Nothing crashed -
+-- most likely another addon embeds an older copy and loaded first - so the
+-- message must not say something broke, and must name both versions.
+loaded, err, chat = loadWithout(shaped(FLOOR - 1, markers(FLOOR - 1)))
+H.check(not loaded, "a complete library older than this build needs is refused")
+H.check(chat:find("r" .. (FLOOR - 1), 1, true) and chat:find("r" .. FLOOR, 1, true),
+    "naming the version in use and the one needed: " .. chat)
+H.check(not chat:find("completely", 1, true), "and not claiming a failed load: " .. chat)
+loaded = loadWithout(shaped(FLOOR, markers(FLOOR)))
+H.check(loaded, "exactly the floor is enough")
 
 -- The other two files stop before building anything, so a missing library is
 -- one message rather than a cascade of errors and half-made frames.
