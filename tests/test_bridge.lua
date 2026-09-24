@@ -214,6 +214,22 @@ loaded, err, chat = loadWithout(answering("ok", FLOOR - 1))
 H.check(not loaded, "a complete copy below the floor is refused")
 H.check(chat:find("r" .. (FLOOR - 1), 1, true), "as too old: " .. chat)
 
+-- Status is library code on a shared table, and a copy that left it half
+-- built makes it throw - lib.fileMinors nil under a newer UI.lua, say. The
+-- throw must not escape: it would skip the chat message and leave Priestly
+-- silently dead, because this client hides Lua errors by default.
+do
+    local thrower = answering("ok", FLOOR)
+    local real = select(1, thrower())
+    real.Status = function() error("attempt to index field 'fileMinors' (a nil value)", 0) end
+    loaded, err, chat = loadWithout(thrower)
+    H.check(not loaded, "a Status that throws is refused")
+    H.check(chat:find("completely", 1, true),
+        "with the player told in chat, not left with a dead addon: " .. chat)
+    H.check(err:find("lib.Status threw", 1, true) and err:find("fileMinors", 1, true),
+        "and what it threw handed to developers: " .. err)
+end
+
 -- A status this build has never heard of - a future library with a fourth
 -- answer - is refused rather than treated as usable.
 loaded, err, chat = loadWithout(answering("something-new", FLOOR))
