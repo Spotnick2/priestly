@@ -118,6 +118,14 @@ H.check(needs ~= nil, "PriestlyCompat declares the oldest library it works again
 H.eq(needs, tonumber(tostring(tag):match("^r(%d+)$")),
     "and it is the tag .pkgmeta pins: " .. tostring(tag) .. " vs NEEDS_MINOR " .. tostring(needs))
 
+-- lib.Status arrived in r12, and the bridge reads its ABSENCE as "the last
+-- file threw" for anything at or above the floor. Below r12 that reading is
+-- wrong: a healthy older library has no Status, would be called incomplete,
+-- and Priestly would refuse to start for everyone. Rolling the pin back is
+-- the way that happens, and this is what stops it landing quietly.
+H.check(needs ~= nil and needs >= 12,
+    "the floor is r12 or newer, which is where lib.Status came from: " .. tostring(needs))
+
 local libIgnored = false
 for line in ((H.readFile(".gitignore") or "") .. "\n"):gmatch("([^\n]*)\n") do
     if line == "Libs/" then libIgnored = true end
