@@ -361,11 +361,20 @@ and is invisible from this side.
    build held back from the people who already have the addon. The fact that the *game client* is
    in beta is not a reason: say that in the release notes, where players read it, and ship a
    Release so they can actually get it.
-5. **Check the published zip carries LibGroupBuffs.** CI proves the BigWigs packager embeds it,
-   but releases are built by CurseForge's own packager from the tag webhook, which CI cannot run.
-   Download the file CurseForge published and check `Priestly/Libs/LibGroupBuffs-1.0/` is there,
-   for example with `lua tests/libfiles.lua <unzipped>/Priestly/Libs/LibGroupBuffs-1.0 ship`. A
-   zip without it is an addon that does not start, for everyone who updates.
+5. **Check the published zip carries LibGroupBuffs, and nothing else.** CI proves the BigWigs
+   packager embeds it, but releases are built by CurseForge's own packager from the tag webhook,
+   which CI cannot run, and **the two do not behave the same**. Download the published file and
+   check `Priestly/Libs/LibGroupBuffs-1.0/` with
+   `lua tests/libfiles.lua <unzipped>/Priestly/Libs/LibGroupBuffs-1.0 ship`, then count the files
+   in it: seven, the six the XML loads plus `LICENSE`. A zip without them is an addon that does not
+   start for everyone who updates.
+
+   **CurseForge does not apply an external's own `.pkgmeta`.** Measured on the v2.0.6 download: the
+   library's `tests/`, `AGENTS.md`, `CLAUDE.md` and `README.md` all shipped, 46 files instead of 7,
+   though the library's own ignore list excludes them and the BigWigs packager honours it. Nothing
+   there loads, so it is noise rather than breakage - but the library's list is not the guarantee.
+   The entries under `Libs/LibGroupBuffs-1.0/` in *this* addon's `.pkgmeta` are, and
+   `tests/test_manifest.lua` pins them.
 
 ## Validation
 

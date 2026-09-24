@@ -26,3 +26,15 @@ ignore:
   - README.md
   - CHANGELOG.md
   - LICENSE
+  # The library's own .pkgmeta ignores its tests and notes, and the BigWigs
+  # packager honours that - which is why CI's zip check passes. CurseForge's
+  # packager, which builds the release from the tag webhook, does NOT: the
+  # v2.0.6 download carried 46 files under Libs/LibGroupBuffs-1.0 instead of
+  # 7, including 824 KB of test fixtures. Nothing there loads, so it was noise
+  # rather than breakage, but the paths have to be named from HERE, where that
+  # packager does apply the list. Checked in the published zip, not inferred.
+  - Libs/LibGroupBuffs-1.0/tests
+  - Libs/LibGroupBuffs-1.0/AGENTS.md
+  - Libs/LibGroupBuffs-1.0/CLAUDE.md
+  - Libs/LibGroupBuffs-1.0/README.md
+  - Libs/LibGroupBuffs-1.0/.pkgmeta

@@ -144,15 +144,31 @@ do
     f:close()
 end
 
+-- Every Lua pattern character escaped, not just the dot: a path like
+-- Libs/LibGroupBuffs-1.0/tests carries a `-`, which is a quantifier in a
+-- pattern, so a name-only escape silently matches nothing and the check
+-- passes for the wrong reason.
 local function ignored(name)
+    local literal = name:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1")
     for _, line in ipairs(pkg) do
-        if line:match("^%s*%-%s*" .. name:gsub("%.", "%%.") .. "%s*$") then return true end
+        if line:match("^%s*%-%s*" .. literal .. "%s*$") then return true end
     end
     return false
 end
 
 for _, name in ipairs({ "AGENTS.md", "CLAUDE.md", "tests", "Tools", "docs", ".github" }) do
     H.check(ignored(name), name .. " stays out of the release zip")
+end
+
+-- The library's dev files have to be named HERE as well, because the packager
+-- that builds the release does not apply an external's own ignore list - the
+-- v2.0.6 download carried the library's tests and notes, 46 files instead of
+-- 7. Harmless (nothing there loads) but it made the library's .pkgmeta a false
+-- assurance, so these entries are the real guarantee and must not be dropped.
+for _, name in ipairs({ "Libs/LibGroupBuffs-1.0/tests", "Libs/LibGroupBuffs-1.0/AGENTS.md",
+                        "Libs/LibGroupBuffs-1.0/CLAUDE.md", "Libs/LibGroupBuffs-1.0/README.md",
+                        "Libs/LibGroupBuffs-1.0/.pkgmeta" }) do
+    H.check(ignored(name), name .. " is ignored from here, not left to the library's own list")
 end
 
 H.done("test_manifest")
