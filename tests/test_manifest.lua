@@ -178,7 +178,9 @@ local mirrored, inIgnore = 0, false
 for line in (libPkgmeta or ""):gmatch("[^\r\n]+") do
     if line:match("^ignore:%s*$") then
         inIgnore = true
-    elseif line:match("^%S") then
+    -- A top-level comment does not end a YAML list; a later ignore entry can
+    -- still follow it and must be mirrored here.
+    elseif line:match("^%S") and not line:match("^#") then
         inIgnore = false
     elseif inIgnore then
         local entry = line:match("^%s+%-%s+(%S+)")
