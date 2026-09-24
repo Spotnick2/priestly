@@ -28,6 +28,12 @@ local NEEDS_MINOR = 12
 -- file used to carry them, and got it wrong (#52). A copy older than r12 has
 -- no Status to ask, which is itself an answer: either it is too old for this
 -- build, or its last file threw before installing it.
+--
+-- That reading REQUIRES NEEDS_MINOR >= 12, the release Status arrived in. Drop
+-- the floor below that - rolling the pin back, say - and a healthy older
+-- library with no Status would be called incomplete, and Priestly would
+-- refuse to start for everyone. tests/test_manifest.lua holds the floor at 12
+-- or above for exactly that reason.
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
 local status = lib and lib.Status and lib.Status(NEEDS_MINOR)

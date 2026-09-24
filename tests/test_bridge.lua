@@ -180,17 +180,45 @@ H.check(chat:find("cannot start", 1, true) and chat:find("missing", 1, true),
 local FLOOR = tonumber((H.readFile("PriestlyCompat.lua") or ""):match("NEEDS_MINOR = (%d+)"))
 H.check(FLOOR ~= nil, "the bridge declares the oldest library it works against")
 
+-- The fake answers the way the real library does, floor included: pass it a
+-- needsMinor above its version and it says "too-old". A fake that ignored the
+-- argument let the bridge call lib.Status() with nothing and stay green,
+-- which is the floor silently not being applied at all.
+local askedFor
 local function answering(status, minor)
     local l = { API = { RegisterEventsReported = function() return true end,
                         ClickEdges = function() end },
                 Settings = { New = function() end }, Engine = { New = function() end },
-                UI = { New = function() end },
-                Status = status and function() return status, minor end or nil }
+                UI = { New = function() end } }
+    if status then
+        l.Status = function(needsMinor)
+            askedFor = needsMinor
+            if type(needsMinor) == "number" and minor < needsMinor then
+                return "too-old", minor
+            end
+            return status, minor
+        end
+    end
     return setmetatable({}, { __call = function() return l, minor end })
 end
 
+askedFor = nil
 loaded = loadWithout(answering("ok", FLOOR))
 H.check(loaded, "a library that says it is ok is accepted")
+H.eq(askedFor, FLOOR, "and the floor is what the bridge asked about")
+
+-- A complete copy that is simply behind: the library says so because it was
+-- told the floor. Nothing here would catch the bridge asking with no floor at
+-- all, except this.
+loaded, err, chat = loadWithout(answering("ok", FLOOR - 1))
+H.check(not loaded, "a complete copy below the floor is refused")
+H.check(chat:find("r" .. (FLOOR - 1), 1, true), "as too old: " .. chat)
+
+-- A status this build has never heard of - a future library with a fourth
+-- answer - is refused rather than treated as usable.
+loaded, err, chat = loadWithout(answering("something-new", FLOOR))
+H.check(not loaded, "an unrecognised status is refused")
+H.check(chat:find("completely", 1, true), "rather than assumed to be fine: " .. chat)
 
 loaded, err, chat = loadWithout(answering("incomplete", FLOOR))
 H.check(not loaded, "one that says it is incomplete is refused")
@@ -217,6 +245,7 @@ H.check(not loaded, "a copy without Status at the floor is refused too")
 H.check(chat:find("completely", 1, true),
     "as a failed load, because the file that installs Status is the last one: " .. chat)
 
+------------------------------------------------------------
 -- The real load order: an older copy loaded first is UPGRADED, not refused
 --
 -- The fakes above call the bridge directly, which is not how the game gets
