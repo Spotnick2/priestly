@@ -65,10 +65,19 @@ local DEFAULTS = {
 --
 -- 69977 (installed: .build.info, wow_classic_beta 1.60.1.69977). Its API dump
 -- and 69913's are identical sets - documented functions, events, enums and
--- structures, widget methods, namespace functions - and the SavedVariables
--- bug survives both (PORTING-TBC-TO-FOREVER.md section 0). The test pins
--- these literally, so a build that moves on cannot pass by agreeing with
--- itself.
+-- structures, widget methods, namespace functions - which is what carries the
+-- probe findings over.
+--
+-- SV_BROKEN_ON_BUILD needs its own evidence, because an API dump lists the
+-- same symbols whether or not the client reads the file back. The launch
+-- counters measure it: in files the client wrote on 2026-09-24,
+-- PriestlyProbeChar.launches and AltStableProbe's loadCount are both still 1
+-- after many client starts, and Priestly's own svLoadCheck in the same file
+-- records build 69977. The counter only survives if the table comes back, so
+-- it does not. Still broken on this build.
+--
+-- The test pins these literally, so a build that moves on cannot pass by
+-- agreeing with itself.
 local MEASURED_ON_BUILD = "69977"
 local SV_BROKEN_ON_BUILD = "69977"
 

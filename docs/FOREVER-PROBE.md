@@ -11,9 +11,12 @@ Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercit
 **Still current on build 69977** (`Sep 22 2026`), which is what is installed as of 2026-09-24 and
 what `MEASURED_ON_BUILD` now says. Nothing below was re-run with `/pprobe`; what carries it over
 is that the two builds' API dumps are **identical sets** - documented functions, events, enums and
-structures, widget methods, namespace functions - and that the SavedVariables bug survives both
-(`PORTING-TBC-TO-FOREVER.md` section 0). A finding here that stops matching the game is a bug
-report, not a surprise: re-run the probe rather than assuming the note was always wrong.
+structures, widget methods, namespace functions. A finding here that stops matching the game is a
+bug report, not a surprise: re-run the probe rather than assuming the note was always wrong.
+
+The SavedVariables finding (section 11) is the exception, because a dump cannot show it: the
+client lists the same symbols whether or not it reads the file back. It was re-measured on 69977
+**from the files themselves**, without launching the game - see below.
 
 ---
 
@@ -338,6 +341,20 @@ launches now: account=1 character=1
 Both files on disk read `launches = 1`. Every session starts from zero and writes 1; a working load
 would show 2, 3, 4. Confirmed independently by Priestly itself: `PriestlyDB.pos` is present in the
 character file and nil in the next session, which `/priestly pos` reports directly.
+
+**Still broken on 69977, re-measured 2026-09-24 without launching the game.** The counters are on
+disk, so the check costs nothing once a counting addon has ever run — `WTF/Account/<id>/`:
+
+| file | reads |
+|---|---|
+| `SavedVariables/AltStableProbe.lua` | `loadCount = 1`, stamped `2026-09-24 11:00:10` |
+| `<realm>/<char>/SavedVariables/PriestlyProbe.lua` | `launches = 1` |
+| `SavedVariables/Priestly.lua` | `svLoadCheck = { build = "69977", … }` |
+
+The counter only survives if the table comes back, and it has not after many client starts. The
+third line is what ties the measurement to the build: Priestly stamps the build it saw into the
+same file the counter sits in. `SV_BROKEN_ON_BUILD` rests on this, not on the API dumps matching —
+a dump lists the same symbols whether or not the client reads the file back.
 
 **How the earlier wrong answer happened, because it will happen again.** Persistence was checked by
 reading the saved file. That file looks fully populated whether or not the load ran, because

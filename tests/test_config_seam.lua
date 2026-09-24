@@ -29,6 +29,14 @@ H.eq(TC.MEASURED_ON_BUILD, MEASURED,
 H.eq(TC.SV_BROKEN_ON_BUILD, BROKEN,
     "and on the build where saved settings are known not to come back")
 
+-- The stub's default build is the one every other test file runs under, so a
+-- stale default quietly models a client that no longer exists - and a test
+-- asserting "no build warning at a default login" would be asserting it
+-- against the wrong build. AGENTS.md says to keep them equal; this is what
+-- makes that true rather than remembered.
+WoW.reset()
+H.eq(WoW.build, MEASURED, "the stub models the build Priestly was measured on")
+
 ------------------------------------------------------------
 -- The setters
 ------------------------------------------------------------
