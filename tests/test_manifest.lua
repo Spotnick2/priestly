@@ -144,9 +144,14 @@ do
     f:close()
 end
 
+-- Every Lua pattern character escaped, not just the dot: a path like
+-- Libs/LibGroupBuffs-1.0/tests carries a `-`, which is a quantifier in a
+-- pattern, so a name-only escape silently matches nothing and the check
+-- passes for the wrong reason.
 local function ignored(name)
+    local literal = name:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1")
     for _, line in ipairs(pkg) do
-        if line:match("^%s*%-%s*" .. name:gsub("%.", "%%.") .. "%s*$") then return true end
+        if line:match("^%s*%-%s*" .. literal .. "%s*$") then return true end
     end
     return false
 end
@@ -154,5 +159,40 @@ end
 for _, name in ipairs({ "AGENTS.md", "CLAUDE.md", "tests", "Tools", "docs", ".github" }) do
     H.check(ignored(name), name .. " stays out of the release zip")
 end
+
+-- The library's dev files have to be named HERE as well, because the packager
+-- that builds the release does not apply an external's own ignore list - the
+-- v2.0.6 download carried the library's tests and notes, 46 files instead of
+-- 7. Harmless (nothing there loads) but it made the library's .pkgmeta a false
+-- assurance.
+--
+-- Read from the library's own list rather than copied, so it cannot drift: a
+-- dev file added there, ignored there, and therefore invisible to CI's
+-- packager, fails HERE instead of shipping in the next CurseForge release.
+-- Dot-paths are skipped - both packagers prune those, which the published zip
+-- confirms: its 46 files were exactly the non-dot files at that tag.
+local libPkgmeta = H.readFile(H.libraryRoot() .. "/.pkgmeta")
+H.check(libPkgmeta ~= nil, "the library checkout has a .pkgmeta to mirror")
+
+local mirrored, inIgnore = 0, false
+for line in (libPkgmeta or ""):gmatch("[^\r\n]+") do
+    if line:match("^ignore:%s*$") then
+        inIgnore = true
+    -- A top-level comment does not end a YAML list; a later ignore entry can
+    -- still follow it and must be mirrored here.
+    elseif line:match("^%S") and not line:match("^#") then
+        inIgnore = false
+    elseif inIgnore then
+        local entry = line:match("^%s+%-%s+(%S+)")
+        -- `external` is the embed path this .pkgmeta declares, so a move to a
+        -- 2.0 library leaves these assertions pointing at the right place.
+        if entry and entry:sub(1, 1) ~= "." then
+            mirrored = mirrored + 1
+            H.check(ignored(external .. "/" .. entry),
+                entry .. " is ignored from here too, not left to the library's own list")
+        end
+    end
+end
+H.check(mirrored >= 4, "the library's ignore list was read: " .. mirrored .. " entries")
 
 H.done("test_manifest")
