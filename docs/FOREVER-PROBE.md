@@ -342,19 +342,38 @@ Both files on disk read `launches = 1`. Every session starts from zero and write
 would show 2, 3, 4. Confirmed independently by Priestly itself: `PriestlyDB.pos` is present in the
 character file and nil in the next session, which `/priestly pos` reports directly.
 
-**Still broken on 69977, re-measured 2026-09-24 without launching the game.** The counters are on
-disk, so the check costs nothing once a counting addon has ever run — `WTF/Account/<id>/`:
+**Still broken on 69977, re-measured 2026-09-24 without launching the game.** The probe's own
+before/after is *in the file it writes*, so once a counting addon has ever run, the check costs
+nothing — `WTF/Account/<id>/SavedVariables/PriestlyProbe.lua`:
 
-| file | reads |
-|---|---|
-| `SavedVariables/AltStableProbe.lua` | `loadCount = 1`, stamped `2026-09-24 11:00:10` |
-| `<realm>/<char>/SavedVariables/PriestlyProbe.lua` | `launches = 1` |
-| `SavedVariables/Priestly.lua` | `svLoadCheck = { build = "69977", … }` |
+```lua
+PriestlyProbePersist = {
+["marker"] = "written by PriestlyProbe",
+["launches"] = 1,
+["stamps"] = {
+"2026-09-24 11:00:02",
+},
+}
+```
 
-The counter only survives if the table comes back, and it has not after many client starts. The
-third line is what ties the measurement to the build: Priestly stamps the build it saw into the
-same file the counter sits in. `SV_BROKEN_ON_BUILD` rests on this, not on the API dumps matching —
-a dump lists the same symbols whether or not the client reads the file back.
+`stamps` is **append-only per addon load** and `launches` increments from whatever arrived, so the
+list's length is the number of loads since the table last came back. One entry, on a client whose
+file already held an earlier session's data — the 2026-09-21 measurement read it, and the client
+only writes this file at logout. So the addon saw *nothing* at load.
+
+That also rules out the trap this section warns about: `/reload` and a relog to character select
+both hand the table back in-process, so either would have left **two** stamps. One stamp is a real
+process start with no load-back.
+
+Corroborated in the same session by two other addons, tied to it by the stamps rather than by
+sitting in one file — `SavedVariables/AltStableProbe.lua` has `loadCount = 1` at `11:00:10`, and
+`SavedVariables/Priestly.lua` has `svLoadCheck = { build = "69977", stamp = "…11:00:10" }`, which
+is what dates the measurement to **this build**.
+
+`SV_BROKEN_ON_BUILD` rests on this, not on the API dumps matching — a dump lists the same symbols
+whether or not the client reads the file back. `MEASURED_ON_BUILD` is a different question and
+stays at 69913 until `/pprobe` is re-run here: identical declarations cannot show that aura
+secrecy or secure click casting still behave the same way.
 
 **How the earlier wrong answer happened, because it will happen again.** Persistence was checked by
 reading the saved file. That file looks fully populated whether or not the load ran, because

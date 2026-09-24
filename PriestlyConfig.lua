@@ -63,22 +63,30 @@ local DEFAULTS = {
 -- one thing that survives a restart here. Bump MEASURED_ON_BUILD after
 -- re-measuring (AGENTS.md); the library warns at every real login until then.
 --
--- 69977 (installed: .build.info, wow_classic_beta 1.60.1.69977). Its API dump
--- and 69913's are identical sets - documented functions, events, enums and
--- structures, widget methods, namespace functions - which is what carries the
--- probe findings over.
+-- These two are INDEPENDENT, and right now they differ. The installed client
+-- is 69977 (.build.info, wow_classic_beta 1.60.1.69977).
 --
--- SV_BROKEN_ON_BUILD needs its own evidence, because an API dump lists the
--- same symbols whether or not the client reads the file back. The launch
--- counters measure it: in files the client wrote on 2026-09-24,
--- PriestlyProbeChar.launches and AltStableProbe's loadCount are both still 1
--- after many client starts, and Priestly's own svLoadCheck in the same file
--- records build 69977. The counter only survives if the table comes back, so
--- it does not. Still broken on this build.
+-- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on 69977. The two
+-- API dumps are identical sets - documented functions, events, enums and
+-- structures, widget methods, namespace functions - but matching declarations
+-- cannot show that aura secrecy, secure click casting or any other RUNTIME
+-- finding still behaves the same way. The login notice is the reminder that
+-- they have not been re-checked, so silencing it is the one thing not to do.
 --
--- The test pins these literally, so a build that moves on cannot pass by
+-- SV_BROKEN_ON_BUILD is 69977 because that one IS measured, and it needs its
+-- own instrument: a dump lists the same symbols whether or not the client
+-- reads the file back. PriestlyProbe counts its own loads and appends a stamp
+-- per load, and the account-wide file the client wrote on 2026-09-24 holds
+-- launches = 1 and a single stamp, 11:00:02. Both a /reload and a relog hand
+-- the table back in-process, so either would have left two stamps; a prior
+-- session's file was on disk to load (the 2026-09-21 measurement read it).
+-- One stamp means the addon saw nothing at load on a real client start.
+-- Priestly's own svLoadCheck, written 11:00:10 in that same session, records
+-- the build as 69977. Still broken there.
+--
+-- The test pins both literally, so a build that moves on cannot pass by
 -- agreeing with itself.
-local MEASURED_ON_BUILD = "69977"
+local MEASURED_ON_BUILD = "69913"
 local SV_BROKEN_ON_BUILD = "69977"
 
 -- config-owner: begin

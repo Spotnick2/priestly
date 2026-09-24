@@ -315,9 +315,14 @@ Changing patch compatibility:
   would leave the addon on stale findings with nothing left to say so. It is worded for players;
   the procedure lives here.
   When the build changes, re-measure - `/apidump`, `/pprobe`, and a **full-exit** check of saved
-  settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`, and keep `WoW.build`'s default
-  in `tests/wow_stubs.lua` equal to it. Bumping without re-measuring silences the only reminder
-  that the notes are stale.
+  settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
+  silences the only reminder that the notes are stale, so a dump comparison is not enough on its
+  own: identical declarations say nothing about runtime behaviour like aura secrecy or secure
+  click casting.
+  `WoW.build`'s default in `tests/wow_stubs.lua` tracks the **client**, not this constant - it is
+  the default every other test runs under, and it should show them what a player sees, notice
+  included. The three builds are pinned as literals in `tests/test_config_seam.lua`; they are
+  equal in the ordinary case and diverge while a re-probe is outstanding.
 - If saved settings are **still** broken on the new build, set `SV_BROKEN_ON_BUILD` to it as well.
   Measure that one separately — the launch counters above — and never infer it from the API dumps
   matching. Getting it wrong silences both detectors at once: the addon treats the build as fixed
