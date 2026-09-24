@@ -241,6 +241,60 @@ H.check(not chat:find("completely", 1, true), "and not claiming a failed load: "
 loaded = loadWithout(shaped(FLOOR, markers(FLOOR)))
 H.check(loaded, "exactly the floor is enough")
 
+------------------------------------------------------------
+-- The real load order: an older copy loaded first is UPGRADED, not refused
+--
+-- The fakes above call the bridge directly, which is not how the game gets
+-- here. Priestly's TOC loads its own copy of the library BEFORE this file, so
+-- another addon's older copy has already been upgraded by LibStub when the
+-- bridge runs - which is why a version below the floor means Priestly's own
+-- copy never registered, not that somebody else's is in the way.
+------------------------------------------------------------
+
+do
+    local root = H.libraryRoot()
+    local fixtures = root .. "/tests/fixtures/"
+    local older = {}
+    for _, name in ipairs({ "Compat", "Settings", "Engine", "UI" }) do
+        older[#older + 1] = fixtures .. name .. "-r9.lua"
+    end
+    local haveFixtures = true
+    for _, path in ipairs(older) do
+        local f = io.open(path, "r")
+        if f then f:close() else haveFixtures = false end
+    end
+    H.check(haveFixtures, "the library checkout carries its r9 fixtures to load first")
+
+    if haveFixtures then
+        LibStub = savedLibStub
+        Priestly = nil
+        -- A LibStub with nothing registered, the way a session starts.
+        local stub = loadfile(root .. "/LibStub/LibStub.lua")
+        LibStub = nil
+        stub()
+
+        for _, path in ipairs(older) do loadfile(path)() end
+        local _, before = LibStub:GetLibrary("LibGroupBuffs-1.0")
+        H.eq(before, 9, "another addon's r9 copy registered first")
+
+        -- Now Priestly's own, as its TOC does.
+        local L = dofile("tests/libfiles.lua")
+        for _, file in ipairs(select(2, pcall(L.resolve, root))) do
+            loadfile(root .. "/" .. file)()
+        end
+        local _, after = LibStub:GetLibrary("LibGroupBuffs-1.0")
+        H.check(after > before, "and Priestly's copy upgrades it to r" .. tostring(after))
+
+        local before2 = #WoW.messages
+        local ok = pcall(dofile, "PriestlyCompat.lua")
+        H.check(ok, "so the bridge accepts it, despite the older copy having loaded first")
+        H.eq(#WoW.messages, before2, "and says nothing to the player")
+        H.check(Priestly.API ~= nil, "with the upgraded library in place")
+    end
+
+    LibStub, Priestly = savedLibStub, savedPriestly
+end
+
 -- The other two files stop before building anything, so a missing library is
 -- one message rather than a cascade of errors and half-made frames.
 Priestly = {}

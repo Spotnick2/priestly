@@ -42,12 +42,16 @@ if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
     advice = "Reinstalling Priestly should fix it."
 elseif type(minor) == "number" and minor < NEEDS_MINOR then
-    -- Nothing crashed: an older copy loaded first, most likely inside another
-    -- addon that embeds this library. Saying "failed to load completely"
-    -- would send the player hunting a fault that is not there.
-    problem = "another addon has loaded LibGroupBuffs-1.0 r" .. minor
-        .. ", and this version of Priestly needs r" .. NEEDS_MINOR .. " or newer"
-    advice = "Updating your other addons - or Priestly - should fix it."
+    -- The TOC loads Priestly's own copy of the library before this file, and
+    -- LibStub UPGRADES an older copy another addon loaded first - so a lower
+    -- version here cannot be another addon's doing. It means Priestly's own
+    -- bundled copy never registered: the Libs folder is missing, damaged, or
+    -- stale. Nothing crashed, though, so this must not read as a crash, and it
+    -- must not send the player off to update other addons.
+    problem = "the LibGroupBuffs-1.0 library in Priestly's Libs folder is r" .. minor
+        .. ", and this version of Priestly needs r" .. NEEDS_MINOR
+        .. " - its own copy did not load"
+    advice = "Reinstalling Priestly should fix it."
 elseif not (type(minor) == "number"
             and lib.compatMinor == minor and lib.settingsMinor == minor
             and lib.engineMinor == minor and lib.uiMinor == minor
