@@ -76,7 +76,13 @@ function L.resolve(root, entry)
 end
 
 -- Script entry point, for run.ps1, deploy.ps1 and CI.
-if arg and arg[0] and arg[0]:match("libfiles%.lua$") then
+-- Run as a script, not loaded as a module. Matched on the file NAME: an
+-- unanchored "libfiles%.lua$" also matched `tests/test_libfiles.lua`, which
+-- then printed this usage and exited before the test could run. A path
+-- separator is neither a letter nor an underscore, so this accepts
+-- `tests/libfiles.lua` while rejecting `test_libfiles.lua`.
+if arg and arg[0] and arg[0]:match("libfiles%.lua$")
+    and not arg[0]:match("[%w_]libfiles%.lua$") then
     local root, mode = arg[1], arg[2]
     if not root or (mode ~= "load" and mode ~= "ship") then
         io.stderr:write("usage: lua libfiles.lua <library root> load|ship\n")

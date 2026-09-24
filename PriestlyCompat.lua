@@ -37,10 +37,22 @@ local NEEDS_MINOR = 10
 
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
-local problem
+local problem, advice
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder"
-elseif not (type(minor) == "number" and minor >= NEEDS_MINOR
+    advice = "Reinstalling Priestly should fix it."
+elseif type(minor) == "number" and minor < NEEDS_MINOR then
+    -- The TOC loads Priestly's own copy of the library before this file, and
+    -- LibStub UPGRADES an older copy another addon loaded first - so a lower
+    -- version here cannot be another addon's doing. It means Priestly's own
+    -- bundled copy never registered: the Libs folder is missing, damaged, or
+    -- stale. Nothing crashed, though, so this must not read as a crash, and it
+    -- must not send the player off to update other addons.
+    problem = "the LibGroupBuffs-1.0 library in Priestly's Libs folder is r" .. minor
+        .. ", and this version of Priestly needs r" .. NEEDS_MINOR
+        .. " - its own copy did not load"
+    advice = "Reinstalling Priestly should fix it."
+elseif not (type(minor) == "number"
             and lib.compatMinor == minor and lib.settingsMinor == minor
             and lib.engineMinor == minor and lib.uiMinor == minor
             and type(lib.API) == "table" and type(lib.API.RegisterEventsReported) == "function"
@@ -49,6 +61,7 @@ elseif not (type(minor) == "number" and minor >= NEEDS_MINOR
             and type(lib.Engine) == "table" and type(lib.Engine.New) == "function"
             and type(lib.UI) == "table" and type(lib.UI.New) == "function") then
     problem = "the LibGroupBuffs-1.0 library failed to load completely"
+    advice = "Reinstalling Priestly should fix it."
 end
 
 if problem then
@@ -58,7 +71,7 @@ if problem then
     -- before building anything, so there is exactly one message.
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Priestly cannot start:|r "
-            .. problem .. ". Reinstalling Priestly should fix it.")
+            .. problem .. ". " .. advice)
     end
     error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0). Developers: check out "
         .. "LibGroupBuffs next to the repository and run Tools/deploy.ps1.")
