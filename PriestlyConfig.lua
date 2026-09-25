@@ -86,14 +86,21 @@ local DEFAULTS = {
 -- Priestly's own svLoadCheck, written 11:00:10 in that same session, records
 -- the build as 69977. Still broken there.
 --
--- 70009 then patched, and settings appear to come back: AltStable's launch
--- counter moved 3 -> 4 account-wide and 1 -> 2 per-character, and Priestly's
--- markers returned and announced. What is NOT yet shown is a full exit
--- between those two sessions - a logout to character select writes saved
--- variables too - so this constant stays at 69977 until a quit-and-relaunch
--- is measured. Being wrong here in the optimistic direction is what #57 was
--- about. LibGroupBuffs#30 settles the question without a constant at all, by
--- comparing the marker's own recorded build with the one running.
+-- 70009 then FIXED it: saved tables load back again, measured by launch
+-- counters read at PLAYER_LOGIN - AltStable's went 3 -> 9 across sessions,
+-- and the shared notes record the same result from two addons on two
+-- accounts after a full exit. So 69977 is the LAST broken build, which is
+-- what this constant is for, and it stays there rather than following the
+-- client forward.
+--
+-- Our own /pprobe sv disagreed, and was wrong: it captured at file scope,
+-- which on this client runs BEFORE the saved file is executed, so it could
+-- never see a table arrive on any build (docs/FOREVER-PROBE.md section 11).
+-- Fixed in Tools/PriestlyProbe.
+--
+-- LibGroupBuffs#30 drops the constant entirely: the marker records the build
+-- it was written on, and a patch forces a full exit, so a marker returning
+-- under a different build proves the restart by itself.
 --
 -- The test pins both literally, so a build that moves on cannot pass by
 -- agreeing with itself.

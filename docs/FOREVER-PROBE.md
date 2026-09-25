@@ -432,11 +432,13 @@ Counters that never moved before are moving, and the one reading that pointed th
 `PriestlyProbe` reporting nothing arrived — was the broken instrument described above, not
 evidence.
 
-**The formality that remains** is a quit-to-desktop and relaunch: logging out to character select
-writes saved variables too, so 22:54 → 00:21 could be one client process. The patch at 18:06 did
-force a full exit, and AltStable read `loadCount = 3` after it, which is the strongest thing on
-hand. With the probe fixed, one relaunch now settles it from disk afterwards: its `stamps` list
-gains a second entry, and `launches` reads 2.
+**Settled across a full exit**, not just these two sessions: the shared notes
+(`PORTING-TBC-TO-FOREVER.md` §0) record the same result measured from the launch counters on disk
+after a full exit, by two addons on two accounts. The patch at 18:06 forced one anyway, and
+AltStable read `loadCount = 3` after it.
+
+So `SV_BROKEN_ON_BUILD` stays at **69977** — the last build where loading was broken, which is what
+that constant names. It does not follow the client forward.
 
 **Two account folders.** `WTF/Account/` holds `50284074#1` and `50284074#12`, with characters split
 across them. Reading the wrong one makes addons look like they disagree about whether loading
