@@ -21,13 +21,13 @@ local T, TC = H.loadAddon()
 -- so a relog to character select can announce a fix that never happened.
 -- Moving the client forward has to be a two-file edit, and this is the file
 -- that says so.
--- All three DIFFER right now, and only one of them is waiting on anything:
--- the client is 70009; /pprobe has not been re-run since 69913, so the login
--- notice still says that; and 69977 is the last build where saved settings
--- were broken, since 70009 fixed it - so that one is final, not pending.
--- Until they were allowed to differ, nothing in this file would have caught
--- the two detectors being wired together.
-local MEASURED = "69913"
+-- MEASURED and CLIENT agree again - 70009 was re-probed in game on
+-- 2026-09-25, aura secrecy in a fight and secure click-casting included - so
+-- the login notice is silent. BROKEN does NOT follow them: it names the last
+-- build where saved settings were broken, and 70009 fixed that. They are
+-- allowed to differ, and this file covers them differing, which is how the
+-- two detectors were shown not to be wired together.
+local MEASURED = "70009"
 local BROKEN = "69977"
 local CLIENT = "70009"  -- what .build.info reports; what the stub must model
 local FIXED = "70123"   -- any build other than the three above

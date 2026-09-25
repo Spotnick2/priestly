@@ -8,12 +8,15 @@ arity, return order, or whether the underlying system is wired up on a Vanilla-c
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
 Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercity.
 
-**69913 is the last build anything here was probed on, and the installed client is 70009**
-(patched 2026-09-24; 69977 came and went in between). So every runtime finding below is
-**unverified on the build people are running**, and `MEASURED_ON_BUILD` stays at `69913` for
-exactly that reason - the login notice it drives is the reminder. Do not advance it from this
-document; advance it after running `/pprobe` on the current client and recording the results
-here.
+**Everything here was probed on 1.60.1.70009**, the installed client (patched 2026-09-24; 69913 and
+69977 came before it), and `MEASURED_ON_BUILD` says so. The original measurements were taken on
+69913 and re-run on 70009 on 2026-09-25 — aura secrecy in a real fight and secure click-casting
+included, which are the two this addon is built on. Where a finding moved between them, the section
+says so and keeps both readings.
+
+When the client next patches, the login notice fires again until someone repeats that: `/apidump`,
+`/pprobe` **in combat as well as out**, and the SavedVariables check. Advance the constant from
+those, never from this document.
 
 What is known about the builds since is narrower than it looks, and it is **not** that the API
 stayed the same. 69913 and 69977 were identical sets; **70009 is not** — `forever-api-1.60.1.70009.md`
@@ -45,12 +48,13 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 | names (§4) | `GetUnitName` unchanged; **the player's `UnitName` row changed** — see §4 |
 | instances (§5) | `GetInstanceInfo` now returns **eleven** values — see §5 |
 | misc (§12) | `GetItemIconByID` works, `MouseIsOver` and `InterfaceOptions_AddCategory` still absent, `Settings.*` present — unchanged |
-| auras (§3) | out of combat only: `combat=false secret=false` |
+| auras (§9) | `combat=false secret=false` out of combat, **`combat=true secret=true` in a fight** — unchanged |
+| secure click-casting (§1) | button builds, `PreClick`/`PostClick` fire on both edges, attributes settable out of combat and left alone in it, `loadstring_untainted` still missing — unchanged |
+| click edges (§1) | A, B and C each send **exactly 1 cast** — unchanged |
 
-**Two findings are NOT re-measured on 70009, and they are the two the addon is built on:** aura
-secrecy *in combat* (§3) and secure click-casting (§13). `/pprobe auras` has to be re-run in a
-fight, and `/pprobe secure` / `/pprobe click` clicked through. `MEASURED_ON_BUILD` stays at 69913
-until they are, which is what the login notice is for.
+**Everything the addon is built on is re-measured on 70009**, including the two that matter most:
+aura secrecy in combat, and secure click-casting on both mouse edges. `MEASURED_ON_BUILD` moves to
+70009 with this.
 
 Declarations are still only declarations. Even where the dumps *do* agree, they cannot show that aura secrecy in combat, secure click
 casting, or any other behaviour below still works the same way, which is the whole content of this
@@ -78,6 +82,13 @@ addons do not work". Priestly uses none of that machinery — plain `SecureActio
 | `SetAttribute` from an insecure `PreClick`, out of combat | **yes**, no taint error |
 | `PreClick` / `PostClick` both fire on left and right click | **yes** |
 | `loadstring_untainted` | **missing** — confirms secure *snippets* are broken |
+
+**Re-measured on 70009 (2026-09-25 01:17).** Identical: the button builds, `PreClick`/`PostClick`
+fire on left and right, `SetAttribute("unit1", "party1")` from an insecure `PreClick` returns ok out
+of combat, and in combat the handler correctly leaves attributes alone and the click still reaches
+`PostClick` with `combat=true`. `loadstring_untainted` is still absent and `SecureHandlerWrapScript`
+still present. `/pprobe click` reports **exactly one cast** for each of A, B and C — C being the
+`ActionButtonUseKeyDown` setting that produced the dead-click reports elsewhere.
 | `SecureHandlerWrapScript`, `RegisterStateDriver` | present as functions, but unusable without the above |
 
 The guide's warning is about `SecureHandler*` and state drivers specifically. Priestly's attribute
@@ -334,6 +345,10 @@ porting guide — unused either way. The struct carries everything needed:
   isFromPlayerOrPlayerPet=true, sourceUnit="player", points={1=4}, ... }
 ```
 
+**Secrecy re-measured on 70009 (2026-09-25 01:17):** `combat=false secret=false` standing still,
+`combat=true secret=true` in a fight. Unchanged, so everything below still describes the current
+client.
+
 **Power Word: Fortitude lasts 3600s here** — an hour, against 1800 in Vanilla. Priestly's own saved
 variables confirm it learned exactly that (`learnedDurations = { build = "69913", fort = 3600 }`),
 which also proves the learning path works end to end in game.
@@ -439,8 +454,8 @@ is what dates the measurement to **this build**.
 
 `SV_BROKEN_ON_BUILD` rests on this, not on the API dumps matching — a dump lists the same symbols
 whether or not the client reads the file back. `MEASURED_ON_BUILD` is a different question and
-stays at 69913 until `/pprobe` is re-run here: identical declarations cannot show that aura
-secrecy or secure click casting still behave the same way.
+was settled separately, by re-running `/pprobe` on 70009 — identical declarations could never have
+shown that aura secrecy or secure click casting still behave the same way.
 
 ### 70009: FIXED — and the instrument that said otherwise was broken
 

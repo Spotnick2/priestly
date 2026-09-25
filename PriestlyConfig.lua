@@ -68,19 +68,17 @@ local DEFAULTS = {
 --
 -- These two are INDEPENDENT, and right now they differ. The installed client
 -- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
--- MEASURED_ON_BUILD is behind it and says so at every login until someone
--- re-probes. SV_BROKEN_ON_BUILD is NOT behind: it names the last build where
--- loading was broken, which is 69977, and it does not follow the client
--- forward.
+-- MEASURED_ON_BUILD is 70009 as of 2026-09-25: /apidump, /pprobe including
+-- aura secrecy in a real fight and secure click-casting on both mouse edges,
+-- and the SavedVariables check. SV_BROKEN_ON_BUILD does NOT follow the client
+-- forward: it names the last build where loading was broken, which is 69977.
 --
--- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on the CURRENT
--- client, which is 70009. 69913 and 69977 had identical documented sets;
--- 70009 does NOT - it adds, removes and changes signatures (see
--- docs/FOREVER-PROBE.md, top). Nothing this addon calls was removed, so
--- there is no break, but the dump no longer even suggests the findings
--- carried over - and matching declarations never could show that aura
--- secrecy, secure click casting or any other RUNTIME finding still behaves
--- the same way. The login notice is the reminder that
+-- What moving it took, since a dump comparison would not have done: 69913
+-- and 69977 had identical documented sets, but 70009 adds, removes and
+-- changes signatures (docs/FOREVER-PROBE.md, top). Nothing this addon calls
+-- was removed - and matching declarations could never have shown that aura
+-- secrecy in combat or secure click-casting still behave the same way. Those
+-- were measured in game, which is the only thing that settles them. The login notice is the reminder that
 -- they have not been re-checked, so silencing it is the one thing not to do.
 --
 -- SV_BROKEN_ON_BUILD is 69977 because that one IS measured, and it needs its
@@ -112,7 +110,7 @@ local DEFAULTS = {
 --
 -- The test pins both literally, so a build that moves on cannot pass by
 -- agreeing with itself.
-local MEASURED_ON_BUILD = "69913"
+local MEASURED_ON_BUILD = "70009"
 local SV_BROKEN_ON_BUILD = "69977"
 
 -- config-owner: begin
