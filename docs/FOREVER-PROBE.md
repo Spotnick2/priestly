@@ -335,7 +335,11 @@ The walk returns the rank in the subtext — `Lesser Heal [Rank 1]`, `Power Word
 — so the reagent-rank logic (`API.GetSpellRank`) has something to parse once Prayer of Fortitude is
 learnable.
 
-## 11. SavedVariables — nothing loads back, per-character included
+## 11. SavedVariables — nothing loaded back through 69977; fixed in 70009
+
+**Everything in this section up to the "70009: FIXED" heading below describes builds 69913 and
+69977.** It is kept because the beta can take a fix away again, and because the ways of measuring
+it wrong are the reusable part.
 
 **Re-measured 2026-09-21 01:14 on build 1.60.1.69913. This supersedes the earlier finding in this
 section that per-character storage worked.**
@@ -461,15 +465,17 @@ are rebuilt from runtime state. Only a key absent from `DEFAULTS` can show the f
 only such key in this addon, and it is precisely the one that kept disappearing — reported twice by
 the user before it was believed.
 
-Verify persistence by **counting launches inside the addon**, never by reading the file.
+Verify persistence by **counting launches inside the addon**, never by reading the file — and
+count at `PLAYER_LOGIN`, never at file scope, for the reason at the top of this section.
 
-**Only the account-scoped folders are affected.** Reported on the Blizzard forums
+**Only the account-scoped folders were affected** (through 69977). Reported on the Blizzard forums
 ([UI/Addon settings wiped on client restart](https://us.forums.blizzard.com/en/wow/t/uiaddon-settings-wiped-on-client-restart/2353992/15),
 same build, no Blizzard reply as of 2026-09-21) and matched on this install: the machine-level
 `WTF\SavedVariables\` holds only Blizzard's own login-screen files (`Blizzard_AddOnList`,
-`Blizzard_Console`, `Blizzard_GlueSavedVariables`), and those persist. Everything under
-`WTF\Account\<id>\` - account-wide and per-character alike - is lost. Addon SavedVariables
-always land under the account folder, so this narrows the bug without offering a workaround.
+`Blizzard_Console`, `Blizzard_GlueSavedVariables`), and those persisted. Everything under
+`WTF\Account\<id>\` — account-wide and per-character alike — was lost, which is where addon
+SavedVariables always land. That narrowed the bug without offering a workaround; on 70009 the
+account folders load again.
 
 ### CVars do not persist — the earlier "measured" result was a `/reload` artefact
 
