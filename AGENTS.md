@@ -211,9 +211,14 @@ not by buff id: the single and group forms of one buff share an id and do not sh
   ItemLocation); reputation is `C_Reputation`, not `C_CreatureInfo.GetFactionInfo`.
 - **`C_Spell.GetSpellInfo(name)` only resolves spells the player KNOWS.** By ID it always works.
   Resolve names *from* IDs, never the reverse, or every unlearned buff silently gets a nil name.
-- **`UnitName(unit)` is a trap.** On the player it returns the full two-part name with the realm
-  second; on any other unit it returns only the **first name**, with the surname where the realm
-  normally sits. Use `API.UnitDisplayName` (`GetUnitName(unit, false)`).
+- **`UnitName(unit)` is a trap.** On 70009 it returns only the **first name** for *every* unit,
+  player included, with the surname sitting where the realm normally does — so
+  `local name, realm = UnitName(unit)` hands you a surname and calls it a realm. On 69913 the
+  player was the exception and came back joined with a real realm; whether that changed with the
+  client or with the realm the two runs sat on is **unresolved** (`docs/FOREVER-PROBE.md` §4), so
+  write nothing that depends on either reading. Use `API.UnitDisplayName` (`GetUnitName(unit,
+  false)`), which joins under both. The test stub models 70009 by default and the 69913 shape for
+  a unit given a `realm`, so a player-only name path can be tested against both.
 - **`GetInstanceInfo()` returns the continent outdoors**, not an empty string — gate on
   `instanceType ~= "none"`.
 - Declared API evidence is the build-matched

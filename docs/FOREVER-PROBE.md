@@ -193,7 +193,10 @@ back a bare frame — so presence has to be checked by looking for the regions t
 `C_PlayerInfo.ShouldDisplaySurname()` → **true**. The separator is a **space**, not a hyphen (the
 hyphen in the porting guide comes from the WTF folder layout).
 
-| API | player | party1 |
+**The table below is the 69913 reading.** Its player row is *not* current behaviour — see the 70009
+re-run underneath it, where the player splits like everything else.
+
+| API | player (69913) | party1 |
 |---|---|---|
 | `UnitName` | `"Karuzo Elegia"`, `"ClassicBetaPvE"` | `"Zoruka"`, `"Mortalis"` |
 | `UnitFullName` | `"Karuzo Elegia"`, `"ClassicBetaPvE"` | `"Zoruka"`, `"Mortalis"` |
