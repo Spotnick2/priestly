@@ -37,9 +37,12 @@ local DEFAULTS = {
 
 -- ─── One write path for PriestlyDB ─────────────────────────────────────────────
 --
--- Nothing an addon writes survives a real client restart on this build -
--- account-wide and per-character SavedVariables, and CVars too (issue #9,
--- docs/FOREVER-PROBE.md section 11). The fix is Blizzard's. Until it lands,
+-- Nothing an addon wrote survived a real client restart until build 70009,
+-- which fixed it - account-wide and per-character SavedVariables both. CVars
+-- have NOT been re-measured there and did not persist through 69977 (issue
+-- #9, docs/FOREVER-PROBE.md section 11). Players on an older build still lose
+-- everything, so the single write path below stays as it is; issue #9 is
+-- where moving back to account-wide storage gets decided. Until then,
 -- every settings change goes through one setter anyway, so that whatever the
 -- fix needs - a migration, a validation pass, a different store - lands in one
 -- place instead of in each handler.
@@ -64,13 +67,17 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); the library warns at every real login until then.
 --
 -- These two are INDEPENDENT, and right now they differ. The installed client
--- is 69977 (.build.info, wow_classic_beta 1.60.1.69977).
+-- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
+-- MEASURED_ON_BUILD is behind it and says so at every login until someone
+-- re-probes. SV_BROKEN_ON_BUILD is NOT behind: it names the last build where
+-- loading was broken, which is 69977, and it does not follow the client
+-- forward.
 --
--- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on 69977. The two
--- API dumps are identical sets - documented functions, events, enums and
--- structures, widget methods, namespace functions - but matching declarations
--- cannot show that aura secrecy, secure click casting or any other RUNTIME
--- finding still behaves the same way. The login notice is the reminder that
+-- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on the CURRENT
+-- client, which is 70009. 69913 and 69977 have identical documented sets and
+-- 70009 moves only slightly, but matching declarations cannot show that aura
+-- secrecy, secure click casting or any other RUNTIME finding still behaves
+-- the same way. The login notice is the reminder that
 -- they have not been re-checked, so silencing it is the one thing not to do.
 --
 -- SV_BROKEN_ON_BUILD is 69977 because that one IS measured, and it needs its
@@ -83,6 +90,22 @@ local DEFAULTS = {
 -- One stamp means the addon saw nothing at load on a real client start.
 -- Priestly's own svLoadCheck, written 11:00:10 in that same session, records
 -- the build as 69977. Still broken there.
+--
+-- 70009 then FIXED it: saved tables load back again, measured by launch
+-- counters read at PLAYER_LOGIN - AltStable's went 3 -> 9 across sessions,
+-- and the shared notes record the same result from two addons on two
+-- accounts after a full exit. So 69977 is the LAST broken build, which is
+-- what this constant is for, and it stays there rather than following the
+-- client forward.
+--
+-- Our own /pprobe sv disagreed, and was wrong: it captured at file scope,
+-- which on this client runs BEFORE the saved file is executed, so it could
+-- never see a table arrive on any build (docs/FOREVER-PROBE.md section 11).
+-- Fixed in Tools/PriestlyProbe.
+--
+-- LibGroupBuffs#30 drops the constant entirely: the marker records the build
+-- it was written on, and a patch forces a full exit, so a marker returning
+-- under a different build proves the restart by itself.
 --
 -- The test pins both literally, so a build that moves on cannot pass by
 -- agreeing with itself.

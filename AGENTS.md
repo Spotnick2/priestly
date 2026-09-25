@@ -140,13 +140,21 @@ disagree.
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
 Protection aura names, which the config's "detect" mode reads).
 
-**NO SavedVariables load back on this client — per-character included.** Re-measured on 69977, the
-installed build, on 2026-09-24 — from the launch counters in `WTF/Account/<id>/`, which needs no
-game session (`docs/FOREVER-PROBE.md` §11). Do that, not a dump comparison, before moving
-`SV_BROKEN_ON_BUILD`: a dump lists the same symbols whether or not the client reads the file back.
-First measured on build 1.60.1.69913 (2026-09-21 01:14) with two independent instruments: `/pprobe sv` reports
-`launches=0` before every session on *both* the account-wide and per-character tables, and
-Priestly's own `pos` sits on disk while `PriestlyDB.pos` is nil in the next session.
+**SavedVariables were broken through 69977 and are FIXED in 70009** — the installed build. Saved
+tables load back again, account-wide and per-character, measured from launch counters read at
+`PLAYER_LOGIN` (`docs/FOREVER-PROBE.md` §11). `SV_BROKEN_ON_BUILD` names the *last broken* build,
+69977, and does not follow the client forward. **CVars have not been re-measured on 70009** and did
+not persist through 69977, so assume nothing about them.
+
+Measure this from the counters, never from a dump comparison: a dump lists the same symbols whether
+or not the client reads the file back. And **read the counter in an event, never at file scope** —
+the client runs an addon's saved file *after* its own Lua files, so a file-scope read is nil however
+well loading works, and the file-scope write it guards is then overwritten by the file being loaded.
+Priestly's own probe did that and reported "nothing came back" on a build where loading worked.
+
+The history, because the reasoning still applies: first measured broken on 1.60.1.69913
+(2026-09-21 01:14) with two instruments — the launch counters, and Priestly's own `pos` sitting on
+disk while `PriestlyDB.pos` was nil in the next session.
 
 An earlier pass concluded per-character storage worked. **That was wrong**, and the way it was wrong
 is the thing to learn from: it was verified by reading the saved file, which looks perfectly
@@ -163,18 +171,25 @@ memory - CVars included - reads back as if it had persisted. That is how CVars w
 here as a working store; a full client exit showed they are lost like everything else. `/reload` can
 prove something is broken, never that it works. Confirm with a **full exit and relaunch**.
 
-There is no store to fall back to on this build: CVars fail across a real restart too (measured in
-AltStable, PR #33 there). Wait for Blizzard's fix, which has been reported.
+Through 69977 there was no store to fall back to at all: CVars fail across a real restart too
+(measured in AltStable, PR #33 there). 70009 fixed SavedVariables; **CVars have not been
+re-measured there**, so they are still assumed lost.
 
-`SavedVariablesPerCharacter` stays in the TOC for now: it is no worse than account-wide, and it is
-where settings will land if the client is fixed. `tests/test_manifest.lua` asserts it. But do not
-write code that depends on any setting surviving a `/reload` — tracked in **issue #9**.
+`SavedVariablesPerCharacter` stays in the TOC: on 70009 it loads, and so does account-wide, so the
+choice between them is now a product question rather than a way round a broken client.
+`tests/test_manifest.lua` asserts it.
 
-This is a workaround for a client bug, tracked in **issue #9** for revisiting once the client loads
-account-wide variables. Moving back is not just reverting the TOC line: by then people will have
-configured characters, and seeding the account-wide table from them is what stops every setting
-resetting a second time. Keep `Tools/PriestlyProbe` until #9 closes — `/pprobe sv` is how the client
-gets re-tested.
+**Settings do persist on 70009.** Code may rely on that — but only as far as the measurement goes:
+it holds for SavedVariables on 70009 and later, not for CVars (unmeasured there) and not for anyone
+still on 69977 or earlier, who loses everything at every restart. Priestly still runs on those
+builds, so nothing may *require* a setting to have survived; read it, and cope when it is absent.
+
+Moving back to account-wide storage is **issue #9**, and it is still not just reverting the TOC
+line: people have configured characters under per-character storage, and seeding the account-wide
+table from them is what stops every setting resetting a second time — which would now be a
+self-inflicted version of the bug the client just fixed. Keep `Tools/PriestlyProbe` until #9
+closes; `/pprobe sv` is how the client gets re-tested, and it reads its counters at `PLAYER_LOGIN`
+for the reason §11 gives.
 
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,

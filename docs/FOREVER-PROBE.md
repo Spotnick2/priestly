@@ -8,11 +8,12 @@ arity, return order, or whether the underlying system is wired up on a Vanilla-c
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
 Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercity.
 
-**69913 is the last build anything here was probed on, and the installed client is 69977**
-(`Sep 22 2026`, as of 2026-09-24). So every runtime finding below is **unverified on the build
-people are running**, and `MEASURED_ON_BUILD` stays at `69913` for exactly that reason - the login
-notice it drives is the reminder. Do not advance it from this document; advance it after running
-`/pprobe` on 69977 and recording the results here.
+**69913 is the last build anything here was probed on, and the installed client is 70009**
+(patched 2026-09-24; 69977 came and went in between). So every runtime finding below is
+**unverified on the build people are running**, and `MEASURED_ON_BUILD` stays at `69913` for
+exactly that reason - the login notice it drives is the reminder. Do not advance it from this
+document; advance it after running `/pprobe` on the current client and recording the results
+here.
 
 What is known about 69977 is narrower than it looks: the two builds' API dumps are **identical
 sets** - documented functions, events, enums and structures, widget methods, namespace functions.
@@ -21,10 +22,12 @@ casting, or any other behaviour below still works the same way, which is the who
 file. A finding here that stops matching the game is a bug report, not a surprise: re-run the
 probe rather than assuming the note was always wrong.
 
-The SavedVariables finding (section 11) is the one thing that **has** been re-measured on 69977,
+The SavedVariables finding (section 11) is the one thing that **has** been re-measured since,
 because it needs a different instrument anyway: a dump lists the same symbols whether or not the
-client reads the file back. That one was measured from the files themselves, without launching the
-game - see below - and it is why `SV_BROKEN_ON_BUILD` is `69977` while `MEASURED_ON_BUILD` is not.
+client reads the file back. It was measured from the files themselves on 69977, without launching
+the game - see below - which is why `SV_BROKEN_ON_BUILD` is `69977` while `MEASURED_ON_BUILD` is
+not. **70009 fixed it** — section 11 has the measurement, and the instrument that said otherwise
+and why it could not have.
 
 ---
 
@@ -332,7 +335,11 @@ The walk returns the rank in the subtext — `Lesser Heal [Rank 1]`, `Power Word
 — so the reagent-rank logic (`API.GetSpellRank`) has something to parse once Prayer of Fortitude is
 learnable.
 
-## 11. SavedVariables — nothing loads back, per-character included
+## 11. SavedVariables — nothing loaded back through 69977; fixed in 70009
+
+**Everything in this section up to the "70009: FIXED" heading below describes builds 69913 and
+69977.** It is kept because the beta can take a fix away again, and because the ways of measuring
+it wrong are the reusable part.
 
 **Re-measured 2026-09-21 01:14 on build 1.60.1.69913. This supersedes the earlier finding in this
 section that per-character storage worked.**
@@ -383,6 +390,74 @@ whether or not the client reads the file back. `MEASURED_ON_BUILD` is a differen
 stays at 69913 until `/pprobe` is re-run here: identical declarations cannot show that aura
 secrecy or secure click casting still behave the same way.
 
+### 70009: FIXED — and the instrument that said otherwise was broken
+
+**Saved settings load back again.** AltStable's probe reads its tables at `PLAYER_LOGIN` and
+reports `SavedVariables (account) LOADED - previous loadCount=3`, counting on to **9** across
+sessions. Priestly's own markers come back and announced it.
+
+**`/pprobe sv` said `arrived: NO` in the same session, and it was wrong.** It captured at *file
+scope*:
+
+> This file runs BEFORE the client executes the SavedVariables file, so a file-scope read sees nil
+> no matter how well loading works — and a file-scope WRITE is then overwritten by the file being
+> loaded.
+
+Two things follow, and the second is the nastier one:
+
+- the probe could never have reported anything but `NO`, on any build;
+- its own saved data was silently discarded at every logout. The account file on disk stayed frozen
+  at the values written `2026-09-24 10:56` while its timestamp updated at each exit — the loaded
+  table replacing the one the file-scope code had just built, which is the same ordering seen from
+  the other side.
+
+Fixed in `Tools/PriestlyProbe`: the capture now happens at `PLAYER_LOGIN`, and `tests/test_probe.lua`
+asserts the login line reports a table handed over *after* the addon's files ran. Put the capture
+back at file scope and that test fails.
+
+**What this does not overturn.** 69913 and 69977 really were broken: AltStable's probe is a valid
+instrument and read `loadCount = 1` on 69977 (account `50284074#1`, 2026-09-24 11:00), and
+Priestly's `pos` did not survive.
+
+The two failures leave *different* signatures on disk, which is what keeps the old reading valid:
+
+| | stamp in the file | means |
+|---|---|---|
+| loading broken | **this** session's, rewritten every exit | the fresh table was written; nothing replaced it |
+| reading at file scope | an **older** session's, frozen, while the file's timestamp still updates | the loaded table replaced the fresh one before the write |
+
+The 69977 file carried its own session's stamp (`11:00:02`). The 70009 one carried a stamp from the
+day before. Same counter, opposite causes. The file-scope probe agreed with them for the wrong reason, which
+is the part worth remembering — an instrument that cannot fail is not evidence, it is a coincidence
+waiting to be believed.
+
+#### What was measured on the day (2026-09-24 → 25)
+
+From the files on account `50284074#12`, plus the chat from a live login:
+
+| instrument | before | after |
+|---|---|---|
+| AltStable probe, account-wide | `loadCount = 3` (22:54) | read `3`, wrote `#4` (00:21) |
+| AltStable probe, per-character | `loadCount = 1` | read `1`, wrote `#2` |
+| `PriestlySVCheck.svLoadCheck` | written 22:54, build 70009, `announced = true` | came back; already latched, so it stayed quiet |
+| `PriestlyDB.svLoadCheck` (Kaleid) | — | came back, and announced at 00:21 |
+
+Counters that never moved before are moving, and the one reading that pointed the other way —
+`PriestlyProbe` reporting nothing arrived — was the broken instrument described above, not
+evidence.
+
+**Settled across a full exit**, not just these two sessions: the shared notes
+(`PORTING-TBC-TO-FOREVER.md` §0) record the same result measured from the launch counters on disk
+after a full exit, by two addons on two accounts. The patch at 18:06 forced one anyway, and
+AltStable read `loadCount = 3` after it.
+
+So `SV_BROKEN_ON_BUILD` stays at **69977** — the last build where loading was broken, which is what
+that constant names. It does not follow the client forward.
+
+**Two account folders.** `WTF/Account/` holds `50284074#1` and `50284074#12`, with characters split
+across them. Reading the wrong one makes addons look like they disagree about whether loading
+works. Check which folder the character lives in before believing either.
+
 **How the earlier wrong answer happened, because it will happen again.** Persistence was checked by
 reading the saved file. That file looks fully populated whether or not the load ran, because
 `Priestly_EnsureDefaults` rewrites every `DEFAULTS` key at login and `learnedDurations` / `flavor`
@@ -390,15 +465,17 @@ are rebuilt from runtime state. Only a key absent from `DEFAULTS` can show the f
 only such key in this addon, and it is precisely the one that kept disappearing — reported twice by
 the user before it was believed.
 
-Verify persistence by **counting launches inside the addon**, never by reading the file.
+Verify persistence by **counting launches inside the addon**, never by reading the file — and
+count at `PLAYER_LOGIN`, never at file scope, for the reason at the top of this section.
 
-**Only the account-scoped folders are affected.** Reported on the Blizzard forums
+**Only the account-scoped folders were affected** (through 69977). Reported on the Blizzard forums
 ([UI/Addon settings wiped on client restart](https://us.forums.blizzard.com/en/wow/t/uiaddon-settings-wiped-on-client-restart/2353992/15),
 same build, no Blizzard reply as of 2026-09-21) and matched on this install: the machine-level
 `WTF\SavedVariables\` holds only Blizzard's own login-screen files (`Blizzard_AddOnList`,
-`Blizzard_Console`, `Blizzard_GlueSavedVariables`), and those persist. Everything under
-`WTF\Account\<id>\` - account-wide and per-character alike - is lost. Addon SavedVariables
-always land under the account folder, so this narrows the bug without offering a workaround.
+`Blizzard_Console`, `Blizzard_GlueSavedVariables`), and those persisted. Everything under
+`WTF\Account\<id>\` — account-wide and per-character alike — was lost, which is where addon
+SavedVariables always land. That narrowed the bug without offering a workaround; on 70009 the
+account folders load again.
 
 ### CVars do not persist — the earlier "measured" result was a `/reload` artefact
 
@@ -409,7 +486,9 @@ persisted.
 
 After a **full client exit** on this build, the client rewrote `Config.wtf` and both
 `config-cache.wtf` files without the addon's CVar, and `GetCVar` returned `nil` on relaunch.
-Measured in AltStable (PR #33 there). Nothing an addon writes survives a real restart.
+Measured in AltStable (PR #33 there) on 69977, when nothing an addon wrote survived a real
+restart. **Not re-measured on 70009**, which fixed SavedVariables — that fix implies nothing about
+CVars, which are a different mechanism (the client loads them, not the addon loader).
 
 The SavedVariables result in the section above still stands: SavedVariables are re-read from disk on
 `/reload`, so "nothing loads even across `/reload`" is a valid negative. The rule that follows:

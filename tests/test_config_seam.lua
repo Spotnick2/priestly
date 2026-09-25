@@ -2,9 +2,10 @@
 -- test_config_seam.lua - one write path for PriestlyDB, and the two checks
 -- that watch for the client being fixed or updated (issue #35).
 --
--- Nothing an addon writes survives a real restart on this build. Until
--- Blizzard fixes it, every settings change goes through Priestly_SetConfig so
--- the fix - or the migration it needs - lands in one place.
+-- Nothing an addon wrote survived a real restart until build 70009 fixed it.
+-- Every settings change still goes through Priestly_SetConfig: players on
+-- older builds are still losing everything, and the migration back to
+-- account-wide storage (issue #9) then lands in one place.
 --
 --   & 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_config_seam.lua
 ------------------------------------------------------------
@@ -20,14 +21,15 @@ local T, TC = H.loadAddon()
 -- so a relog to character select can announce a fix that never happened.
 -- Moving the client forward has to be a two-file edit, and this is the file
 -- that says so.
--- They are DIFFERENT right now, on purpose: the client is 69977, where saved
--- settings are measured broken, but /pprobe has not been re-run there, so the
--- login notice still says 69913. Until this change they were always equal,
--- and nothing in this file would have caught the two detectors being wired
--- together.
+-- All three DIFFER right now, and only one of them is waiting on anything:
+-- the client is 70009; /pprobe has not been re-run since 69913, so the login
+-- notice still says that; and 69977 is the last build where saved settings
+-- were broken, since 70009 fixed it - so that one is final, not pending.
+-- Until they were allowed to differ, nothing in this file would have caught
+-- the two detectors being wired together.
 local MEASURED = "69913"
 local BROKEN = "69977"
-local CLIENT = "69977"  -- what .build.info reports; what the stub must model
+local CLIENT = "70009"  -- what .build.info reports; what the stub must model
 local FIXED = "70123"   -- any build other than the three above
 
 H.eq(TC.MEASURED_ON_BUILD, MEASURED,
