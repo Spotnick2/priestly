@@ -386,6 +386,31 @@ whether or not the client reads the file back. `MEASURED_ON_BUILD` is a differen
 stays at 69913 until `/pprobe` is re-run here: identical declarations cannot show that aura
 secrecy or secure click casting still behave the same way.
 
+### 70009 (2026-09-24): it looks fixed, and one thing is still missing
+
+From the files on account `50284074#12`, plus the chat from a live login:
+
+| instrument | before | after |
+|---|---|---|
+| AltStable probe, account-wide | `loadCount = 3` (22:54) | read `3`, wrote `#4` (00:21) |
+| AltStable probe, per-character | `loadCount = 1` | read `1`, wrote `#2` |
+| `PriestlySVCheck.svLoadCheck` | written 22:54, build 70009, `announced = true` | came back; already latched, so it stayed quiet |
+| `PriestlyDB.svLoadCheck` (Kaleid) | — | came back, and announced at 00:21 |
+
+Counters that never moved before are moving. **What is not shown is a full exit between those two
+sessions:** logging out to character select writes saved variables too, so 22:54 → 00:21 may be
+one client process, which is the case the announcement's own wording warns about. `PriestlyProbe`
+would have settled it and was not loaded at 22:54; its file from *before* the patch (10:56, build
+69977) did **not** come back, which is the one piece of evidence pointing the other way.
+
+To finish: quit to the desktop, relaunch, log in, and read `/pprobe sv`. The probe now has a file
+written on 70009, so `previous launches = 1` and a second stamp would settle it — from disk,
+afterwards, without having to trust a chat line.
+
+**Two account folders.** `WTF/Account/` holds `50284074#1` and `50284074#12`, with characters split
+across them. Reading the wrong one makes addons look like they disagree about whether loading
+works. Check which folder the character lives in before believing either.
+
 **How the earlier wrong answer happened, because it will happen again.** Persistence was checked by
 reading the saved file. That file looks fully populated whether or not the load ran, because
 `Priestly_EnsureDefaults` rewrites every `DEFAULTS` key at login and `learnedDurations` / `flavor`
