@@ -8,11 +8,12 @@ arity, return order, or whether the underlying system is wired up on a Vanilla-c
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
 Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercity.
 
-**69913 is the last build anything here was probed on, and the installed client is 69977**
-(`Sep 22 2026`, as of 2026-09-24). So every runtime finding below is **unverified on the build
-people are running**, and `MEASURED_ON_BUILD` stays at `69913` for exactly that reason - the login
-notice it drives is the reminder. Do not advance it from this document; advance it after running
-`/pprobe` on 69977 and recording the results here.
+**69913 is the last build anything here was probed on, and the installed client is 70009**
+(patched 2026-09-24; 69977 came and went in between). So every runtime finding below is
+**unverified on the build people are running**, and `MEASURED_ON_BUILD` stays at `69913` for
+exactly that reason - the login notice it drives is the reminder. Do not advance it from this
+document; advance it after running `/pprobe` on the current client and recording the results
+here.
 
 What is known about 69977 is narrower than it looks: the two builds' API dumps are **identical
 sets** - documented functions, events, enums and structures, widget methods, namespace functions.
@@ -21,10 +22,12 @@ casting, or any other behaviour below still works the same way, which is the who
 file. A finding here that stops matching the game is a bug report, not a surprise: re-run the
 probe rather than assuming the note was always wrong.
 
-The SavedVariables finding (section 11) is the one thing that **has** been re-measured on 69977,
+The SavedVariables finding (section 11) is the one thing that **has** been re-measured since,
 because it needs a different instrument anyway: a dump lists the same symbols whether or not the
-client reads the file back. That one was measured from the files themselves, without launching the
-game - see below - and it is why `SV_BROKEN_ON_BUILD` is `69977` while `MEASURED_ON_BUILD` is not.
+client reads the file back. It was measured from the files themselves on 69977, without launching
+the game - see below - which is why `SV_BROKEN_ON_BUILD` is `69977` while `MEASURED_ON_BUILD` is
+not. **On 70009 it may have been fixed**; section 11 has what is shown so far and the one thing
+still missing.
 
 ---
 

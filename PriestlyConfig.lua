@@ -64,7 +64,9 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); the library warns at every real login until then.
 --
 -- These two are INDEPENDENT, and right now they differ. The installed client
--- is 69977 (.build.info, wow_classic_beta 1.60.1.69977).
+-- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24,
+-- and NEITHER constant has caught up with it yet - see below for what each
+-- one is still waiting on.
 --
 -- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on 69977. The two
 -- API dumps are identical sets - documented functions, events, enums and
@@ -83,6 +85,15 @@ local DEFAULTS = {
 -- One stamp means the addon saw nothing at load on a real client start.
 -- Priestly's own svLoadCheck, written 11:00:10 in that same session, records
 -- the build as 69977. Still broken there.
+--
+-- 70009 then patched, and settings appear to come back: AltStable's launch
+-- counter moved 3 -> 4 account-wide and 1 -> 2 per-character, and Priestly's
+-- markers returned and announced. What is NOT yet shown is a full exit
+-- between those two sessions - a logout to character select writes saved
+-- variables too - so this constant stays at 69977 until a quit-and-relaunch
+-- is measured. Being wrong here in the optimistic direction is what #57 was
+-- about. LibGroupBuffs#30 settles the question without a constant at all, by
+-- comparing the marker's own recorded build with the one running.
 --
 -- The test pins both literally, so a build that moves on cannot pass by
 -- agreeing with itself.

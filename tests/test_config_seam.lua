@@ -20,14 +20,15 @@ local T, TC = H.loadAddon()
 -- so a relog to character select can announce a fix that never happened.
 -- Moving the client forward has to be a two-file edit, and this is the file
 -- that says so.
--- They are DIFFERENT right now, on purpose: the client is 69977, where saved
--- settings are measured broken, but /pprobe has not been re-run there, so the
--- login notice still says 69913. Until this change they were always equal,
--- and nothing in this file would have caught the two detectors being wired
--- together.
+-- All three DIFFER right now, on purpose, and each is waiting on something
+-- different: the client is 70009; /pprobe has not been re-run since 69913, so
+-- the login notice still says that; and saved settings are measured broken as
+-- of 69977, with 70009 not yet measured across a full exit. Until they were
+-- allowed to differ, nothing in this file would have caught the two detectors
+-- being wired together.
 local MEASURED = "69913"
 local BROKEN = "69977"
-local CLIENT = "69977"  -- what .build.info reports; what the stub must model
+local CLIENT = "70009"  -- what .build.info reports; what the stub must model
 local FIXED = "70123"   -- any build other than the three above
 
 H.eq(TC.MEASURED_ON_BUILD, MEASURED,
