@@ -171,8 +171,9 @@ memory - CVars included - reads back as if it had persisted. That is how CVars w
 here as a working store; a full client exit showed they are lost like everything else. `/reload` can
 prove something is broken, never that it works. Confirm with a **full exit and relaunch**.
 
-There is no store to fall back to on this build: CVars fail across a real restart too (measured in
-AltStable, PR #33 there). Wait for Blizzard's fix, which has been reported.
+Through 69977 there was no store to fall back to at all: CVars fail across a real restart too
+(measured in AltStable, PR #33 there). 70009 fixed SavedVariables; **CVars have not been
+re-measured there**, so they are still assumed lost.
 
 `SavedVariablesPerCharacter` stays in the TOC for now: it is no worse than account-wide, and it is
 where settings will land if the client is fixed. `tests/test_manifest.lua` asserts it. But do not

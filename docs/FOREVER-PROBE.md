@@ -480,7 +480,9 @@ persisted.
 
 After a **full client exit** on this build, the client rewrote `Config.wtf` and both
 `config-cache.wtf` files without the addon's CVar, and `GetCVar` returned `nil` on relaunch.
-Measured in AltStable (PR #33 there). Nothing an addon writes survives a real restart.
+Measured in AltStable (PR #33 there) on 69977, when nothing an addon wrote survived a real
+restart. **Not re-measured on 70009**, which fixed SavedVariables — that fix implies nothing about
+CVars, which are a different mechanism (the client loads them, not the addon loader).
 
 The SavedVariables result in the section above still stands: SavedVariables are re-read from disk on
 `/reload`, so "nothing loads even across `/reload`" is a valid negative. The rule that follows:

@@ -2,9 +2,10 @@
 -- test_config_seam.lua - one write path for PriestlyDB, and the two checks
 -- that watch for the client being fixed or updated (issue #35).
 --
--- Nothing an addon writes survives a real restart on this build. Until
--- Blizzard fixes it, every settings change goes through Priestly_SetConfig so
--- the fix - or the migration it needs - lands in one place.
+-- Nothing an addon wrote survived a real restart until build 70009 fixed it.
+-- Every settings change still goes through Priestly_SetConfig: players on
+-- older builds are still losing everything, and the migration back to
+-- account-wide storage (issue #9) then lands in one place.
 --
 --   & 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_config_seam.lua
 ------------------------------------------------------------
