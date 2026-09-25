@@ -4,20 +4,61 @@ What `Tools/PriestlyProbe` actually measured on the live client, as opposed to w
 documentation says. Existence is not a contract: a namespace being present tells you nothing about
 arity, return order, or whether the underlying system is wired up on a Vanilla-content client.
 
-**Client:** WoW: Forever 1.60.1, build **69913**, `Sep 17 2026`, `tocVersion` **16001**,
+**Client:** WoW: Forever 1.60.1, build **70009**, `Sep 23 2026`, `tocVersion` **16001**,
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
-Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercity.
+Re-probed 2026-09-25 on a level 3 Priest in a 2-person party, in Tirisfal Glades, in and out of
+combat. First probed 2026-09-20 on build **69913** (`Sep 17 2026`) in Undercity; where a reading
+moved between the two, the section says so and keeps both.
 
-**69913 is the last build anything here was probed on, and the installed client is 70009**
-(patched 2026-09-24; 69977 came and went in between). So every runtime finding below is
-**unverified on the build people are running**, and `MEASURED_ON_BUILD` stays at `69913` for
-exactly that reason - the login notice it drives is the reminder. Do not advance it from this
-document; advance it after running `/pprobe` on the current client and recording the results
-here.
+**Everything here was probed on 1.60.1.70009**, the installed client (patched 2026-09-24; 69913 and
+69977 came before it), and `MEASURED_ON_BUILD` says so. The original measurements were taken on
+69913 and re-run on 70009 on 2026-09-25 — aura secrecy in a real fight and secure click-casting
+included, which are the two this addon is built on. Where a finding moved between them, the section
+says so and keeps both readings.
 
-What is known about 69977 is narrower than it looks: the two builds' API dumps are **identical
-sets** - documented functions, events, enums and structures, widget methods, namespace functions.
-That is a statement about *declarations*. It cannot show that aura secrecy in combat, secure click
+When the client next patches, the login notice fires again until someone repeats that: `/apidump`,
+`/pprobe` **in combat as well as out**, and the SavedVariables check. Advance the constant from
+those, never from this document.
+
+What is known about the builds since is narrower than it looks, and it is **not** that the API
+stayed the same. 69913 and 69977 were identical sets; **70009 is not** — `forever-api-1.60.1.70009.md`
+against 69977: documented functions 6577 → 6596, events 1802 → 1805, tables 792 → 797, global
+functions 5991 → 6057, namespace functions 5401 → 5417, widget methods unchanged. And there are
+**removals and signature changes**, not only additions: `C_GameRules.SelectClassicExperiencePreset`
+and `SelectModernExperiencePreset` are gone in favour of `Get`/`SetForeverExperiencePreset`, the
+`C_LocaleContext.*` namespace moved to script-object methods, and `C_FriendList.SendWho`/`SortWho`
+changed arity. Nothing Priestly or LibGroupBuffs calls was removed — grepped both — so there is no
+functional break, but the dump is no longer evidence that anything below still holds.
+
+Two new arrivals land in areas this file is about, and neither has been probed:
+
+| added in 70009 | why it matters here |
+|---|---|
+| `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | §9's duration learning guesses at refresh behaviour; this may answer it outright |
+| `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | §4's surname handling is hand-rolled string work |
+
+### Re-probed on 70009 (2026-09-25 01:13)
+
+`/pprobe` was run on the current client. `GetBuildInfo` reads `1.60.1`, `70009`, **`Sep 23 2026`**,
+`tocVersion` 16001, `WOW_PROJECT_ID` 1, locale enUS.
+
+| section | 70009 |
+|---|---|
+| events (§2) | **17** probed, 0 unusable — one more than 69913's 16, because `CVAR_UPDATE` was measured this time |
+| templates (§3) | 14 probed, **0 threw** — unchanged |
+| spellbook (§10) | walk sees 12 entries, rank subtext present — unchanged |
+| names (§4) | `GetUnitName` unchanged; **the player's `UnitName` row changed** — see §4 |
+| instances (§5) | `GetInstanceInfo` now returns **eleven** values — see §5 |
+| items (§6), options (§7) | `GetItemIconByID` works, `GetItemInfo` still uncached for the candles, `MouseIsOver` and `InterfaceOptions_AddCategory` still absent, `Settings.*` present — unchanged |
+| auras (§9) | `combat=false secret=false` out of combat, **`combat=true secret=true` in a fight** — unchanged |
+| secure click-casting (§1) | button builds, `PreClick`/`PostClick` fire on both edges, attributes settable out of combat and left alone in it, `loadstring_untainted` still missing — unchanged |
+| click edges (§1) | A, B and C each send **exactly 1 cast** — unchanged |
+
+**Everything the addon is built on is re-measured on 70009**, including the two that matter most:
+aura secrecy in combat, and secure click-casting on both mouse edges. `MEASURED_ON_BUILD` moves to
+70009 with this.
+
+Declarations are still only declarations. Even where the dumps *do* agree, they cannot show that aura secrecy in combat, secure click
 casting, or any other behaviour below still works the same way, which is the whole content of this
 file. A finding here that stops matching the game is a bug report, not a surprise: re-run the
 probe rather than assuming the note was always wrong.
@@ -44,6 +85,13 @@ addons do not work". Priestly uses none of that machinery — plain `SecureActio
 | `PreClick` / `PostClick` both fire on left and right click | **yes** |
 | `loadstring_untainted` | **missing** — confirms secure *snippets* are broken |
 | `SecureHandlerWrapScript`, `RegisterStateDriver` | present as functions, but unusable without the above |
+
+**Re-measured on 70009 (2026-09-25 01:17).** Identical: the button builds, `PreClick`/`PostClick`
+fire on left and right, `SetAttribute("unit1", "party1")` from an insecure `PreClick` returns ok out
+of combat, and in combat the handler correctly leaves attributes alone and the click still reaches
+`PostClick` with `combat=true`. `loadstring_untainted` is still absent and `SecureHandlerWrapScript`
+still present. `/pprobe click` reports **exactly one cast** for each of A, B and C — C being the
+`ActionButtonUseKeyDown` setting that produced the dead-click reports elsewhere.
 
 The guide's warning is about `SecureHandler*` and state drivers specifically. Priestly's attribute
 based click casting is a different mechanism and is intact. **Do not introduce a `SecureHandler*`.**
@@ -107,15 +155,15 @@ does not discriminate — with both edges registered every branch yields exactly
 is precisely why it is safe either way. Registering both edges is correct under every reading of
 that code, so the question is archived rather than open.
 
-## 2. Events — all 16 register, none throw
+## 2. Events — all 17 register, none throw
 
 Including `ACTIVE_TALENT_GROUP_CHANGED`, which was the one to distrust (no working Forever addon in
 the local sample registers it). `PLAYER_SPECIALIZATION_CHANGED` and `CHARACTER_POINTS_CHANGED` also
 register.
 
-**`CVAR_UPDATE` is the 17th and is not yet measured.** It is in the probe's list for reference. The
-addon does not register it: see section 1 — registering both mouse edges removes the reason to
-watch the CVar at all.
+**`CVAR_UPDATE` is the 17th, and 70009's run did measure it** — the probe registers all 17 and
+reported none unusable, where the 69913 note left this one open. The addon still does not register
+it: see section 1 — registering both mouse edges removes the reason to watch the CVar at all.
 
 Registration still goes through `Priestly.RegisterEvents`, which reports rejected names in chat: it
 costs nothing, and it means a future event rename is reported instead of silently killing a handler.
@@ -145,7 +193,10 @@ back a bare frame — so presence has to be checked by looking for the regions t
 `C_PlayerInfo.ShouldDisplaySurname()` → **true**. The separator is a **space**, not a hyphen (the
 hyphen in the porting guide comes from the WTF folder layout).
 
-| API | player | party1 |
+**The table below is the 69913 reading.** Its player row is *not* current behaviour — see the 70009
+re-run underneath it, where the player splits like everything else.
+
+| API | player (69913) | party1 |
 |---|---|---|
 | `UnitName` | `"Karuzo Elegia"`, `"ClassicBetaPvE"` | `"Zoruka"`, `"Mortalis"` |
 | `UnitFullName` | `"Karuzo Elegia"`, `"ClassicBetaPvE"` | `"Zoruka"`, `"Mortalis"` |
@@ -154,10 +205,25 @@ hyphen in the porting guide comes from the WTF folder layout).
 | `GetUnitName(unit, true)` | `"Karuzo Elegia"` | `"Zoruka Mortalis"` |
 | `C_PlayerInfo.GetName` | errors — wants a `playerLocation`, not a unit token | same |
 
-**`UnitName` is a trap.** On the player it returns the whole two-part name with the realm second;
-on another unit it returns only the **first name**, with the surname in the position where realm
-normally lives. Any code that uses `UnitName(unit)` for a party or raid member silently drops the
-surname — and first names are not unique.
+**Re-run on 70009 (2026-09-25 01:13), and the player row changed.** `GetUnitName` is unchanged and
+still joins for both; `UnitName`, `UnitFullName` and `UnitNameUnmodified` now **split for the player
+too**:
+
+| API | player, 69913 | player, 70009 |
+|---|---|---|
+| `UnitName` | `"Karuzo Elegia"`, `"ClassicBetaPvE"` | `"Karuzo"`, `"Elegia"` |
+| `GetUnitName(unit, false)` | `"Karuzo Elegia"` | `"Karuzo Elegia"` |
+
+`C_PlayerInfo.ShouldDisplaySurname()` is still `true`, and `C_PlayerInfo.GetName` still errors on a
+unit token. **Whether the client changed or the two runs sat on different realms is unresolved** —
+the 69913 run reported a real realm (`ClassicBetaPvE`) in that second slot and the 70009 one reports
+the surname, and the character has since moved account folders. Worth re-checking when a build
+lands, rather than recorded as a client change it may not be.
+
+**`UnitName` is a trap either way.** It returns only the **first name**, with the surname in the
+position where realm normally lives — on 70009 for every unit, on 69913 for every unit but the
+player. Any code that uses `UnitName(unit)` for a party or raid member silently drops the surname —
+and first names are not unique.
 
 `API.UnitDisplayName` uses `GetUnitName(unit, false)`, which is the only one that returns the joined
 name consistently for both. Identity still keys on `UnitGUID` (`Player-4618-00C6CDD5`), never on a
@@ -166,7 +232,9 @@ name.
 ## 5. Instances — `GetInstanceInfo` returns the continent outdoors
 
 Standing in Undercity: `GetInstanceInfo()` → `"Eastern Kingdoms", "none", 0, "", 0, 0, false, 0, 0`
-while `GetRealZoneText()` → `"Undercity"`.
+while `GetRealZoneText()` → `"Undercity"`. On 70009, from Tirisfal Glades, the same call returns
+**eleven** values — `"Eastern Kingdoms", "none", 0, "", 0, 0, false, 0, 0, nil, false` — so the
+tuple has grown by two. Nothing here reads past the second.
 
 So the name is **not** empty outside an instance, and testing only the name would have been correct
 purely by luck — until an `INSTANCE_DB` key collided with a continent or the addon gained a zone
@@ -282,6 +350,10 @@ porting guide — unused either way. The struct carries everything needed:
   isFromPlayerOrPlayerPet=true, sourceUnit="player", points={1=4}, ... }
 ```
 
+**Secrecy re-measured on 70009 (2026-09-25 01:17):** `combat=false secret=false` standing still,
+`combat=true secret=true` in a fight. Unchanged, so everything below still describes the current
+client.
+
 **Power Word: Fortitude lasts 3600s here** — an hour, against 1800 in Vanilla. Priestly's own saved
 variables confirm it learned exactly that (`learnedDurations = { build = "69913", fort = 3600 }`),
 which also proves the learning path works end to end in game.
@@ -387,8 +459,8 @@ is what dates the measurement to **this build**.
 
 `SV_BROKEN_ON_BUILD` rests on this, not on the API dumps matching — a dump lists the same symbols
 whether or not the client reads the file back. `MEASURED_ON_BUILD` is a different question and
-stays at 69913 until `/pprobe` is re-run here: identical declarations cannot show that aura
-secrecy or secure click casting still behave the same way.
+was settled separately, by re-running `/pprobe` on 70009 — identical declarations could never have
+shown that aura secrecy or secure click casting still behave the same way.
 
 ### 70009: FIXED — and the instrument that said otherwise was broken
 

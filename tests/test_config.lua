@@ -157,6 +157,11 @@ WoW.instanceType = nil
 TC.CheckCurrentInstance()
 H.check(Priestly_ShouldShowShadow(nil, nil) == false, "out in the world")
 
+-- Eleven returns on 70009, nine on 69913. Nothing here reads past the second,
+-- and this says so out loud rather than leaving the stub free to model a
+-- client shape that no longer exists.
+H.eq(select("#", GetInstanceInfo()), 11, "GetInstanceInfo returns the tuple this client returns")
+
 -- Outdoors the live client hands back the CONTINENT with instanceType "none",
 -- not an empty name. Gating on the name alone would be correct only by luck -
 -- until somebody adds a zone name that collides.
