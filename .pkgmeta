@@ -9,7 +9,7 @@ enable-nolib-creation: no
 externals:
   Libs/LibGroupBuffs-1.0:
     url: https://github.com/Spotnick2/LibGroupBuffs
-    tag: r12
+    tag: r14
 
 manual-changelog:
   filename: CHANGELOG.md

@@ -125,7 +125,7 @@ reports it with `settings:Changed(key)`: the scan cannot see an alias.
 
 The setters, the `svLoadCheck` load check and the build watch are LibGroupBuffs' `Settings.lua`
 (#3). `PriestlyConfig.lua` builds one settings object from it with Priestly's saved-table
-accessors, `MEASURED_ON_BUILD` / `SV_BROKEN_ON_BUILD` and a chat reporter; the `Priestly_*`
+accessors, `MEASURED_ON_BUILD` and a chat reporter; the `Priestly_*`
 functions above are thin wrappers so the options panel and tests keep their names. A change to how
 the checks behave or what they say belongs in the library, not here. `Priestly_OnConfigChanged` is
 empty today; it is the one place the SavedVariables fix, or a migration, will land. The library
@@ -142,8 +142,7 @@ Protection aura names, which the config's "detect" mode reads).
 
 **SavedVariables were broken through 69977 and are FIXED in 70009** — the installed build. Saved
 tables load back again, account-wide and per-character, measured from launch counters read at
-`PLAYER_LOGIN` (`docs/FOREVER-PROBE.md` §11). `SV_BROKEN_ON_BUILD` names the *last broken* build,
-69977, and does not follow the client forward. **CVars have not been re-measured on 70009** and did
+`PLAYER_LOGIN` (`docs/FOREVER-PROBE.md` §11). **CVars have not been re-measured on 70009** and did
 not persist through 69977, so assume nothing about them.
 
 Measure this from the counters, never from a dump comparison: a dump lists the same symbols whether
@@ -343,15 +342,13 @@ Changing patch compatibility:
   the default every other test runs under, and it should show them what a player sees, notice
   included. The three builds are pinned as literals in `tests/test_config_seam.lua`; they are
   equal in the ordinary case and diverge while a re-probe is outstanding.
-- If saved settings are **still** broken on the new build, set `SV_BROKEN_ON_BUILD` to it as well.
-  Measure that one separately — the launch counters above — and never infer it from the API dumps
-  matching. Getting it wrong silences both detectors at once: the addon treats the build as fixed
-  (so a relog announces a fix that never happened) or as broken (so a real fix goes unannounced),
-  and bumping `MEASURED_ON_BUILD` in the same edit removes the login notice that would have
-  prompted a second look.
-  On that build a returning `svLoadCheck` is treated as the client's in-process cache (a relog to
-  character select can hand it back, just as `/reload` does), so the fix is never falsely
-  announced.
+- **There is no second constant to set for saved settings**, and there deliberately is not. As of
+  LibGroupBuffs r14 the library decides that from the marker's own recorded build: a build changes
+  only when the client is patched, a patch requires a full exit, so a marker returning under a
+  *different* build cannot be the in-process cache a relog produces. Priestly used to pass
+  `SV_BROKEN_ON_BUILD`, the library trusted every build but that one, and each relog on a build the
+  constant did not name announced a fix that had not happened — in three addons at once. If you
+  find yourself wanting to add that build back, the answer is in `Settings.lua`, not here.
 - **`svLoadCheck` must never be added to `DEFAULTS`.** It detects Blizzard's SavedVariables fix by
   being written every session and never defaulted; a default would recreate it every login and the
   check could never fire. `tests/test_config_seam.lua` asserts this, and the library refuses to

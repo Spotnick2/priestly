@@ -70,8 +70,9 @@ local DEFAULTS = {
 -- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
 -- MEASURED_ON_BUILD is 70009 as of 2026-09-25: /apidump, /pprobe including
 -- aura secrecy in a real fight and secure click-casting on both mouse edges,
--- and the SavedVariables check. SV_BROKEN_ON_BUILD does NOT follow the client
--- forward: it names the last build where loading was broken, which is 69977.
+-- and the SavedVariables check. There is no companion constant for the
+-- settings check any more: as of LibGroupBuffs r14 it works that out from the
+-- marker's own recorded build, so nothing here has to be kept current for it.
 --
 -- What moving it took, since a dump comparison would not have done: 69913
 -- and 69977 had identical documented sets, but 70009 adds, removes and
@@ -85,37 +86,23 @@ local DEFAULTS = {
 -- re-measuring is the one thing not to do: it is the only reminder that the
 -- notes describe a client nobody is running.
 --
--- SV_BROKEN_ON_BUILD is 69977 because that one IS measured, and it needs its
--- own instrument: a dump lists the same symbols whether or not the client
--- reads the file back. PriestlyProbe counts its own loads and appends a stamp
--- per load, and the account-wide file the client wrote on 2026-09-24 holds
--- launches = 1 and a single stamp, 11:00:02. Both a /reload and a relog hand
--- the table back in-process, so either would have left two stamps; a prior
--- session's file was on disk to load (the 2026-09-21 measurement read it).
--- One stamp means the addon saw nothing at load on a real client start.
--- Priestly's own svLoadCheck, written 11:00:10 in that same session, records
--- the build as 69977. Still broken there.
+-- Saved settings were broken through 69977 and load again on 70009
+-- (docs/FOREVER-PROBE.md section 11). Priestly used to carry that build as
+-- SV_BROKEN_ON_BUILD and hand it to the library, which trusted a returning
+-- marker on every build except that one - so every relog on a build the
+-- constant did not name announced a fix that had not happened, in three
+-- addons at once.
 --
--- 70009 then FIXED it: saved tables load back again, measured by launch
--- counters read at PLAYER_LOGIN - AltStable's went 3 -> 9 across sessions,
--- and the shared notes record the same result from two addons on two
--- accounts after a full exit. So 69977 is the LAST broken build, which is
--- what this constant is for, and it stays there rather than following the
--- client forward.
+-- r14 removed the need: the marker records the build it was written on, a
+-- build only changes when the client is patched, and a patch requires a full
+-- exit - so a marker returning under a DIFFERENT build proves the restart by
+-- itself, with nothing here to keep current. The constant is gone rather than
+-- left passed-and-ignored, because a dead build number invites exactly the
+-- bump that caused the bug.
 --
--- Our own /pprobe sv disagreed, and was wrong: it captured at file scope,
--- which on this client runs BEFORE the saved file is executed, so it could
--- never see a table arrive on any build (docs/FOREVER-PROBE.md section 11).
--- Fixed in Tools/PriestlyProbe.
---
--- LibGroupBuffs#30 drops the constant entirely: the marker records the build
--- it was written on, and a patch forces a full exit, so a marker returning
--- under a different build proves the restart by itself.
---
--- The test pins both literally, so a build that moves on cannot pass by
+-- The test pins this literally, so a build that moves on cannot pass by
 -- agreeing with itself.
 local MEASURED_ON_BUILD = "70009"
-local SV_BROKEN_ON_BUILD = "69977"
 
 -- config-owner: begin
 -- The two saved tables, created on first use. PriestlyDB holds the settings
@@ -143,7 +130,6 @@ local settings = Priestly.Settings.New({
         { label = "account-wide",  get = AccountCheckStore },
     },
     measuredOnBuild = MEASURED_ON_BUILD,
-    svBrokenOnBuild = SV_BROKEN_ON_BUILD,
     report = function(text, kind)
         if not DEFAULT_CHAT_FRAME then return end
         if kind == "settingsLoaded" then text = "|cff55ff55" .. text .. "|r" end
@@ -496,9 +482,10 @@ end
 --
 -- Both checks live in LibGroupBuffs-1.0's Settings.lua. The load check keeps a
 -- `svLoadCheck` marker in each scope - written every session, never in
--- DEFAULTS - and says so once when one comes back on a real login on a build
--- other than SV_BROKEN_ON_BUILD. The build check warns at every real login on
--- a build other than MEASURED_ON_BUILD, deliberately unlatched.
+-- DEFAULTS - and says so once when one comes back carrying a build OTHER than
+-- the one running, which only a patched client can produce. The build check
+-- warns at every real login on a build other than MEASURED_ON_BUILD,
+-- deliberately unlatched.
 
 function Priestly_CheckClientBuild()
     settings:CheckBuild()
@@ -1177,5 +1164,4 @@ Priestly._testConfig = {
     CheckCurrentInstance = CheckCurrentInstance,
     inShadowInstance = function() return g_InShadowInstance end,
     MEASURED_ON_BUILD = MEASURED_ON_BUILD,
-    SV_BROKEN_ON_BUILD = SV_BROKEN_ON_BUILD,
 }

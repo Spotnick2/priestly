@@ -35,8 +35,12 @@ local FIXED = "70123"   -- any build other than the three above
 
 H.eq(TC.MEASURED_ON_BUILD, MEASURED,
     "the source says Priestly was measured on the build these tests measure it on")
-H.eq(TC.SV_BROKEN_ON_BUILD, BROKEN,
-    "and on the build where saved settings are known not to come back")
+-- No constant for the settings check any more: r14 reads the marker's own
+-- recorded build. BROKEN below is a test fixture, not something the addon
+-- declares - it is just "a build older than the one running", which is what
+-- makes a returning marker news.
+H.eq(TC.SV_BROKEN_ON_BUILD, nil,
+    "and carries no build constant for the settings check, which r14 decides itself")
 
 -- The stub's default build is the one every other test file runs under, so a
 -- stale default quietly models a client that no longer exists - and a test
@@ -205,26 +209,39 @@ local marker = PriestlyDB.svLoadCheck
 Priestly_HandleEnteringWorld(false, false)
 H.check(PriestlyDB.svLoadCheck == marker, "a zone change leaves the marker alone")
 
--- The fix: a new build, and the marker came back on a real login.
+-- The fix, and what proves it: the marker comes back carrying a DIFFERENT
+-- build from the one running. A build only changes when the client is
+-- patched, and a patch requires a full exit, so the process that held the
+-- cache is gone - which is why this can be stated plainly now instead of
+-- hedged. That is the library's job as of r14; Priestly passes no constant
+-- into the decision any more.
 WoW.build = FIXED
 before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
 local msg = said(before)
 H.check(msg:find("came back", 1, true), "a real login on a new build announces it: " .. msg)
-H.check(msg:find("fully exited", 1, true), "conditional on a full exit: " .. msg)
-H.check(msg:find("proves nothing", 1, true), "and says a relog or /reload proves nothing: " .. msg)
+H.check(msg:find(BROKEN, 1, true) and msg:find(FIXED, 1, true),
+    "naming the build it was saved on and the one it was read on: " .. msg)
+H.check(msg:find("fully restarted", 1, true),
+    "and why that settles it - the game restarted in between: " .. msg)
+H.check(msg:find("is fixed", 1, true), "so it says so plainly: " .. msg)
 H.check(msg:find("per-character", 1, true) and msg:find("account-wide", 1, true),
     "naming the scopes that came back: " .. msg)
-H.check(msg:find(FIXED, 1, true), "and the build: " .. msg)
+H.check(not msg:find("proves nothing", 1, true),
+    "with the old hedge gone, because a relog cannot produce this: " .. msg)
 
--- Once only: the latch persists by then, because the store works.
+-- Once: the marker is rewritten with the build running now, so every later
+-- login this session reads its own build back and has nothing to report.
 before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
 H.check(not said(before):find("came back", 1, true), "it does not repeat at the next login")
 
--- Account-wide fixed on its own is worth knowing: it is what #9 moves back to.
+-- Account-wide coming back on its own is worth knowing: it is what #9 moves
+-- back to. The marker has to carry an OLDER build - a marker stamped with the
+-- build already running is what a relog looks like, and r14 says nothing to
+-- that, on purpose.
 freshSession(FIXED)
-PriestlySVCheck = { svLoadCheck = { stamp = "then", build = FIXED } }
+PriestlySVCheck = { svLoadCheck = { stamp = "then", build = BROKEN } }
 before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
 msg = said(before)
