@@ -32,6 +32,26 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 | `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | section 3's duration learning guesses at refresh behaviour; this may answer it outright |
 | `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | section 7's surname handling is hand-rolled string work |
 
+### Re-probed on 70009 (2026-09-25 01:13)
+
+`/pprobe` was run on the current client. `GetBuildInfo` reads `1.60.1`, `70009`, **`Sep 23 2026`**,
+`tocVersion` 16001, `WOW_PROJECT_ID` 1, locale enUS.
+
+| section | 70009 |
+|---|---|
+| events (§2) | 17 probed, **0 unusable** — unchanged |
+| templates (§6) | 14 probed, **0 threw** — unchanged |
+| spellbook (§10) | walk sees 12 entries, rank subtext present — unchanged |
+| names (§4) | `GetUnitName` unchanged; **the player's `UnitName` row changed** — see §4 |
+| instances (§5) | `GetInstanceInfo` now returns **eleven** values — see §5 |
+| misc (§12) | `GetItemIconByID` works, `MouseIsOver` and `InterfaceOptions_AddCategory` still absent, `Settings.*` present — unchanged |
+| auras (§3) | out of combat only: `combat=false secret=false` |
+
+**Two findings are NOT re-measured on 70009, and they are the two the addon is built on:** aura
+secrecy *in combat* (§3) and secure click-casting (§13). `/pprobe auras` has to be re-run in a
+fight, and `/pprobe secure` / `/pprobe click` clicked through. `MEASURED_ON_BUILD` stays at 69913
+until they are, which is what the login notice is for.
+
 Declarations are still only declarations. Even where the dumps *do* agree, they cannot show that aura secrecy in combat, secure click
 casting, or any other behaviour below still works the same way, which is the whole content of this
 file. A finding here that stops matching the game is a bug report, not a surprise: re-run the
@@ -169,10 +189,25 @@ hyphen in the porting guide comes from the WTF folder layout).
 | `GetUnitName(unit, true)` | `"Karuzo Elegia"` | `"Zoruka Mortalis"` |
 | `C_PlayerInfo.GetName` | errors — wants a `playerLocation`, not a unit token | same |
 
-**`UnitName` is a trap.** On the player it returns the whole two-part name with the realm second;
-on another unit it returns only the **first name**, with the surname in the position where realm
-normally lives. Any code that uses `UnitName(unit)` for a party or raid member silently drops the
-surname — and first names are not unique.
+**Re-run on 70009 (2026-09-25 01:13), and the player row changed.** `GetUnitName` is unchanged and
+still joins for both; `UnitName`, `UnitFullName` and `UnitNameUnmodified` now **split for the player
+too**:
+
+| API | player, 69913 | player, 70009 |
+|---|---|---|
+| `UnitName` | `"Karuzo Elegia"`, `"ClassicBetaPvE"` | `"Karuzo"`, `"Elegia"` |
+| `GetUnitName(unit, false)` | `"Karuzo Elegia"` | `"Karuzo Elegia"` |
+
+`C_PlayerInfo.ShouldDisplaySurname()` is still `true`, and `C_PlayerInfo.GetName` still errors on a
+unit token. **Whether the client changed or the two runs sat on different realms is unresolved** —
+the 69913 run reported a real realm (`ClassicBetaPvE`) in that second slot and the 70009 one reports
+the surname, and the character has since moved account folders. Worth re-checking when a build
+lands, rather than recorded as a client change it may not be.
+
+**`UnitName` is a trap either way.** It returns only the **first name**, with the surname in the
+position where realm normally lives — on 70009 for every unit, on 69913 for every unit but the
+player. Any code that uses `UnitName(unit)` for a party or raid member silently drops the surname —
+and first names are not unique.
 
 `API.UnitDisplayName` uses `GetUnitName(unit, false)`, which is the only one that returns the joined
 name consistently for both. Identity still keys on `UnitGUID` (`Player-4618-00C6CDD5`), never on a
@@ -181,7 +216,9 @@ name.
 ## 5. Instances — `GetInstanceInfo` returns the continent outdoors
 
 Standing in Undercity: `GetInstanceInfo()` → `"Eastern Kingdoms", "none", 0, "", 0, 0, false, 0, 0`
-while `GetRealZoneText()` → `"Undercity"`.
+while `GetRealZoneText()` → `"Undercity"`. On 70009, from Tirisfal Glades, the same call returns
+**eleven** values — `"Eastern Kingdoms", "none", 0, "", 0, 0, false, 0, 0, nil, false` — so the
+tuple has grown by two. Nothing here reads past the second.
 
 So the name is **not** empty outside an instance, and testing only the name would have been correct
 purely by luck — until an `INSTANCE_DB` key collided with a continent or the addon gained a zone

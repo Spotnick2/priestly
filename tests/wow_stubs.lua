@@ -451,13 +451,19 @@ function UnitIsDeadOrGhost(unit)
     local u = unitInfo(unit)
     return u ~= nil and u.dead
 end
--- Measured on build 69913: UnitName returns the joined name only for the
--- player. For any other unit it returns the FIRST name, with the surname where
--- the realm normally sits. GetUnitName is the one that joins them for both.
+-- UnitName splits: it returns the FIRST name, with the surname in the
+-- position where the realm normally sits. GetUnitName is the one that joins
+-- them. Measured on 70009 for the player and for party1 alike.
+--
+-- On 69913 the PLAYER was the exception - `"Karuzo Elegia", "ClassicBetaPvE"`,
+-- joined name plus a real realm - and the stub modelled that. The 70009 run
+-- reads `"Karuzo", "Elegia"` for the player too. Whether the client changed or
+-- the two runs sat on different realms is unresolved (docs/FOREVER-PROBE.md
+-- section 4); either way the addon is unaffected, because it reads
+-- GetUnitName, and the stub models what the client does NOW.
 function UnitName(unit)
     local u = unitInfo(unit)
     if not u then return nil end
-    if unit == "player" then return u.name end
     local first, surname = u.name:match("^(%S+)%s+(%S+)$")
     if first then return first, surname end
     return u.name
