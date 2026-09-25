@@ -261,15 +261,23 @@ H.check(not said:find("usable store", 1, true), "or advice to build on it: " .. 
 -- "arrived: NO" on a build where loading worked. So: load the probe with
 -- nothing set, hand it the saved tables the way the client does, and only
 -- then log in.
+-- ONE copy answers this login. Earlier cases in this file left their own
+-- copies registered, and any of them printing "account=yes" would satisfy the
+-- check below without the copy under test having seen anything - which is
+-- exactly how this assertion passed a file-scope mutation when it was first
+-- written.
+local otherCopies = WoW.events
+WoW.events = {}
+
 PriestlyProbePersist, PriestlyProbeChar = nil, nil
 assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
 PriestlyProbePersist = { launches = 4, stamps = {} }
 PriestlyProbeChar = { launches = 4 }
 before = #WoW.messages
 WoW.dispatch("PLAYER_LOGIN")
--- The login line itself is the assertion that matters: it reports what the
--- capture saw, and the capture only happens here. Move it back to file scope
--- and this says "account=|cffff4444no|r" however well loading works.
+-- The login line reports what the capture saw, and the capture happens there.
+-- Move it to file scope - where this copy was loaded with the tables still
+-- nil - and this says "account=|cffff4444no|r" however well loading works.
 said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
 H.check(said:find("SavedVariables seen at load: account=yes", 1, true),
     "a table handed over after the addon's files ran is seen at login: " .. said)
@@ -293,6 +301,7 @@ H.check(broughtBack ~= nil and broughtBack >= 4,
 H.check(PriestlyProbePersist.launches > 4, "which this launch then advances: "
     .. tostring(PriestlyProbePersist.launches))
 PriestlyProbePersist, PriestlyProbeChar = nil, nil
+WoW.events = otherCopies
 
 C_CVar = nil
 

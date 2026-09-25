@@ -26,8 +26,8 @@ The SavedVariables finding (section 11) is the one thing that **has** been re-me
 because it needs a different instrument anyway: a dump lists the same symbols whether or not the
 client reads the file back. It was measured from the files themselves on 69977, without launching
 the game - see below - which is why `SV_BROKEN_ON_BUILD` is `69977` while `MEASURED_ON_BUILD` is
-not. **On 70009 it may have been fixed**; section 11 has what is shown so far and the one thing
-still missing.
+not. **70009 fixed it** — section 11 has the measurement, and the instrument that said otherwise
+and why it could not have.
 
 ---
 
@@ -413,7 +413,17 @@ back at file scope and that test fails.
 
 **What this does not overturn.** 69913 and 69977 really were broken: AltStable's probe is a valid
 instrument and read `loadCount = 1` on 69977 (account `50284074#1`, 2026-09-24 11:00), and
-Priestly's `pos` did not survive. The file-scope probe agreed with them for the wrong reason, which
+Priestly's `pos` did not survive.
+
+The two failures leave *different* signatures on disk, which is what keeps the old reading valid:
+
+| | stamp in the file | means |
+|---|---|---|
+| loading broken | **this** session's, rewritten every exit | the fresh table was written; nothing replaced it |
+| reading at file scope | an **older** session's, frozen, while the file's timestamp still updates | the loaded table replaced the fresh one before the write |
+
+The 69977 file carried its own session's stamp (`11:00:02`). The 70009 one carried a stamp from the
+day before. Same counter, opposite causes. The file-scope probe agreed with them for the wrong reason, which
 is the part worth remembering — an instrument that cannot fail is not evidence, it is a coincidence
 waiting to be believed.
 

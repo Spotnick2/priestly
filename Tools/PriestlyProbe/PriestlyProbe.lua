@@ -896,10 +896,19 @@ SlashCmdList["PPROBE"] = function(msg)
         local ok, err = pcall(P[cmd])
         if not ok then say("|cffff4444ERROR: " .. tostring(err) .. "|r") end
     elseif cmd == "sv" then
-        -- Normally done at PLAYER_LOGIN, which has long since fired. Asking
-        -- before that - a test, or a slash command from another addon at
-        -- load - still gets an answer rather than an error.
-        CaptureSavedVariables()
+        -- Must NOT capture here. Capturing latches, so a caller that beats
+        -- PLAYER_LOGIN - another addon running this from its own ADDON_LOADED
+        -- - would freeze the answer at "nothing arrived" for the session, and
+        -- the counter would not advance either, so the NEXT session reads the
+        -- same number and the client looks broken. That is the exact false
+        -- negative this probe was rebuilt to stop reporting.
+        if not svCaptured then
+            say("|cff99ddff== SavedVariables persistence ==|r")
+            say("  |cffffcc00Not captured yet.|r This is read at PLAYER_LOGIN, because the")
+            say("  client runs the saved file after the addon's own files. Ask again")
+            say("  once you are in the world.")
+            return
+        end
         say("|cff99ddff== SavedVariables persistence ==|r")
         say("  account-wide table arrived at load: " ..
             (SV_ACCOUNT_ARRIVED and "|cff55ff55YES|r" or "|cffff4444NO|r"))

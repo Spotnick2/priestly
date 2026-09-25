@@ -37,9 +37,12 @@ local DEFAULTS = {
 
 -- ─── One write path for PriestlyDB ─────────────────────────────────────────────
 --
--- Nothing an addon writes survives a real client restart on this build -
--- account-wide and per-character SavedVariables, and CVars too (issue #9,
--- docs/FOREVER-PROBE.md section 11). The fix is Blizzard's. Until it lands,
+-- Nothing an addon wrote survived a real client restart until build 70009,
+-- which fixed it - account-wide and per-character SavedVariables both. CVars
+-- have NOT been re-measured there and did not persist through 69977 (issue
+-- #9, docs/FOREVER-PROBE.md section 11). Players on an older build still lose
+-- everything, so the single write path below stays as it is; issue #9 is
+-- where moving back to account-wide storage gets decided. Until then,
 -- every settings change goes through one setter anyway, so that whatever the
 -- fix needs - a migration, a validation pass, a different store - lands in one
 -- place instead of in each handler.
@@ -64,15 +67,17 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); the library warns at every real login until then.
 --
 -- These two are INDEPENDENT, and right now they differ. The installed client
--- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24,
--- and NEITHER constant has caught up with it yet - see below for what each
--- one is still waiting on.
+-- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
+-- MEASURED_ON_BUILD is behind it and says so at every login until someone
+-- re-probes. SV_BROKEN_ON_BUILD is NOT behind: it names the last build where
+-- loading was broken, which is 69977, and it does not follow the client
+-- forward.
 --
--- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on 69977. The two
--- API dumps are identical sets - documented functions, events, enums and
--- structures, widget methods, namespace functions - but matching declarations
--- cannot show that aura secrecy, secure click casting or any other RUNTIME
--- finding still behaves the same way. The login notice is the reminder that
+-- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on the CURRENT
+-- client, which is 70009. 69913 and 69977 have identical documented sets and
+-- 70009 moves only slightly, but matching declarations cannot show that aura
+-- secrecy, secure click casting or any other RUNTIME finding still behaves
+-- the same way. The login notice is the reminder that
 -- they have not been re-checked, so silencing it is the one thing not to do.
 --
 -- SV_BROKEN_ON_BUILD is 69977 because that one IS measured, and it needs its

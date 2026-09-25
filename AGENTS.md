@@ -140,13 +140,21 @@ disagree.
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
 Protection aura names, which the config's "detect" mode reads).
 
-**NO SavedVariables load back on this client — per-character included.** Re-measured on 69977, the
-installed build, on 2026-09-24 — from the launch counters in `WTF/Account/<id>/`, which needs no
-game session (`docs/FOREVER-PROBE.md` §11). Do that, not a dump comparison, before moving
-`SV_BROKEN_ON_BUILD`: a dump lists the same symbols whether or not the client reads the file back.
-First measured on build 1.60.1.69913 (2026-09-21 01:14) with two independent instruments: `/pprobe sv` reports
-`launches=0` before every session on *both* the account-wide and per-character tables, and
-Priestly's own `pos` sits on disk while `PriestlyDB.pos` is nil in the next session.
+**SavedVariables were broken through 69977 and are FIXED in 70009** — the installed build. Saved
+tables load back again, account-wide and per-character, measured from launch counters read at
+`PLAYER_LOGIN` (`docs/FOREVER-PROBE.md` §11). `SV_BROKEN_ON_BUILD` names the *last broken* build,
+69977, and does not follow the client forward. **CVars have not been re-measured on 70009** and did
+not persist through 69977, so assume nothing about them.
+
+Measure this from the counters, never from a dump comparison: a dump lists the same symbols whether
+or not the client reads the file back. And **read the counter in an event, never at file scope** —
+the client runs an addon's saved file *after* its own Lua files, so a file-scope read is nil however
+well loading works, and the file-scope write it guards is then overwritten by the file being loaded.
+Priestly's own probe did that and reported "nothing came back" on a build where loading worked.
+
+The history, because the reasoning still applies: first measured broken on 1.60.1.69913
+(2026-09-21 01:14) with two instruments — the launch counters, and Priestly's own `pos` sitting on
+disk while `PriestlyDB.pos` was nil in the next session.
 
 An earlier pass concluded per-character storage worked. **That was wrong**, and the way it was wrong
 is the thing to learn from: it was verified by reading the saved file, which looks perfectly

@@ -20,12 +20,12 @@ local T, TC = H.loadAddon()
 -- so a relog to character select can announce a fix that never happened.
 -- Moving the client forward has to be a two-file edit, and this is the file
 -- that says so.
--- All three DIFFER right now, on purpose, and each is waiting on something
--- different: the client is 70009; /pprobe has not been re-run since 69913, so
--- the login notice still says that; and saved settings are measured broken as
--- of 69977, with 70009 not yet measured across a full exit. Until they were
--- allowed to differ, nothing in this file would have caught the two detectors
--- being wired together.
+-- All three DIFFER right now, and only one of them is waiting on anything:
+-- the client is 70009; /pprobe has not been re-run since 69913, so the login
+-- notice still says that; and 69977 is the last build where saved settings
+-- were broken, since 70009 fixed it - so that one is final, not pending.
+-- Until they were allowed to differ, nothing in this file would have caught
+-- the two detectors being wired together.
 local MEASURED = "69913"
 local BROKEN = "69977"
 local CLIENT = "70009"  -- what .build.info reports; what the stub must model
