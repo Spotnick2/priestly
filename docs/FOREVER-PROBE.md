@@ -4,9 +4,11 @@ What `Tools/PriestlyProbe` actually measured on the live client, as opposed to w
 documentation says. Existence is not a contract: a namespace being present tells you nothing about
 arity, return order, or whether the underlying system is wired up on a Vanilla-content client.
 
-**Client:** WoW: Forever 1.60.1, build **69913**, `Sep 17 2026`, `tocVersion` **16001**,
+**Client:** WoW: Forever 1.60.1, build **70009**, `Sep 23 2026`, `tocVersion` **16001**,
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
-Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercity.
+Re-probed 2026-09-25 on a level 3 Priest in a 2-person party, in Tirisfal Glades, in and out of
+combat. First probed 2026-09-20 on build **69913** (`Sep 17 2026`) in Undercity; where a reading
+moved between the two, the section says so and keeps both.
 
 **Everything here was probed on 1.60.1.70009**, the installed client (patched 2026-09-24; 69913 and
 69977 came before it), and `MEASURED_ON_BUILD` says so. The original measurements were taken on
@@ -32,8 +34,8 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 
 | added in 70009 | why it matters here |
 |---|---|
-| `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | section 3's duration learning guesses at refresh behaviour; this may answer it outright |
-| `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | section 7's surname handling is hand-rolled string work |
+| `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | §9's duration learning guesses at refresh behaviour; this may answer it outright |
+| `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | §4's surname handling is hand-rolled string work |
 
 ### Re-probed on 70009 (2026-09-25 01:13)
 
@@ -42,12 +44,12 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 
 | section | 70009 |
 |---|---|
-| events (§2) | 17 probed, **0 unusable** — unchanged |
-| templates (§6) | 14 probed, **0 threw** — unchanged |
+| events (§2) | **17** probed, 0 unusable — one more than 69913's 16, because `CVAR_UPDATE` was measured this time |
+| templates (§3) | 14 probed, **0 threw** — unchanged |
 | spellbook (§10) | walk sees 12 entries, rank subtext present — unchanged |
 | names (§4) | `GetUnitName` unchanged; **the player's `UnitName` row changed** — see §4 |
 | instances (§5) | `GetInstanceInfo` now returns **eleven** values — see §5 |
-| misc (§12) | `GetItemIconByID` works, `MouseIsOver` and `InterfaceOptions_AddCategory` still absent, `Settings.*` present — unchanged |
+| items (§6), options (§7) | `GetItemIconByID` works, `GetItemInfo` still uncached for the candles, `MouseIsOver` and `InterfaceOptions_AddCategory` still absent, `Settings.*` present — unchanged |
 | auras (§9) | `combat=false secret=false` out of combat, **`combat=true secret=true` in a fight** — unchanged |
 | secure click-casting (§1) | button builds, `PreClick`/`PostClick` fire on both edges, attributes settable out of combat and left alone in it, `loadstring_untainted` still missing — unchanged |
 | click edges (§1) | A, B and C each send **exactly 1 cast** — unchanged |
@@ -82,6 +84,7 @@ addons do not work". Priestly uses none of that machinery — plain `SecureActio
 | `SetAttribute` from an insecure `PreClick`, out of combat | **yes**, no taint error |
 | `PreClick` / `PostClick` both fire on left and right click | **yes** |
 | `loadstring_untainted` | **missing** — confirms secure *snippets* are broken |
+| `SecureHandlerWrapScript`, `RegisterStateDriver` | present as functions, but unusable without the above |
 
 **Re-measured on 70009 (2026-09-25 01:17).** Identical: the button builds, `PreClick`/`PostClick`
 fire on left and right, `SetAttribute("unit1", "party1")` from an insecure `PreClick` returns ok out
@@ -89,7 +92,6 @@ of combat, and in combat the handler correctly leaves attributes alone and the c
 `PostClick` with `combat=true`. `loadstring_untainted` is still absent and `SecureHandlerWrapScript`
 still present. `/pprobe click` reports **exactly one cast** for each of A, B and C — C being the
 `ActionButtonUseKeyDown` setting that produced the dead-click reports elsewhere.
-| `SecureHandlerWrapScript`, `RegisterStateDriver` | present as functions, but unusable without the above |
 
 The guide's warning is about `SecureHandler*` and state drivers specifically. Priestly's attribute
 based click casting is a different mechanism and is intact. **Do not introduce a `SecureHandler*`.**
@@ -153,15 +155,15 @@ does not discriminate — with both edges registered every branch yields exactly
 is precisely why it is safe either way. Registering both edges is correct under every reading of
 that code, so the question is archived rather than open.
 
-## 2. Events — all 16 register, none throw
+## 2. Events — all 17 register, none throw
 
 Including `ACTIVE_TALENT_GROUP_CHANGED`, which was the one to distrust (no working Forever addon in
 the local sample registers it). `PLAYER_SPECIALIZATION_CHANGED` and `CHARACTER_POINTS_CHANGED` also
 register.
 
-**`CVAR_UPDATE` is the 17th and is not yet measured.** It is in the probe's list for reference. The
-addon does not register it: see section 1 — registering both mouse edges removes the reason to
-watch the CVar at all.
+**`CVAR_UPDATE` is the 17th, and 70009's run did measure it** — the probe registers all 17 and
+reported none unusable, where the 69913 note left this one open. The addon still does not register
+it: see section 1 — registering both mouse edges removes the reason to watch the CVar at all.
 
 Registration still goes through `Priestly.RegisterEvents`, which reports rejected names in chat: it
 costs nothing, and it means a future event rename is reported instead of silently killing a handler.

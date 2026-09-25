@@ -30,6 +30,7 @@ local T, TC = H.loadAddon()
 local MEASURED = "70009"
 local BROKEN = "69977"
 local CLIENT = "70009"  -- what .build.info reports; what the stub must model
+local CLIENT_DATE = "Sep 23 2026"   -- what GetBuildInfo reports on it
 local FIXED = "70123"   -- any build other than the three above
 
 H.eq(TC.MEASURED_ON_BUILD, MEASURED,
@@ -44,10 +45,16 @@ H.eq(TC.SV_BROKEN_ON_BUILD, BROKEN,
 -- makes that true rather than remembered.
 -- The stub models the CLIENT, not whichever build Priestly last re-probed:
 -- it is the default every other test file runs under, so a stale one hides
--- from all of them what a player actually sees - including, right now, a
--- login notice.
+-- from all of them what a player actually sees. They agree today, and the
+-- notice is silent; the moment the client patches they part again, and every
+-- test in the suite should see what the player sees.
 WoW.reset()
 H.eq(WoW.build, CLIENT, "the stub models the build the client is on")
+-- The date moves with it, and was NOT pinned until a review pointed out that
+-- it could drift back silently while the number stayed right. It comes from
+-- GetBuildInfo in the /pprobe run, not from the executable's timestamp, which
+-- is a day later and was wrong here once.
+H.eq(select(3, GetBuildInfo()), CLIENT_DATE, "and the date that build reports")
 
 ------------------------------------------------------------
 -- The setters

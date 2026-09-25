@@ -78,8 +78,12 @@ local DEFAULTS = {
 -- changes signatures (docs/FOREVER-PROBE.md, top). Nothing this addon calls
 -- was removed - and matching declarations could never have shown that aura
 -- secrecy in combat or secure click-casting still behave the same way. Those
--- were measured in game, which is the only thing that settles them. The login notice is the reminder that
--- they have not been re-checked, so silencing it is the one thing not to do.
+-- were measured in game, which is the only thing that settles them.
+--
+-- When the client next patches, the notice starts again and stays until
+-- someone repeats all of it. Silencing it by bumping this constant without
+-- re-measuring is the one thing not to do: it is the only reminder that the
+-- notes describe a client nobody is running.
 --
 -- SV_BROKEN_ON_BUILD is 69977 because that one IS measured, and it needs its
 -- own instrument: a dump lists the same symbols whether or not the client

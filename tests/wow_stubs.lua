@@ -76,6 +76,7 @@ function WoW.SetUnit(unit, info)
         class     = info.class or "PRIEST",
         connected = info.connected ~= false,
         dead      = info.dead or false,
+        realm     = info.realm,     -- set it to get 69913's joined-name shape
         level     = info.level or 20,
     }
     return WoW.units[unit]
@@ -451,19 +452,22 @@ function UnitIsDeadOrGhost(unit)
     local u = unitInfo(unit)
     return u ~= nil and u.dead
 end
--- UnitName splits: it returns the FIRST name, with the surname in the
--- position where the realm normally sits. GetUnitName is the one that joins
--- them. Measured on 70009 for the player and for party1 alike.
+-- UnitName's SECOND return is the realm slot, and what lands in it is the
+-- unsettled part. Measured on 70009: every unit, player included, comes back
+-- split - `"Karuzo", "Elegia"` - so the surname sits where the realm goes.
+-- Measured on 69913: the player alone came back joined, with a real realm
+-- second (`"Karuzo Elegia", "ClassicBetaPvE"`). Whether the client changed or
+-- the two runs sat on different realms is unresolved
+-- (docs/FOREVER-PROBE.md section 4).
 --
--- On 69913 the PLAYER was the exception - `"Karuzo Elegia", "ClassicBetaPvE"`,
--- joined name plus a real realm - and the stub modelled that. The 70009 run
--- reads `"Karuzo", "Elegia"` for the player too. Whether the client changed or
--- the two runs sat on different realms is unresolved (docs/FOREVER-PROBE.md
--- section 4); either way the addon is unaffected, because it reads
--- GetUnitName, and the stub models what the client does NOW.
+-- So the stub does the 70009 reading by default, and a test that gives a unit
+-- a `realm` gets the 69913 one - which is also the only way to model a real
+-- realm arriving in that slot, for code doing `local name, realm = ...`.
+-- GetUnitName joins under both, which is what the addon actually reads.
 function UnitName(unit)
     local u = unitInfo(unit)
     if not u then return nil end
+    if u.realm then return u.name, u.realm end
     local first, surname = u.name:match("^(%S+)%s+(%S+)$")
     if first then return first, surname end
     return u.name
@@ -500,7 +504,11 @@ function GetInstanceInfo()
     -- "none" - it does not return an empty name.
     local t = WoW.instanceType
     if not t then t = (WoW.instanceName == "" and "none") or "party" end
-    return WoW.instanceName, t, 0, "", 5, 0, false, 0, 0
+    -- Eleven returns, measured on 70009 (nine on 69913): the last two are
+    -- new. Nothing reads past the second, but a stub that models the old
+    -- arity is a stub that disagrees with the client, which is the whole
+    -- thing this file exists not to do.
+    return WoW.instanceName, t, 0, "", 5, 0, false, 0, 0, nil, false
 end
 function GetRealZoneText() return WoW.instanceName end
 
