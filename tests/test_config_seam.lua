@@ -13,9 +13,39 @@ dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 local T, TC = H.loadAddon()
 
-local BROKEN = TC.SV_BROKEN_ON_BUILD
-local MEASURED = TC.MEASURED_ON_BUILD
-local FIXED = "70123"   -- any build other than the two above
+-- Pinned here as LITERALS, not read from the source. Every check below takes
+-- its builds from the constants, so a stale constant satisfies all of them
+-- while the addon warns at every real login on the build people are actually
+-- running - and, worse, treats that build as one where saved settings work,
+-- so a relog to character select can announce a fix that never happened.
+-- Moving the client forward has to be a two-file edit, and this is the file
+-- that says so.
+-- They are DIFFERENT right now, on purpose: the client is 69977, where saved
+-- settings are measured broken, but /pprobe has not been re-run there, so the
+-- login notice still says 69913. Until this change they were always equal,
+-- and nothing in this file would have caught the two detectors being wired
+-- together.
+local MEASURED = "69913"
+local BROKEN = "69977"
+local CLIENT = "69977"  -- what .build.info reports; what the stub must model
+local FIXED = "70123"   -- any build other than the three above
+
+H.eq(TC.MEASURED_ON_BUILD, MEASURED,
+    "the source says Priestly was measured on the build these tests measure it on")
+H.eq(TC.SV_BROKEN_ON_BUILD, BROKEN,
+    "and on the build where saved settings are known not to come back")
+
+-- The stub's default build is the one every other test file runs under, so a
+-- stale default quietly models a client that no longer exists - and a test
+-- asserting "no build warning at a default login" would be asserting it
+-- against the wrong build. AGENTS.md says to keep them equal; this is what
+-- makes that true rather than remembered.
+-- The stub models the CLIENT, not whichever build Priestly last re-probed:
+-- it is the default every other test file runs under, so a stale one hides
+-- from all of them what a player actually sees - including, right now, a
+-- login notice.
+WoW.reset()
+H.eq(WoW.build, CLIENT, "the stub models the build the client is on")
 
 ------------------------------------------------------------
 -- The setters
@@ -118,6 +148,19 @@ local function said(fromIndex)
     return table.concat(WoW.messages, " | ", fromIndex + 1, #WoW.messages)
 end
 
+-- Everything except the build notice, which is the OTHER detector: it fires on
+-- any build but MEASURED_ON_BUILD, which currently includes the broken one.
+-- The checks below are about the settings announcement, so they say so.
+local function saidSettings(fromIndex)
+    local out = {}
+    for i = fromIndex + 1, #WoW.messages do
+        if not WoW.messages[i]:find("tested on game build", 1, true) then
+            out[#out + 1] = WoW.messages[i]
+        end
+    end
+    return table.concat(out, " | ")
+end
+
 local function freshSession(build)
     WoW.reset()
     WoW.build = build
@@ -129,7 +172,12 @@ end
 freshSession(BROKEN)
 local before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
-H.eq(said(before), "", "no marker at login, nothing announced - today's state")
+H.eq(saidSettings(before), "", "no marker at login, nothing announced - today's state")
+-- The two detectors, on one login: the client is on a build nobody re-probed,
+-- and on that same build saved settings are known not to come back. One speaks
+-- and the other stays quiet.
+H.check(said(before):find("tested on", 1, true),
+    "the build notice still fires on the broken build, which is not the measured one")
 H.check(type(PriestlyDB.svLoadCheck) == "table", "the per-character marker is written")
 H.check(type(PriestlySVCheck.svLoadCheck) == "table", "and the account-wide one")
 H.eq(PriestlyDB.svLoadCheck.build, BROKEN, "with the build it was written on")
@@ -138,10 +186,10 @@ H.eq(PriestlyDB.svLoadCheck.build, BROKEN, "with the build it was written on")
 -- being served from the client's cache. Neither may announce.
 before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
-H.eq(said(before), "",
+H.eq(saidSettings(before), "",
     "on the broken build a returning marker is the client's cache, not a fix")
 Priestly_HandleEnteringWorld(false, true)
-H.eq(said(before), "", "and a /reload never announces")
+H.eq(saidSettings(before), "", "and a /reload never announces")
 
 -- A zone change is neither, and must not touch the marker.
 local marker = PriestlyDB.svLoadCheck

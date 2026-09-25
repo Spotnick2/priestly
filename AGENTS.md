@@ -140,8 +140,11 @@ disagree.
 `Priestly_OnSoloToggle`, `Priestly_ApplyAlpha`, and `Priestly.shadowAuraNames` (localized Shadow
 Protection aura names, which the config's "detect" mode reads).
 
-**NO SavedVariables load back on this client — per-character included.** Re-measured on build
-1.60.1.69913 (2026-09-21 01:14) with two independent instruments: `/pprobe sv` reports
+**NO SavedVariables load back on this client — per-character included.** Re-measured on 69977, the
+installed build, on 2026-09-24 — from the launch counters in `WTF/Account/<id>/`, which needs no
+game session (`docs/FOREVER-PROBE.md` §11). Do that, not a dump comparison, before moving
+`SV_BROKEN_ON_BUILD`: a dump lists the same symbols whether or not the client reads the file back.
+First measured on build 1.60.1.69913 (2026-09-21 01:14) with two independent instruments: `/pprobe sv` reports
 `launches=0` before every session on *both* the account-wide and per-character tables, and
 Priestly's own `pos` sits on disk while `PriestlyDB.pos` is nil in the next session.
 
@@ -312,10 +315,20 @@ Changing patch compatibility:
   would leave the addon on stale findings with nothing left to say so. It is worded for players;
   the procedure lives here.
   When the build changes, re-measure - `/apidump`, `/pprobe`, and a **full-exit** check of saved
-  settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`, and keep `WoW.build`'s default
-  in `tests/wow_stubs.lua` equal to it. Bumping without re-measuring silences the only reminder
-  that the notes are stale.
+  settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
+  silences the only reminder that the notes are stale, so a dump comparison is not enough on its
+  own: identical declarations say nothing about runtime behaviour like aura secrecy or secure
+  click casting.
+  `WoW.build`'s default in `tests/wow_stubs.lua` tracks the **client**, not this constant - it is
+  the default every other test runs under, and it should show them what a player sees, notice
+  included. The three builds are pinned as literals in `tests/test_config_seam.lua`; they are
+  equal in the ordinary case and diverge while a re-probe is outstanding.
 - If saved settings are **still** broken on the new build, set `SV_BROKEN_ON_BUILD` to it as well.
+  Measure that one separately — the launch counters above — and never infer it from the API dumps
+  matching. Getting it wrong silences both detectors at once: the addon treats the build as fixed
+  (so a relog announces a fix that never happened) or as broken (so a real fix goes unannounced),
+  and bumping `MEASURED_ON_BUILD` in the same edit removes the login notice that would have
+  prompted a second look.
   On that build a returning `svLoadCheck` is treated as the client's in-process cache (a relog to
   character select can hand it back, just as `/reload` does), so the fix is never falsely
   announced.

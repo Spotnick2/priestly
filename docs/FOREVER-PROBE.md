@@ -8,6 +8,24 @@ arity, return order, or whether the underlying system is wired up on a Vanilla-c
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
 Probed 2026-09-20 on a level 3 Priest, in a 2-person party, standing in Undercity.
 
+**69913 is the last build anything here was probed on, and the installed client is 69977**
+(`Sep 22 2026`, as of 2026-09-24). So every runtime finding below is **unverified on the build
+people are running**, and `MEASURED_ON_BUILD` stays at `69913` for exactly that reason - the login
+notice it drives is the reminder. Do not advance it from this document; advance it after running
+`/pprobe` on 69977 and recording the results here.
+
+What is known about 69977 is narrower than it looks: the two builds' API dumps are **identical
+sets** - documented functions, events, enums and structures, widget methods, namespace functions.
+That is a statement about *declarations*. It cannot show that aura secrecy in combat, secure click
+casting, or any other behaviour below still works the same way, which is the whole content of this
+file. A finding here that stops matching the game is a bug report, not a surprise: re-run the
+probe rather than assuming the note was always wrong.
+
+The SavedVariables finding (section 11) is the one thing that **has** been re-measured on 69977,
+because it needs a different instrument anyway: a dump lists the same symbols whether or not the
+client reads the file back. That one was measured from the files themselves, without launching the
+game - see below - and it is why `SV_BROKEN_ON_BUILD` is `69977` while `MEASURED_ON_BUILD` is not.
+
 ---
 
 ## 1. Secure click-casting — the blocking question
@@ -331,6 +349,39 @@ launches now: account=1 character=1
 Both files on disk read `launches = 1`. Every session starts from zero and writes 1; a working load
 would show 2, 3, 4. Confirmed independently by Priestly itself: `PriestlyDB.pos` is present in the
 character file and nil in the next session, which `/priestly pos` reports directly.
+
+**Still broken on 69977, re-measured 2026-09-24 without launching the game.** The probe's own
+before/after is *in the file it writes*, so once a counting addon has ever run, the check costs
+nothing — `WTF/Account/<id>/SavedVariables/PriestlyProbe.lua`:
+
+```lua
+PriestlyProbePersist = {
+["marker"] = "written by PriestlyProbe",
+["launches"] = 1,
+["stamps"] = {
+"2026-09-24 11:00:02",
+},
+}
+```
+
+`stamps` is **append-only per addon load** and `launches` increments from whatever arrived, so the
+list's length is the number of loads since the table last came back. One entry, on a client whose
+file already held an earlier session's data — the 2026-09-21 measurement read it, and the client
+only writes this file at logout. So the addon saw *nothing* at load.
+
+That also rules out the trap this section warns about: `/reload` and a relog to character select
+both hand the table back in-process, so either would have left **two** stamps. One stamp is a real
+process start with no load-back.
+
+Corroborated in the same session by two other addons, tied to it by the stamps rather than by
+sitting in one file — `SavedVariables/AltStableProbe.lua` has `loadCount = 1` at `11:00:10`, and
+`SavedVariables/Priestly.lua` has `svLoadCheck = { build = "69977", stamp = "…11:00:10" }`, which
+is what dates the measurement to **this build**.
+
+`SV_BROKEN_ON_BUILD` rests on this, not on the API dumps matching — a dump lists the same symbols
+whether or not the client reads the file back. `MEASURED_ON_BUILD` is a different question and
+stays at 69913 until `/pprobe` is re-run here: identical declarations cannot show that aura
+secrecy or secure click casting still behave the same way.
 
 **How the earlier wrong answer happened, because it will happen again.** Persistence was checked by
 reading the saved file. That file looks fully populated whether or not the load ran, because

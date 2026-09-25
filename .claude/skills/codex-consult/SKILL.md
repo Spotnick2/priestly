@@ -81,7 +81,7 @@ or a tri-state return), or a change to the `PriestlyDB` shape.
 measured on the live client, and a cold reviewer will otherwise argue from Classic-era or Retail
 behaviour that does not hold here - that auras throw for the whole group in combat, that
 account-wide SavedVariables never load, that the client's secure handler decides which mouse edge
-acts. `C:/Projects/References/forever-api-1.60.1.69913.md` is the full measured API surface if a
+acts. `C:/Projects/References/forever-api-1.60.1.69977.md` is the full measured API surface if a
 question turns on whether something exists.
 
 Say what you have already established and ask it not to repeat that work. A clean "no defect found"
