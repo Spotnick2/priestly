@@ -386,7 +386,38 @@ whether or not the client reads the file back. `MEASURED_ON_BUILD` is a differen
 stays at 69913 until `/pprobe` is re-run here: identical declarations cannot show that aura
 secrecy or secure click casting still behave the same way.
 
-### 70009 (2026-09-24): it looks fixed, and one thing is still missing
+### 70009: FIXED — and the instrument that said otherwise was broken
+
+**Saved settings load back again.** AltStable's probe reads its tables at `PLAYER_LOGIN` and
+reports `SavedVariables (account) LOADED - previous loadCount=3`, counting on to **9** across
+sessions. Priestly's own markers come back and announced it.
+
+**`/pprobe sv` said `arrived: NO` in the same session, and it was wrong.** It captured at *file
+scope*:
+
+> This file runs BEFORE the client executes the SavedVariables file, so a file-scope read sees nil
+> no matter how well loading works — and a file-scope WRITE is then overwritten by the file being
+> loaded.
+
+Two things follow, and the second is the nastier one:
+
+- the probe could never have reported anything but `NO`, on any build;
+- its own saved data was silently discarded at every logout. The account file on disk stayed frozen
+  at the values written `2026-09-24 10:56` while its timestamp updated at each exit — the loaded
+  table replacing the one the file-scope code had just built, which is the same ordering seen from
+  the other side.
+
+Fixed in `Tools/PriestlyProbe`: the capture now happens at `PLAYER_LOGIN`, and `tests/test_probe.lua`
+asserts the login line reports a table handed over *after* the addon's files ran. Put the capture
+back at file scope and that test fails.
+
+**What this does not overturn.** 69913 and 69977 really were broken: AltStable's probe is a valid
+instrument and read `loadCount = 1` on 69977 (account `50284074#1`, 2026-09-24 11:00), and
+Priestly's `pos` did not survive. The file-scope probe agreed with them for the wrong reason, which
+is the part worth remembering — an instrument that cannot fail is not evidence, it is a coincidence
+waiting to be believed.
+
+#### What was measured on the day (2026-09-24 → 25)
 
 From the files on account `50284074#12`, plus the chat from a live login:
 
@@ -397,15 +428,15 @@ From the files on account `50284074#12`, plus the chat from a live login:
 | `PriestlySVCheck.svLoadCheck` | written 22:54, build 70009, `announced = true` | came back; already latched, so it stayed quiet |
 | `PriestlyDB.svLoadCheck` (Kaleid) | — | came back, and announced at 00:21 |
 
-Counters that never moved before are moving. **What is not shown is a full exit between those two
-sessions:** logging out to character select writes saved variables too, so 22:54 → 00:21 may be
-one client process, which is the case the announcement's own wording warns about. `PriestlyProbe`
-would have settled it and was not loaded at 22:54; its file from *before* the patch (10:56, build
-69977) did **not** come back, which is the one piece of evidence pointing the other way.
+Counters that never moved before are moving, and the one reading that pointed the other way —
+`PriestlyProbe` reporting nothing arrived — was the broken instrument described above, not
+evidence.
 
-To finish: quit to the desktop, relaunch, log in, and read `/pprobe sv`. The probe now has a file
-written on 70009, so `previous launches = 1` and a second stamp would settle it — from disk,
-afterwards, without having to trust a chat line.
+**The formality that remains** is a quit-to-desktop and relaunch: logging out to character select
+writes saved variables too, so 22:54 → 00:21 could be one client process. The patch at 18:06 did
+force a full exit, and AltStable read `loadCount = 3` after it, which is the strongest thing on
+hand. With the probe fixed, one relaunch now settles it from disk afterwards: its `stamps` list
+gains a second entry, and `launches` reads 2.
 
 **Two account folders.** `WTF/Account/` holds `50284074#1` and `50284074#12`, with characters split
 across them. Reading the wrong one makes addons look like they disagree about whether loading

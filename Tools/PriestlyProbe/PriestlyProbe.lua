@@ -27,20 +27,41 @@ PriestlyProbeDB = PriestlyProbeDB or {}
 -- and only one of them may be broken - which would be a workaround.
 ------------------------------------------------------------
 
-local SV_ACCOUNT_ARRIVED = (PriestlyProbePersist ~= nil)
-local SV_CHAR_ARRIVED    = (PriestlyProbeChar ~= nil)
-local SV_ACCOUNT_BEFORE  = SV_ACCOUNT_ARRIVED and PriestlyProbePersist.launches or 0
-local SV_CHAR_BEFORE     = SV_CHAR_ARRIVED and PriestlyProbeChar.launches or 0
+-- READ THEM IN AN EVENT, NOT AT FILE SCOPE. This file runs BEFORE the client
+-- executes the SavedVariables file, so a file-scope read sees nil no matter
+-- how well loading works - and a file-scope WRITE is then overwritten by the
+-- file being loaded, so the counter never advances and this addon's own data
+-- is discarded at every logout.
+--
+-- Measured, not assumed. This probe read at file scope until 2026-09-25 and
+-- reported "arrived: NO" on build 70009, while AltStable's probe - which
+-- reads at PLAYER_LOGIN - reported its account table LOADED in the same
+-- session and counted up to 9. This probe's file on disk meanwhile stayed
+-- frozen at the values written 2026-09-24 10:56 while its timestamp updated
+-- at every logout: the loaded table was replacing the one this code had just
+-- built, which is the same ordering seen from the other side.
+local SV_ACCOUNT_ARRIVED, SV_CHAR_ARRIVED = false, false
+local SV_ACCOUNT_BEFORE, SV_CHAR_BEFORE = 0, 0
+local svCaptured = false
 
-PriestlyProbePersist = PriestlyProbePersist or { launches = 0, stamps = {} }
-PriestlyProbePersist.launches = (PriestlyProbePersist.launches or 0) + 1
-PriestlyProbePersist.stamps = PriestlyProbePersist.stamps or {}
-PriestlyProbePersist.stamps[#PriestlyProbePersist.stamps + 1] = date("%Y-%m-%d %H:%M:%S")
-PriestlyProbePersist.marker = "written by PriestlyProbe"
+local function CaptureSavedVariables()
+    if svCaptured then return end
+    svCaptured = true
 
-PriestlyProbeChar = PriestlyProbeChar or { launches = 0 }
-PriestlyProbeChar.launches = (PriestlyProbeChar.launches or 0) + 1
-PriestlyProbeChar.lastCharacter = nil   -- filled in at PLAYER_LOGIN
+    SV_ACCOUNT_ARRIVED = (PriestlyProbePersist ~= nil)
+    SV_CHAR_ARRIVED    = (PriestlyProbeChar ~= nil)
+    SV_ACCOUNT_BEFORE  = SV_ACCOUNT_ARRIVED and (PriestlyProbePersist.launches or 0) or 0
+    SV_CHAR_BEFORE     = SV_CHAR_ARRIVED and (PriestlyProbeChar.launches or 0) or 0
+
+    PriestlyProbePersist = PriestlyProbePersist or { launches = 0, stamps = {} }
+    PriestlyProbePersist.launches = (PriestlyProbePersist.launches or 0) + 1
+    PriestlyProbePersist.stamps = PriestlyProbePersist.stamps or {}
+    PriestlyProbePersist.stamps[#PriestlyProbePersist.stamps + 1] = date("%Y-%m-%d %H:%M:%S")
+    PriestlyProbePersist.marker = "written by PriestlyProbe"
+
+    PriestlyProbeChar = PriestlyProbeChar or { launches = 0 }
+    PriestlyProbeChar.launches = (PriestlyProbeChar.launches or 0) + 1
+end
 
 ------------------------------------------------------------
 -- Do CVars survive where SavedVariables do not?
@@ -875,6 +896,10 @@ SlashCmdList["PPROBE"] = function(msg)
         local ok, err = pcall(P[cmd])
         if not ok then say("|cffff4444ERROR: " .. tostring(err) .. "|r") end
     elseif cmd == "sv" then
+        -- Normally done at PLAYER_LOGIN, which has long since fired. Asking
+        -- before that - a test, or a slash command from another addon at
+        -- load - still gets an answer rather than an error.
+        CaptureSavedVariables()
         say("|cff99ddff== SavedVariables persistence ==|r")
         say("  account-wide table arrived at load: " ..
             (SV_ACCOUNT_ARRIVED and "|cff55ff55YES|r" or "|cffff4444NO|r"))
@@ -891,6 +916,9 @@ SlashCmdList["PPROBE"] = function(msg)
             say("  |cffff4444Nothing was read back.|r Expected on the very first run.")
             say("  Otherwise this is a real failure, whether it followed /reload or a")
             say("  full exit: SavedVariables are re-read from disk either way.")
+            say("  (Captured at PLAYER_LOGIN. Read at file scope - as this probe did")
+            say("  until 2026-09-25 - it always says NO: the client runs the saved")
+            say("  file after the addon's own files.)")
         else
             say("  |cffffcc00A value came back.|r What it means depends on what you did:")
             say("  - after only /reload: |cffffcc00inconclusive|r. Settings have been seen to")
@@ -938,6 +966,8 @@ end
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:SetScript("OnEvent", function()
+    -- First, before anything reads or writes those tables.
+    CaptureSavedVariables()
     PriestlyProbeChar.lastCharacter = (GetUnitName and GetUnitName("player", false)) or "?"
     say("loaded. |cffffffff/pprobe|r runs everything, |cffffffff/pprobe sv|r checks persistence.")
     say("  SavedVariables seen at load: account=" ..

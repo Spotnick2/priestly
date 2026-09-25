@@ -255,15 +255,43 @@ H.check(not said:find("usable store", 1, true), "or advice to build on it: " .. 
 
 -- /pprobe sv had the same flaw: it said "SavedVariables DO load" on any value
 -- that came back, which a /reload alone can produce.
+--
+-- The tables arrive AFTER the addon's files run - that is the client's
+-- order, and reading them at file scope is what made this probe report
+-- "arrived: NO" on a build where loading worked. So: load the probe with
+-- nothing set, hand it the saved tables the way the client does, and only
+-- then log in.
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
+assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
 PriestlyProbePersist = { launches = 4, stamps = {} }
 PriestlyProbeChar = { launches = 4 }
-assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
+before = #WoW.messages
+WoW.dispatch("PLAYER_LOGIN")
+-- The login line itself is the assertion that matters: it reports what the
+-- capture saw, and the capture only happens here. Move it back to file scope
+-- and this says "account=|cffff4444no|r" however well loading works.
+said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said:find("SavedVariables seen at load: account=yes", 1, true),
+    "a table handed over after the addon's files ran is seen at login: " .. said)
+
 before = #WoW.messages
 H.check(pcall(SlashCmdList["PPROBE"], "sv"), "/pprobe sv runs when values came back")
 said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
 H.check(said:find("inconclusive", 1, true), "sv is inconclusive after only /reload: " .. said)
 H.check(said:find("FULL exit and relaunch", 1, true), "and conclusive after a full exit: " .. said)
 H.check(not said:find("DO load", 1, true), "with no unconditional claim: " .. said)
+-- The point of the change: tables handed over after the files ran are SEEN.
+H.check(said:find("arrived at load: |cff55ff55YES", 1, true),
+    "and a table that arrived after the addon's files ran is seen, not missed: " .. said)
+-- Not the exact number: this file loads the probe several times over, each
+-- copy answers the same login, and they run in table order.
+local broughtBack = tonumber(said:match("before this one: account=(%d+)"))
+H.check(broughtBack ~= nil and broughtBack >= 4,
+    "with the count it brought: " .. tostring(broughtBack))
+-- Advanced, not reset. Not an exact number: this file loads the probe several
+-- times over, and every loaded copy has its own login handler.
+H.check(PriestlyProbePersist.launches > 4, "which this launch then advances: "
+    .. tostring(PriestlyProbePersist.launches))
 PriestlyProbePersist, PriestlyProbeChar = nil, nil
 
 C_CVar = nil
