@@ -74,8 +74,11 @@ local DEFAULTS = {
 -- forward.
 --
 -- MEASURED_ON_BUILD stays 69913 until /pprobe is re-run on the CURRENT
--- client, which is 70009. 69913 and 69977 have identical documented sets and
--- 70009 moves only slightly, but matching declarations cannot show that aura
+-- client, which is 70009. 69913 and 69977 had identical documented sets;
+-- 70009 does NOT - it adds, removes and changes signatures (see
+-- docs/FOREVER-PROBE.md, top). Nothing this addon calls was removed, so
+-- there is no break, but the dump no longer even suggests the findings
+-- carried over - and matching declarations never could show that aura
 -- secrecy, secure click casting or any other RUNTIME finding still behaves
 -- the same way. The login notice is the reminder that
 -- they have not been re-checked, so silencing it is the one thing not to do.

@@ -416,7 +416,7 @@ NUM_BAG_SLOTS = 4                -- measured on this client
 
 function GetTime() return WoW.time end
 function GetLocale() return WoW.locale end
-function GetBuildInfo() return "1.60.1", WoW.build, "Sep 24 2026", 16001 end
+function GetBuildInfo() return "1.60.1", WoW.build, "Sep 23 2026", 16001 end
 function InCombatLockdown() return WoW.inCombat end
 -- NOT defined on purpose: MouseIsOver does not exist on this client. The stub
 -- must model the client's absences, not just its presences - defining it here

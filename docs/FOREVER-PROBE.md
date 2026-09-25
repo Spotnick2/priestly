@@ -15,9 +15,24 @@ exactly that reason - the login notice it drives is the reminder. Do not advance
 document; advance it after running `/pprobe` on the current client and recording the results
 here.
 
-What is known about 69977 is narrower than it looks: the two builds' API dumps are **identical
-sets** - documented functions, events, enums and structures, widget methods, namespace functions.
-That is a statement about *declarations*. It cannot show that aura secrecy in combat, secure click
+What is known about the builds since is narrower than it looks, and it is **not** that the API
+stayed the same. 69913 and 69977 were identical sets; **70009 is not** — `forever-api-1.60.1.70009.md`
+against 69977: documented functions 6577 → 6596, events 1802 → 1805, tables 792 → 797, global
+functions 5991 → 6057, namespace functions 5401 → 5417, widget methods unchanged. And there are
+**removals and signature changes**, not only additions: `C_GameRules.SelectClassicExperiencePreset`
+and `SelectModernExperiencePreset` are gone in favour of `Get`/`SetForeverExperiencePreset`, the
+`C_LocaleContext.*` namespace moved to script-object methods, and `C_FriendList.SendWho`/`SortWho`
+changed arity. Nothing Priestly or LibGroupBuffs calls was removed — grepped both — so there is no
+functional break, but the dump is no longer evidence that anything below still holds.
+
+Two new arrivals land in areas this file is about, and neither has been probed:
+
+| added in 70009 | why it matters here |
+|---|---|
+| `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | section 3's duration learning guesses at refresh behaviour; this may answer it outright |
+| `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | section 7's surname handling is hand-rolled string work |
+
+Declarations are still only declarations. Even where the dumps *do* agree, they cannot show that aura secrecy in combat, secure click
 casting, or any other behaviour below still works the same way, which is the whole content of this
 file. A finding here that stops matching the game is a bug report, not a surprise: re-run the
 probe rather than assuming the note was always wrong.
