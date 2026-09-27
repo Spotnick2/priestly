@@ -465,10 +465,16 @@ SlashCmdList["PRIESTLY"] = function(msg)
         -- Settings are account-wide again as of 70009; the first character
         -- logged in after that change seeded them. This is how a player picks
         -- a different one afterwards.
-        local copied = Priestly_AdoptCharacterSettings and Priestly_AdoptCharacterSettings() or 0
-        if copied > 0 then
+        local applied, panelStale = Priestly_AdoptCharacterSettings()
+        if applied > 0 then
             DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Now using this character's "
-                .. "old settings on every character (" .. copied .. " kept).")
+                .. "old settings on every character (" .. applied .. " applied).")
+            if panelStale then
+                -- Its controls are built once and never re-read the settings,
+                -- so saying nothing would leave the panel disagreeing.
+                DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r The options window still "
+                    .. "shows the old values - |cffffffff/reload|r to refresh it.")
+            end
         else
             DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Nothing to adopt: this "
                 .. "character has no settings saved from before they became shared.")

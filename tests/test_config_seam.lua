@@ -392,16 +392,18 @@ Priestly_EnsureDefaults()
 H.eq(PriestlyAccountDB.frameAlpha, TC.DEFAULTS.frameAlpha,
     "a legacy table with no settings in it seeds nothing")
 
--- Nor one holding settings-shaped keys without the marker a release writes.
--- `flavor` is what says "a version of this addon configured this table"; with
--- no marker there is no telling what wrote it, and a guess here silently
--- changes what the player sees.
+-- A table with settings but NO flavor is a TBC-era profile - that absence is
+-- what triggers the TBC migration - and it is the profile most in need of
+-- carrying across. An earlier version of this seed used `flavor` as its
+-- "somebody configured this" marker and refused exactly this case.
 WoW.reset()
 PriestlyAccountDB = nil
-PriestlyDB = { frameAlpha = 0.2, lockFrame = true }
+PriestlyDB = { frameAlpha = 0.2, lockFrame = true, trackSpirit = false }
 Priestly_EnsureDefaults()
-H.eq(PriestlyAccountDB.frameAlpha, TC.DEFAULTS.frameAlpha,
-    "a legacy table with no flavor marker is not treated as settings")
+H.eq(PriestlyAccountDB.frameAlpha, 0.2, "a TBC-era profile, with no flavor, is carried across")
+H.eq(PriestlyAccountDB.trackSpirit, false, "every setting of it")
+H.eq(PriestlyAccountDB.flavor, "forever",
+    "and the flavor migration then runs over what it brought")
 
 -- Once the shared table is configured, a second character cannot fill a key
 -- it happens to be missing - a setting added by a later version, or one the
@@ -415,5 +417,143 @@ PriestlyDB = configuredCharacter({ shadowMode = "instance" })
 Priestly_EnsureDefaults()
 H.eq(PriestlyAccountDB.shadowMode, TC.DEFAULTS.shadowMode,
     "a missing key is filled by the DEFAULT, not by another character's value")
+
+
+-- An alt that never configured anything must not claim the shared table. It
+-- still runs EnsureDefaults at login - every character does, priest or not -
+-- and the first version of this seed treated the `flavor` that writes as
+-- "somebody configured this", which locked the real settings out for good.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, nil
+Priestly_EnsureDefaults()                      -- the alt logs in first
+H.eq(PriestlyAccountDB.flavor, "forever", "the alt's login stamps the flavor marker")
+H.eq(PriestlyAccountDB[TC.SEED_MARKER], nil, "but claims nothing to seed from")
+
+PriestlyDB = configuredCharacter()             -- now the configured priest
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, 0.5, "so the priest's settings still come across")
+H.eq(PriestlyAccountDB.lockFrame, true, "all of them")
+H.check(PriestlyAccountDB[TC.SEED_MARKER] ~= nil, "and the shared table records who from")
+
+-- `visible` is this session's window state, not a preference to share: one
+-- character closing the window must not close it for every character.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter({ visible = false })
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.visible, nil, "a closed window is not carried across")
+
+-- The account scope's load-check latch used to live in PriestlySVCheck. It is
+-- not a store any more, but dropping its marker would un-latch a fix this
+-- player was already told about, and the next patch would tell them again.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, nil
+PriestlySVCheck = { svLoadCheck = { stamp = "then", build = "70009", loads = true } }
+Priestly_EnsureDefaults()
+local inherited = PriestlyAccountDB.svLoadCheck
+H.check(type(inherited) == "table", "the old marker is inherited at all")
+H.eq(inherited and inherited.loads, true, "with its latch")
+H.eq(inherited and inherited.build, "70009", "and the build it was written on")
+PriestlySVCheck.svLoadCheck.build = "changed"
+H.eq(inherited and inherited.build, "70009", "by value, not by reference")
+
+-- Adopt REPLACES: a key this character never set falls back to the default,
+-- rather than keeping whichever other character's value is sitting there.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+Priestly_EnsureDefaults()
+Priestly_SetConfig("showClickHints", false)    -- the first character's choice
+PriestlyDB = configuredCharacter({ showClickHints = nil })
+H.check(Priestly_AdoptCharacterSettings() > 0, "the second character adopts")
+H.eq(PriestlyAccountDB.showClickHints, TC.DEFAULTS.showClickHints,
+    "a setting they never had reverts to the default, not the other character's")
+
+-- Adopt says whether the options panel is now showing stale values: it is
+-- built once and never re-synced, so the honest answer is that a reload is
+-- needed rather than letting it disagree with the addon.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+Priestly_EnsureDefaults()
+local _, stale = Priestly_AdoptCharacterSettings()
+H.eq(stale, false, "with the panel never opened, nothing is stale")
+
+-- A saved file is text on disk: it can come back with a table inside itself.
+-- Copying it must not recurse off the end of the stack, which would abort
+-- login before the defaults are backfilled.
+WoW.reset()
+PriestlyAccountDB = nil
+local loop = { frameAlpha = 0.33 }
+loop.self = loop
+PriestlyDB = loop
+H.check(pcall(Priestly_EnsureDefaults), "a self-referential saved table does not blow the stack")
+H.eq(PriestlyAccountDB.frameAlpha, 0.33, "and its settings still come across")
+
+-- The slash command itself, not just the function under it: the branch, both
+-- messages and the count are the whole user-facing surface of this feature.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+Priestly_EnsureDefaults()
+before = #WoW.messages
+SlashCmdList["PRIESTLY"]("adopt")
+said2 = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said2:find("every character", 1, true), "/priestly adopt reports what it did: " .. said2)
+H.check(said2:find("applied", 1, true), "with a count: " .. said2)
+
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, nil
+Priestly_EnsureDefaults()
+before = #WoW.messages
+SlashCmdList["PRIESTLY"]("adopt")
+said2 = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said2:find("Nothing to adopt", 1, true),
+    "and says so plainly when there is nothing: " .. said2)
+
+-- The move announces itself, once, naming the character it took: an addon
+-- whose settings just changed under the player should say why.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+WoW.SetUnit("player", { name = "Karuzo Elegia" })
+before = #WoW.messages
+Priestly_EnsureDefaults()
+said2 = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said2:find("shared by all your characters", 1, true), "the seed says so: " .. said2)
+H.check(said2:find("Karuzo Elegia", 1, true), "naming where they came from: " .. said2)
+before = #WoW.messages
+Priestly_EnsureDefaults()
+H.eq(#WoW.messages, before, "and only once")
+
+-- A second configured character is TOLD its own settings are still there,
+-- once, rather than left looking at an addon that reset itself.
+PriestlyDB = configuredCharacter({ frameAlpha = 0.25 })
+before = #WoW.messages
+Priestly_EnsureDefaults()
+said2 = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said2:find("adopt", 1, true), "the other character is pointed at adopt: " .. said2)
+before = #WoW.messages
+Priestly_EnsureDefaults()
+H.eq(#WoW.messages, before, "once for that character, not at every login")
+
+-- Adopt has to APPLY what it copied, not just store it. The panel is built
+-- once and never re-synced, and the window reads its opacity and rows when
+-- told to - so without these calls the player sees the old setup and a chat
+-- line claiming the new one.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+Priestly_EnsureDefaults()
+local applied = { alpha = 0, rebuild = 0, changed = {} }
+local realAlpha, realRebuild = Priestly_ApplyAlpha, Priestly_ForceRebuild
+local realHook = Priestly_OnConfigChanged
+Priestly_ApplyAlpha = function() applied.alpha = applied.alpha + 1 end
+Priestly_ForceRebuild = function() applied.rebuild = applied.rebuild + 1 end
+Priestly_OnConfigChanged = function(key) applied.changed[key] = true end
+
+PriestlyDB = configuredCharacter({ frameAlpha = 0.31 })
+Priestly_AdoptCharacterSettings()
+H.check(applied.alpha > 0, "adopt re-applies the window opacity")
+H.check(applied.rebuild > 0, "and rebuilds the rows")
+H.check(applied.changed.frameAlpha, "and reports the keys it changed, so anything watching sees")
+H.check(applied.changed.shadowMode, "every one of them, not just the first")
+
+Priestly_ApplyAlpha, Priestly_ForceRebuild = realAlpha, realRebuild
+Priestly_OnConfigChanged = realHook
 
 H.done("test_config_seam")

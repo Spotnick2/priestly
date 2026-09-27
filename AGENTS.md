@@ -84,7 +84,7 @@ Load order from `Priestly.toc`:
 1. `Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml` — LibStub, then the library's compat layer.
 2. `PriestlyCompat.lua` — sets `Priestly.API` to the library's API table. Nothing else may touch a
    moved API directly.
-3. `PriestlyConfig.lua` — `PriestlyDB` defaults, instance database, `Priestly_*` helper globals.
+3. `PriestlyConfig.lua` — `PriestlyAccountDB` defaults, instance database, `Priestly_*` helpers.
 4. `Priestly.lua` — UI and event logic; calls the config helpers.
 
 `Priestly.API` (the only sanctioned route to a changed API; implemented in LibGroupBuffs'
@@ -110,13 +110,15 @@ Load order from `Priestly.toc`:
 `PriestlyConfig.lua` exposes: `Priestly_EnsureDefaults`, `Priestly_ShowSolo`, `Priestly_TrackPets`,
 `Priestly_IsBuffEnabled`, `Priestly_ShouldShowShadow`, `Priestly_GetFrameAlpha`,
 `Priestly_OpenConfig`, `Priestly_LearnDuration`, `Priestly_GetLearnedDuration`,
-`Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`, and the write path:
+`Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`,
+`Priestly_AdoptCharacterSettings`, `Priestly_ConfigPanelBuilt`, and the write path:
 `Priestly_SetConfig(key, value)`, `Priestly_SetShadowInstance(name, tracked)`,
 `Priestly_OnConfigChanged(key)`. Plus `Priestly_HandleEnteringWorld` and `Priestly_CheckClientBuild`,
 which the config's event frame calls.
 
-**Every write to `PriestlyDB` or `PriestlySVCheck` goes through `Priestly_SetConfig` or
-`Priestly_SetShadowInstance`.** The only exceptions are inside `-- config-owner: begin/end` regions
+**Every write to `PriestlyAccountDB` goes through `Priestly_SetConfig` or
+`Priestly_SetShadowInstance`.** `PriestlyDB`, the legacy per-character table, is read-only apart
+from one bookkeeping key the seed sets, and `PriestlySVCheck` is read once and never written. The only exceptions are inside `-- config-owner: begin/end` regions
 in `PriestlyConfig.lua`: the two saved-table accessors, `EnsureDefaults` and the learned-duration
 cache. `tests/test_config_seam.lua` scans the source with LibGroupBuffs' `tests/config_scan.lua`
 (from the library checkout the suite runs against) and fails on any other write, and counts the
@@ -201,9 +203,10 @@ misbehave again, and it reads its counters at `PLAYER_LOGIN` for the reason §11
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,
 `lockFrame`, `showClickHints`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`,
-and `svLoadCheck` (never in `DEFAULTS`, see below). The account-wide
-`PriestlySVCheck` holds nothing but its own `svLoadCheck`: it exists only so the addon can tell
-when account-wide storage is fixed.
+and `svLoadCheck` (never in `DEFAULTS`, see below), plus `seededFrom` — which character the
+shared settings came from. `PriestlySVCheck` is no longer a store: it is read once so the account
+scope inherits its `svLoadCheck` latch, and dropping that would tell a player about the
+SavedVariables fix a second time.
 `learnedDurations` is keyed by **spell name**,
 not by buff id: the single and group forms of one buff share an id and do not share a duration.
 
@@ -474,7 +477,12 @@ pwsh Tools\deploy.ps1
 - A grouped player with a surname renders in full.
 - Options panel: every checkbox, the three shadow radios, the opacity slider, and Select All /
   Deselect All / Reset Defaults.
-- Log in with a pre-existing TBC `PriestlyDB`: settings survive, TBC instance keys are gone.
+- Log in with a pre-existing per-character `PriestlyDB`: its settings become the shared ones, chat
+  says which character they came from, and a TBC-era profile (no `flavor`) also migrates, losing
+  only its TBC instance keys.
+- Log in a second configured character: the shared settings are unchanged and chat points at
+  `/priestly adopt`, which then applies that character's and says a `/reload` is needed if the
+  options window is open.
 
 ## Packaging
 

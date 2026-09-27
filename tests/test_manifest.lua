@@ -63,13 +63,22 @@ H.eq(directive("Interface"), "16001",
 -- which is all the old PriestlySVCheck marker table existed for.
 ------------------------------------------------------------
 
-H.eq(directive("SavedVariables"), "PriestlyAccountDB",
+H.eq(directive("SavedVariables"), "PriestlyAccountDB, PriestlySVCheck",
     "settings are account-wide, which is what #9 decided once the client could load them")
+-- PriestlySVCheck is not a store any more. It stays declared because the
+-- account scope's load-check history lives in it, and an undeclared variable
+-- may never be handed back - losing the latch that says this player was
+-- already told the settings bug was fixed.
+H.check(tostring(directive("SavedVariables")):find("PriestlySVCheck", 1, true) ~= nil,
+    "and the old marker table is still declared, so its load-check latch can be inherited")
 H.eq(directive("SavedVariablesPerCharacter"), "PriestlyDB",
     "and the per-character table stays declared, because the migration reads it")
-H.check(not tostring(directive("SavedVariables")):find("PriestlyDB,", 1, true)
-    and directive("SavedVariables") ~= "PriestlyDB",
-    "neither variable is declared in both scopes - one name cannot live in two")
+-- Substring, deliberately: "PriestlyAccountDB" does not contain "PriestlyDB",
+-- so this catches the double declaration however the list is punctuated. A
+-- version of this check that looked for "PriestlyDB," passed against exactly
+-- the mistake it names.
+H.check(not tostring(directive("SavedVariables")):find("PriestlyDB", 1, true),
+    "and PriestlyDB is not ALSO declared account-wide - one name cannot live in two scopes")
 
 ------------------------------------------------------------
 -- Load order

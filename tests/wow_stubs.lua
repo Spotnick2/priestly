@@ -757,6 +757,9 @@ local KNOWN_ABSENT = {
     -- per-character one, absent for anyone who never ran those releases,
     -- which is exactly the read the migration has to survive.
     PriestlyAccountDB = true, PriestlyDB = true, PriestlyProbeDB = true,
+    -- Still declared for one purpose: its load-check marker is inherited by
+    -- the account store, so nobody is told about the fix a second time.
+    PriestlySVCheck = true,
     -- LibStub.lua looks itself up before it exists.
     LibStub = true,
     Priestly_ScheduleRefresh = true, Priestly_ForceRebuild = true,

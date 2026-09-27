@@ -4,7 +4,7 @@
 ## Author: Spotnick
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\Spell_Holy_PrayerOfFortitude
-## SavedVariables: PriestlyAccountDB
+## SavedVariables: PriestlyAccountDB, PriestlySVCheck
 ## SavedVariablesPerCharacter: PriestlyDB
 ## X-Curse-Project-ID: 1489106
 

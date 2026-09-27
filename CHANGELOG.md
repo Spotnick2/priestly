@@ -1,5 +1,19 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Fixed
+- **Your settings stop resetting.** Game build 70009 fixed the client bug that wrote addon settings
+  to disk and never read them back, so Priestly remembers your setup again. If you played through
+  that patch, it says so in chat the first time it sees them come back.
+
+### Changed
+- **Settings are shared by all your characters again.** While the client bug was live they were
+  kept per character; now they are account-wide, so a second priest starts from your setup rather
+  than from defaults. The first character you log in after updating brings theirs across, and says
+  so. If that was the wrong one, log in as the character whose setup you want and run
+  **`/priestly adopt`** — that character is told its own settings are still there, once.
+
 ## v2.0.6 - 2026-09-23
 
 ### Known issue
