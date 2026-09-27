@@ -86,8 +86,6 @@ if problem then
 end
 
 Priestly.API = lib.API
--- Which copy of the library is live, for a bug report to carry.
-Priestly.libMinor = minor
 -- The settings write path and the client-fix watches; PriestlyConfig.lua
 -- builds Priestly's settings object from it.
 Priestly.Settings = lib.Settings

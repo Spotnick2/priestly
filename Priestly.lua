@@ -122,9 +122,6 @@ local ST_MISSING = Priestly.Engine.STATES.MISSING
 local ST_UNKNOWN = Priestly.Engine.STATES.UNKNOWN
 local PET_GROUP  = Priestly.Engine.PET_GROUP
 
--- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
--- and talent changes: what a priest knows changes as they level, and at the
--- current beta cap the group spells do not exist at all.
 -- ─── What names are we actually matching? ────────────────────────────────────
 --
 -- Spell names come from the client, by ID, so they speak whatever language it
@@ -137,6 +134,17 @@ local PET_GROUP  = Priestly.Engine.PET_GROUP
 -- So `/priestly help` prints what it is matching on. A "not working" report
 -- then arrives carrying its own answer, without the reporter having to know
 -- what to look for.
+-- Asked at print time, never captured. The library upgrades IN PLACE: a
+-- sibling addon shipping a newer copy replaces the methods this addon is
+-- already running, so a version read at load would name the copy that lost.
+-- That is the same rule AGENTS.md states for functions, and the line exists
+-- to tell a bug report which code actually ran.
+local function LiveLibraryMinor()
+    if not LibStub then return "?" end
+    local _, live = LibStub("LibGroupBuffs-1.0", true)
+    return live or "?"
+end
+
 local FROM_NOTE = {
     resolved   = "",
     remembered = " (remembered)",
@@ -152,7 +160,7 @@ function Priestly_PrintSpellReport()
     DEFAULT_CHAT_FRAME:AddMessage(string.format("  locale %s, game build %s, Priestly %s, library r%s",
         tostring(report.locale), tostring(API.ClientBuild and API.ClientBuild() or "?"),
         tostring(API.AddonVersion and API.AddonVersion("Priestly") or "?"),
-        tostring(Priestly.libMinor or "?")))
+        tostring(LiveLibraryMinor())))
     for _, entry in ipairs(report) do
         for _, form in ipairs(entry.forms) do
             DEFAULT_CHAT_FRAME:AddMessage(string.format("  %-7s %-6s %s%s%s",
@@ -189,6 +197,19 @@ local function WarnIfNamesUnresolved()
     end
 end
 
+-- Filling the extension point PriestlyConfig leaves empty. Turning a buff ON
+-- is the other moment an unresolved name starts to matter: that row reads
+-- MISS on everyone from then on, and without this nothing would explain it
+-- for the rest of the session. Cheap, as that hook asks: the latch returns on
+-- the first line once anything has been said.
+function Priestly_OnConfigChanged(key)
+    if key == "trackFort" or key == "trackSpirit" then WarnIfNamesUnresolved() end
+end
+
+-- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
+-- and talent changes: what a priest knows changes as they level, and at the
+-- current beta cap no priest can LEARN the group spells - though the client
+-- still resolves their names by ID, so they are not unresolved (see above).
 local function RefreshSpellData()
     engine:RefreshSpells()
     -- PriestlyConfig's "show Shadow Protection when someone has it" mode needs
@@ -462,6 +483,9 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "PLAYER_TALENT_UPDATE" or event == "SPELLS_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
         -- Newly learned spells change which rows exist and how they cast.
         RefreshSpellData()
+        -- A spell just learned may resolve where it did not before, or fail
+        -- where it did not. Latched, so this can only ever speak once.
+        WarnIfNamesUnresolved()
         ui:ApplyAppearance()      -- the spec icon
         -- Full rebuild: available buffs and reagents may change on a respec.
         -- In combat only the counts can move; the rebuild follows the fight.
@@ -499,7 +523,6 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage(
             "  |cffffffff/priestly adopt|r      share THIS character's old settings with all")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly help|r       this message")
-        Priestly_PrintSpellReport()
         -- Describe the mapping that is actually live: without the group
         -- Prayers (the whole current level range) left-click is single-target.
         local anyGroup = false
@@ -525,6 +548,10 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  R = green (in range) / yellow (out of range) / grey (offline)")
         DEFAULT_CHAT_FRAME:AddMessage("  Timer = green >50% / yellow 10-50% / red <10%")
         DEFAULT_CHAT_FRAME:AddMessage("  ? = buff state unreadable right now (combat aura secrecy)")
+        -- LAST, and deliberately: the login warning sends people here to copy
+        -- these lines, and a default chat frame shows about ten. Printed in
+        -- the middle of the dump they scroll off behind the click legend.
+        Priestly_PrintSpellReport()
 
     elseif cmd == "config" or cmd == "options" or cmd == "settings" or cmd == "opt" then
         if Priestly_OpenConfig then Priestly_OpenConfig() end
