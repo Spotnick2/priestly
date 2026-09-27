@@ -84,9 +84,11 @@ catch up:
   all started fresh each time, and no addon could work around it: there was nowhere on the client
   to save to that survived a restart.
 
-  It is fixed now, and Priestly says so in chat the first time it sees your settings come back. If
-  you are on an older build, the old behaviour is still the old behaviour — update the game. If
-  settings go missing on 70009 or later, that *is* worth reporting.
+  It is fixed now. If you played through the patch, Priestly says so in chat once it sees your
+  settings survive it — it can only tell by watching them come back across a game update, so a
+  fresh install on an already-fixed build will simply work and say nothing. If you are on an older
+  build, the old behaviour is still the old behaviour — update the game. If settings go missing on
+  70009 or later, that *is* worth reporting.
 
 ---
 

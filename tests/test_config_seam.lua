@@ -14,19 +14,21 @@ dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 local T, TC = H.loadAddon()
 
--- Pinned here as LITERALS, not read from the source. Every check below takes
--- its builds from the constants, so a stale constant satisfies all of them
--- while the addon warns at every real login on the build people are actually
--- running - and, worse, treats that build as one where saved settings work,
--- so a relog to character select can announce a fix that never happened.
--- Moving the client forward has to be a two-file edit, and this is the file
--- that says so.
--- MEASURED and CLIENT agree again - 70009 was re-probed in game on
+-- Pinned here as LITERALS, not read from the source: the checks below take
+-- their builds from the constant, so a stale constant would satisfy all of
+-- them while the addon warned at every real login on the build people are
+-- actually running. Moving the client forward has to be a two-file edit, and
+-- this is the file that says so.
+--
+-- MEASURED and CLIENT agree today - 70009 was re-probed in game on
 -- 2026-09-25, aura secrecy in a fight and secure click-casting included - so
--- the login notice is silent. BROKEN does NOT follow them: it names the last
--- build where saved settings were broken, and 70009 fixed that. They are
--- allowed to differ, and this file covers them differing, which is how the
--- two detectors were shown not to be wired together.
+-- the login notice is silent. They part again the moment the client patches.
+--
+-- BROKEN is no longer a constant the addon declares. Since LibGroupBuffs r14
+-- the settings check reads the marker's own recorded build rather than a
+-- build the host names, so BROKEN here is a test fixture and means only "a
+-- build older than the one running" - which is what makes a returning marker
+-- news. Nothing below depends on WHICH build it is.
 local MEASURED = "70009"
 local BROKEN = "69977"
 local CLIENT = "70009"  -- what .build.info reports; what the stub must model
