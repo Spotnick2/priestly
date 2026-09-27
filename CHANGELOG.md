@@ -1,18 +1,30 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.7 - 2026-09-27
+
+### Read this if you had Priestly before
+
+- **Your settings move, once, and Priestly tells you when it happens.** They used to be kept
+  separately for each character; now they are shared by all of them again. The first character you
+  log in after updating brings its settings across for everyone, and says so in chat by name.
+- **If that was the wrong character**, log in as the one whose setup you want and run
+  **`/priestly adopt`**. Nothing is lost in the meantime: every character's own settings are still
+  saved, and any character that has some is told once that `/priestly adopt` will use them.
+- **Whether the window is open stays with the character.** Closing it on one priest does not close
+  it on another.
 
 ### Fixed
 - **Your settings stop resetting.** Game build 70009 fixed the client bug that wrote addon settings
-  to disk and never read them back, so Priestly remembers your setup again. If you played through
-  that patch, it says so in chat the first time it sees them come back.
-
-### Changed
-- **Settings are shared by all your characters again.** While the client bug was live they were
-  kept per character; now they are account-wide, so a second priest starts from your setup rather
-  than from defaults. The first character you log in after updating brings theirs across, and says
-  so. If that was the wrong one, log in as the character whose setup you want and run
-  **`/priestly adopt`** — that character is told its own settings are still there, once.
+  to disk and never read them back, so Priestly remembers your setup again — position, opacity,
+  which buffs you track, the Shadow Protection list. If you played through that patch, it says so
+  in chat the first time it sees them come back. On an older build they still reset every session;
+  that was never something an addon could work around.
+- **The "this version was tested on game build …" notice is gone** for anyone on 70009. Priestly's
+  findings have been re-checked against it, in and out of combat. The notice returns at the next
+  game patch, which is what it is for.
+- **A clearer message when the bundled library is out of date.** It used to report a failed load —
+  sending you looking for a crash that never happened — where the real answer was an old copy. It
+  now names both versions and says to reinstall.
 
 ## v2.0.6 - 2026-09-23
 
