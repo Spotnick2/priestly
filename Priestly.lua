@@ -122,6 +122,37 @@ local ST_MISSING = Priestly.Engine.STATES.MISSING
 local ST_UNKNOWN = Priestly.Engine.STATES.UNKNOWN
 local PET_GROUP  = Priestly.Engine.PET_GROUP
 
+-- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
+-- and talent changes: what a priest knows changes as they level, and at the
+-- current beta cap no priest can LEARN the group spells - though the client
+-- still resolves their names by ID, so they are not unresolved (see above).
+local function RefreshSpellData()
+    engine:RefreshSpells()
+    -- PriestlyConfig's "show Shadow Protection when someone has it" mode needs
+    -- the localized aura names, and it loads before this file.
+    for _, d in ipairs(DEFS) do
+        if d.id == "shadow" then Priestly.shadowAuraNames = d.names end
+    end
+end
+
+local function ClickSpells(def) return engine:ClickSpells(def) end
+local function BuffRem(unit, def) return engine:BuffRem(unit, def) end
+local function DurationFor(...) return engine:DurationFor(...) end
+local function PruneAuraCache() return engine:PruneCache() end
+local function IsValidTarget(unit) return engine:IsValidTarget(unit) end
+local function PickTarget(...) return engine:PickTarget(...) end
+local function GatherGroups() return engine:GatherGroups() end
+local function ActiveDefs(groups, ord) return engine:ActiveDefs(groups, ord) end
+local function MembersFor(def, members) return engine:MembersFor(def, members) end
+local function GroupStat(members, def) return engine:GroupStat(members, def) end
+local function AuraEventIsRelevant(unit, updateInfo)
+    return engine:AuraEventIsRelevant(unit, updateInfo)
+end
+
+-- ─── State ───────────────────────────────────────────────────────────────────
+local g_IsPriest = false
+local g_LastGroupSize = 0
+
 -- ─── What names are we actually matching? ────────────────────────────────────
 --
 -- Spell names come from the client, by ID, so they speak whatever language it
@@ -182,6 +213,15 @@ end
 local g_WarnedUnresolved = false
 local function WarnIfNamesUnresolved()
     if g_WarnedUnresolved or not DEFAULT_CHAT_FRAME then return end
+    -- Gated HERE rather than at each caller, because the callers are events.
+    -- SPELLS_CHANGED is registered as soon as the files load and can arrive
+    -- before PLAYER_LOGIN, when there is no saved table yet and
+    -- Priestly_IsBuffEnabled answers "enabled" for everything - so a
+    -- character whose Spirit is switched off would spend the once-a-session
+    -- warning before its own settings were readable. g_IsPriest is false
+    -- until login, which makes it the signal for both that and the addon
+    -- having nothing to say to a non-priest.
+    if not g_IsPriest then return end
     local report = engine:SpellReport()
     for _, entry in ipairs(report) do
         for _, form in ipairs(entry.forms) do
@@ -205,37 +245,6 @@ end
 function Priestly_OnConfigChanged(key)
     if key == "trackFort" or key == "trackSpirit" then WarnIfNamesUnresolved() end
 end
-
--- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
--- and talent changes: what a priest knows changes as they level, and at the
--- current beta cap no priest can LEARN the group spells - though the client
--- still resolves their names by ID, so they are not unresolved (see above).
-local function RefreshSpellData()
-    engine:RefreshSpells()
-    -- PriestlyConfig's "show Shadow Protection when someone has it" mode needs
-    -- the localized aura names, and it loads before this file.
-    for _, d in ipairs(DEFS) do
-        if d.id == "shadow" then Priestly.shadowAuraNames = d.names end
-    end
-end
-
-local function ClickSpells(def) return engine:ClickSpells(def) end
-local function BuffRem(unit, def) return engine:BuffRem(unit, def) end
-local function DurationFor(...) return engine:DurationFor(...) end
-local function PruneAuraCache() return engine:PruneCache() end
-local function IsValidTarget(unit) return engine:IsValidTarget(unit) end
-local function PickTarget(...) return engine:PickTarget(...) end
-local function GatherGroups() return engine:GatherGroups() end
-local function ActiveDefs(groups, ord) return engine:ActiveDefs(groups, ord) end
-local function MembersFor(def, members) return engine:MembersFor(def, members) end
-local function GroupStat(members, def) return engine:GroupStat(members, def) end
-local function AuraEventIsRelevant(unit, updateInfo)
-    return engine:AuraEventIsRelevant(unit, updateInfo)
-end
-
--- ─── State ───────────────────────────────────────────────────────────────────
-local g_IsPriest = false
-local g_LastGroupSize = 0
 
 -- Settings writes go through PriestlyConfig's single write path (issue #35).
 -- Guarded like every other cross-file helper in this file: if PriestlyConfig
@@ -423,7 +432,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- before anything reads DEFS.
         RefreshSpellData()
         -- After the first resolve, so it can only fire on a real failure.
-        if g_IsPriest then WarnIfNamesUnresolved() end
+        WarnIfNamesUnresolved()
 
         ui:Init()
 

@@ -627,6 +627,32 @@ for _, line in ipairs(lines) do
 end
 H.eq(headers, 1, "exactly once, not once in the middle and again at the end")
 
+-- SPELLS_CHANGED is registered as soon as the files load and can arrive
+-- BEFORE login, when there is no saved table and every buff reads as
+-- tracked. Warning then would spend the once-a-session message on a
+-- character whose settings, once readable, say the buff is switched off.
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+local realName0 = Priestly.API.SpellName
+for _, d in ipairs(T.DEFS) do
+    d.snglFrom, d.grpFrom = "fallback", d.grpID and "fallback" or nil
+end
+Priestly.API.SpellName = function() return nil end
+
+-- A warrior logs in: nothing here is for them, whatever the names say.
+WoW.SetUnit("player", { name = "Tanky Person", class = "WARRIOR" })
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "a non-priest is not warned about spell names: " .. said)
+
+-- And a spell change while that is the state stays quiet too, rather than
+-- spending the once-a-session warning where it means nothing.
+said = saidBy(function() WoW.dispatch("SPELLS_CHANGED") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "nor is a spell change before a priest logs in: " .. said)
+Priestly.API.SpellName = realName0
+-- The blocks below prove the latch survived all that: they still warn.
+
 -- The warning at login. Only for a buff the player is actually tracking: an
 -- unresolved name for something switched off changes nothing they can see,
 -- and a warning they cannot act on is noise.
