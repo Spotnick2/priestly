@@ -19,7 +19,7 @@ local T, TC = H.loadAddon()
 
 local function setup()
     WoW.reset()
-    PriestlyDB = nil
+    PriestlyAccountDB = nil
     Priestly_EnsureDefaults()
     H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE" })
     T.RefreshSpellData()
@@ -130,7 +130,7 @@ end
 ------------------------------------------------------------
 -- Header: drag handle and close button
 --
--- OnDragStop is the only writer of PriestlyDB.pos and calls
+-- OnDragStop is the only writer of PriestlyAccountDB.pos and calls
 -- StartMoving/StopMovingOrSizing/GetPoint - exactly the shape of call the
 -- MouseIsOver regression proved can be silently absent on this client.
 ------------------------------------------------------------
@@ -139,10 +139,10 @@ setup()
 local drag = T.mainFrame().dragHandle
 H.check(drag ~= nil, "the drag handle is reachable")
 runScript(drag, "OnDragStart")
-PriestlyDB.pos = nil
+PriestlyAccountDB.pos = nil
 runScript(drag, "OnDragStop")
-H.check(PriestlyDB.pos ~= nil, "dragging the frame saves its position")
-H.check(PriestlyDB.pos.point ~= nil, "with an anchor point")
+H.check(PriestlyAccountDB.pos ~= nil, "dragging the frame saves its position")
+H.check(PriestlyAccountDB.pos.point ~= nil, "with an anchor point")
 
 -- The close button is the other way a user shuts the window.
 local closeBtn = T.mainFrame().closeBtn
@@ -395,31 +395,31 @@ H.eq(live, 1, "the popover follows the rebuild instead of listing a departed mem
 
 -- Through runScript, like every other handler here: a raw _scripts call turns
 -- a throw into a dead run instead of one reported failure.
-PriestlyDB.lockFrame = false
+PriestlyAccountDB.lockFrame = false
 runScript(drag, "OnDragStart")
 H.check(T.mainFrame()._moving, "unlocked, the header drags the window")
 runScript(drag, "OnDragStop")
 
-PriestlyDB.lockFrame = true
+PriestlyAccountDB.lockFrame = true
 T.mainFrame()._moving = false
 runScript(drag, "OnDragStart")
 H.check(not T.mainFrame()._moving, "locked, dragging the header does nothing")
 
 -- Locking mid-drag must not strand the frame on the cursor, and must not
 -- overwrite the saved position with wherever the mouse happened to be.
-PriestlyDB.lockFrame = false
-PriestlyDB.pos = nil
+PriestlyAccountDB.lockFrame = false
+PriestlyAccountDB.pos = nil
 runScript(drag, "OnDragStart")
-PriestlyDB.lockFrame = true
+PriestlyAccountDB.lockFrame = true
 runScript(drag, "OnDragStop")
 H.check(not T.mainFrame()._moving, "a drag interrupted by the lock still stops")
-H.check(PriestlyDB.pos == nil, "and does not save a position it was not allowed to move to")
+H.check(PriestlyAccountDB.pos == nil, "and does not save a position it was not allowed to move to")
 
 -- A locked window can still be recovered: the lock must not trap it offscreen.
-PriestlyDB.pos = { point = "CENTER", relPoint = "CENTER", x = 9999, y = 9999 }
+PriestlyAccountDB.pos = { point = "CENTER", relPoint = "CENTER", x = 9999, y = 9999 }
 local msgBefore = #WoW.messages
 SlashCmdList["PRIESTLY"]("reset")
-H.check(PriestlyDB.pos == nil, "/priestly reset works while locked")
+H.check(PriestlyAccountDB.pos == nil, "/priestly reset works while locked")
 
 -- ...but say so, because the window is now centred AND still locked. Dragging
 -- it does nothing and every reload puts it back, which reads exactly like the
@@ -429,7 +429,7 @@ H.check(said:find("locked"), "and says the window is still locked: " .. said)
 H.check(said:find("config") or said:find("Lock frame"),
     "pointing at the setting that undoes it: " .. said)
 
-PriestlyDB.lockFrame = false
+PriestlyAccountDB.lockFrame = false
 msgBefore = #WoW.messages
 SlashCmdList["PRIESTLY"]("reset")
 said = table.concat(WoW.messages, " ", msgBefore + 1, #WoW.messages)
@@ -453,28 +453,28 @@ runScript(hoverRow, "OnEnter")
 runScript(hoverRow, "OnLeave")
 
 -- ...and with hints off, which takes a different path out of ShowClickHint.
-PriestlyDB.showClickHints = false
+PriestlyAccountDB.showClickHints = false
 runScript(hoverRow, "OnEnter")
 runScript(hoverRow, "OnLeave")
-PriestlyDB.showClickHints = true
+PriestlyAccountDB.showClickHints = true
 
 ------------------------------------------------------------
 -- The position diagnostic must work when it is most needed
 --
 -- Somebody runs this because the window is misbehaving, so it has to survive
--- a nil PriestlyDB, an absent pos and an unbuilt frame rather than throwing a
+-- a nil PriestlyAccountDB, an absent pos and an unbuilt frame rather than throwing a
 -- second error on top of the first.
 ------------------------------------------------------------
 
 local before = #WoW.messages
-PriestlyDB.pos = nil
+PriestlyAccountDB.pos = nil
 H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "/priestly pos runs with no saved position")
 local said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("nothing saved"), "and says so plainly: " .. said)
 H.check(said:find("last restore"), "while still reporting what the restore decided")
 
 before = #WoW.messages
-PriestlyDB.pos = { point = "RIGHT", relPoint = "RIGHT", x = -350.5, y = -122.8 }
+PriestlyAccountDB.pos = { point = "RIGHT", relPoint = "RIGHT", x = -350.5, y = -122.8 }
 H.check(pcall(SlashCmdList["PRIESTLY"], "pos"), "and with one")
 said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("RIGHT"), "reporting the saved anchor: " .. said)

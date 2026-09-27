@@ -28,7 +28,7 @@ end
 
 local function setup(known)
     WoW.reset()
-    PriestlyDB = nil
+    PriestlyAccountDB = nil
     Priestly_EnsureDefaults()
     H.TeachSpells(known)
     T.RefreshSpellData()
@@ -94,12 +94,12 @@ H.eq(ids(T.ActiveDefs({}, {})), "", "a priest who knows none of them gets no row
 ------------------------------------------------------------
 
 setup({ "FORT_SINGLE", "SPIRIT_SINGLE" })
-PriestlyDB.trackSpirit = false
+PriestlyAccountDB.trackSpirit = false
 H.eq(ids(T.ActiveDefs({}, {})), "fort", "untracking Spirit removes its row")
-PriestlyDB.trackSpirit = true
-PriestlyDB.trackFort = false
+PriestlyAccountDB.trackSpirit = true
+PriestlyAccountDB.trackFort = false
 H.eq(ids(T.ActiveDefs({}, {})), "spirit", "untracking Fortitude removes its row too")
-PriestlyDB.trackFort = true
+PriestlyAccountDB.trackFort = true
 
 ------------------------------------------------------------
 -- Shadow Protection visibility modes
@@ -107,10 +107,10 @@ PriestlyDB.trackFort = true
 
 setup({ "FORT_SINGLE", "SHADOW_SINGLE" })
 
-PriestlyDB.shadowMode = "always"
+PriestlyAccountDB.shadowMode = "always"
 H.eq(ids(T.ActiveDefs({}, {})), "fort,shadow", "'always' shows it")
 
-PriestlyDB.shadowMode = "detect"
+PriestlyAccountDB.shadowMode = "detect"
 WoW.SetUnit("party1", { name = "Karuzo Elegia" })
 local groups = { [1] = { { unit = "party1", name = "Karuzo Elegia" } } }
 H.eq(ids(T.ActiveDefs(groups, { 1 })), "fort", "'detect' hides it when nobody has it")
@@ -121,12 +121,12 @@ WoW.ClearAuras("party1")
 WoW.SetAura("party1", "Prayer of Shadow Protection", 600, 300)
 H.eq(ids(T.ActiveDefs(groups, { 1 })), "fort,shadow", "the Prayer form counts too")
 
-PriestlyDB.shadowMode = "instance"
+PriestlyAccountDB.shadowMode = "instance"
 WoW.instanceName = "Scholomance"
-PriestlyDB.shadowInstances["Scholomance"] = true
+PriestlyAccountDB.shadowInstances["Scholomance"] = true
 TC.CheckCurrentInstance()
 H.eq(ids(T.ActiveDefs({}, {})), "fort,shadow", "'instance' shows it in a checked instance")
-PriestlyDB.shadowInstances["Scholomance"] = false
+PriestlyAccountDB.shadowInstances["Scholomance"] = false
 TC.CheckCurrentInstance()
 H.eq(ids(T.ActiveDefs({}, {})), "fort", "and hides it in an unchecked one")
 
@@ -135,14 +135,14 @@ H.eq(ids(T.ActiveDefs({}, {})), "fort", "and hides it in an unchecked one")
 -- without bothering a level-13 priest - the row cannot exist either way, so a
 -- checkbox describes the instance rather than the player.
 setup({ "FORT_SINGLE" })
-PriestlyDB.shadowMode = "always"
+PriestlyAccountDB.shadowMode = "always"
 H.eq(ids(T.ActiveDefs({}, {})), "fort",
     "'always' cannot conjure a row for a spell the priest does not have")
 
-PriestlyDB.shadowMode = "instance"
+PriestlyAccountDB.shadowMode = "instance"
 WoW.instanceName = "Scholomance"
 WoW.instanceType = "party"
-PriestlyDB.shadowInstances["Scholomance"] = true
+PriestlyAccountDB.shadowInstances["Scholomance"] = true
 TC.CheckCurrentInstance()
 H.eq(ids(T.ActiveDefs({}, {})), "fort",
     "nor can standing in a checked shadow instance, if the spell is unknown")
@@ -153,7 +153,7 @@ WoW.instanceType = nil
 ------------------------------------------------------------
 
 WoW.reset()
-PriestlyDB = nil
+PriestlyAccountDB = nil
 Priestly_EnsureDefaults()
 WoW.DefineSpell(1243, "Machtwort: Seelenstaerke")
 WoW.Know(1243, "Machtwort: Seelenstaerke")

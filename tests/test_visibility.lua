@@ -20,7 +20,9 @@ local function setup(groupSize)
     -- each section is testing the open, not inheriting one.
     WoW.inCombat = false
     T.CloseUI(false)
-    PriestlyDB = nil
+    -- Both: the window state lives in the per-character table now, and a
+    -- section that left it closed would otherwise decide the next one.
+    PriestlyAccountDB, PriestlyDB = nil, nil
     Priestly_EnsureDefaults()
     H.TeachSpells({ "FORT_SINGLE" })
     T.RefreshSpellData()

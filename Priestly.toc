@@ -4,8 +4,8 @@
 ## Author: Spotnick
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\Spell_Holy_PrayerOfFortitude
+## SavedVariables: PriestlyAccountDB, PriestlySVCheck
 ## SavedVariablesPerCharacter: PriestlyDB
-## SavedVariables: PriestlySVCheck
 ## X-Curse-Project-ID: 1489106
 
 Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml

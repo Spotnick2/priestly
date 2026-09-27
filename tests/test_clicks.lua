@@ -16,9 +16,9 @@ local T, TC = H.loadAddon()
 
 local function setup(known)
     WoW.reset()
-    PriestlyDB = nil
+    PriestlyAccountDB = nil
     Priestly_EnsureDefaults()
-    PriestlyDB.shadowMode = "never"
+    PriestlyAccountDB.shadowMode = "never"
     H.TeachSpells(known)
     T.RefreshSpellData()
 
@@ -273,7 +273,7 @@ setup({ "FORT_SINGLE" })
 local anchor = T.rows()[1]
 WoW.screenWidth = 1920
 
-PriestlyDB.popoverSide = "auto"
+PriestlyAccountDB.popoverSide = "auto"
 WoW.centers[anchor] = 200
 H.eq(T.PopoverSide(anchor), "right", "a frame on the left opens the popover to the right")
 WoW.centers[anchor] = 1700
@@ -284,16 +284,16 @@ WoW.centers[anchor] = 300
 H.eq(T.PopoverSide(anchor), "right", "dragging it across the screen flips the side")
 
 -- Explicit settings win over the geometry.
-PriestlyDB.popoverSide = "left"
+PriestlyAccountDB.popoverSide = "left"
 H.eq(T.PopoverSide(anchor), "left", "'always left' overrides a frame on the left")
-PriestlyDB.popoverSide = "right"
+PriestlyAccountDB.popoverSide = "right"
 WoW.centers[anchor] = 1700
 H.eq(T.PopoverSide(anchor), "right", "'always right' overrides a frame on the right")
 
 -- Unknown geometry falls back to the old behaviour rather than guessing.
 -- GetCenter is nil before layout, and screen width is 0 mid UI-scale change -
 -- which is TRUTHY in Lua and would otherwise sail through an `or` guard.
-PriestlyDB.popoverSide = "auto"
+PriestlyAccountDB.popoverSide = "auto"
 WoW.centers[anchor] = nil
 H.eq(T.PopoverSide(anchor), "left", "an unplaced row falls back to the left")
 WoW.centers[anchor] = 200
@@ -376,9 +376,9 @@ H.check(hint:find("nothing to buff"), "a row with no valid target says so: " .. 
 -- Off by preference.
 rows = setup({ "FORT_SINGLE" })
 row = activeRows(rows)[1]
-PriestlyDB.showClickHints = false
+PriestlyAccountDB.showClickHints = false
 H.eq(hintFor(row), "", "turning hints off shows nothing")
-PriestlyDB.showClickHints = true
+PriestlyAccountDB.showClickHints = true
 
 -- Leaving the row drops the tooltip. The popover has its own polling hide, so
 -- this must not be the thing that closes it.

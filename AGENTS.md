@@ -84,7 +84,7 @@ Load order from `Priestly.toc`:
 1. `Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml` — LibStub, then the library's compat layer.
 2. `PriestlyCompat.lua` — sets `Priestly.API` to the library's API table. Nothing else may touch a
    moved API directly.
-3. `PriestlyConfig.lua` — `PriestlyDB` defaults, instance database, `Priestly_*` helper globals.
+3. `PriestlyConfig.lua` — `PriestlyAccountDB` defaults, instance database, `Priestly_*` helpers.
 4. `Priestly.lua` — UI and event logic; calls the config helpers.
 
 `Priestly.API` (the only sanctioned route to a changed API; implemented in LibGroupBuffs'
@@ -110,13 +110,21 @@ Load order from `Priestly.toc`:
 `PriestlyConfig.lua` exposes: `Priestly_EnsureDefaults`, `Priestly_ShowSolo`, `Priestly_TrackPets`,
 `Priestly_IsBuffEnabled`, `Priestly_ShouldShowShadow`, `Priestly_GetFrameAlpha`,
 `Priestly_OpenConfig`, `Priestly_LearnDuration`, `Priestly_GetLearnedDuration`,
-`Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`, and the write path:
+`Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`,
+`Priestly_AdoptCharacterSettings`, `Priestly_ConfigPanelBuilt`, `Priestly_WindowVisible`,
+`Priestly_SetWindowVisible`, and the write path:
 `Priestly_SetConfig(key, value)`, `Priestly_SetShadowInstance(name, tracked)`,
 `Priestly_OnConfigChanged(key)`. Plus `Priestly_HandleEnteringWorld` and `Priestly_CheckClientBuild`,
 which the config's event frame calls.
 
-**Every write to `PriestlyDB` or `PriestlySVCheck` goes through `Priestly_SetConfig` or
-`Priestly_SetShadowInstance`.** The only exceptions are inside `-- config-owner: begin/end` regions
+**Every write to `PriestlyAccountDB` goes through `Priestly_SetConfig` or
+`Priestly_SetShadowInstance`.**
+
+`PriestlyDB`, the per-character table, takes exactly three kinds of write and no settings:
+`visible` through `Priestly_SetWindowVisible` (window state belongs to the character), the seed's
+one bookkeeping key, and the library renewing its own `svLoadCheck` marker. Its settings — what a
+per-character release left there — are never written again, because they are the backup
+`/priestly adopt` reads. `PriestlySVCheck` is read once and never written. The only exceptions are inside `-- config-owner: begin/end` regions
 in `PriestlyConfig.lua`: the two saved-table accessors, `EnsureDefaults` and the learned-duration
 cache. `tests/test_config_seam.lua` scans the source with LibGroupBuffs' `tests/config_scan.lua`
 (from the library checkout the suite runs against) and fails on any other write, and counts the
@@ -174,28 +182,49 @@ Through 69977 there was no store to fall back to at all: CVars fail across a rea
 (measured in AltStable, PR #33 there). 70009 fixed SavedVariables; **CVars have not been
 re-measured there**, so they are still assumed lost.
 
-`SavedVariablesPerCharacter` stays in the TOC: on 70009 it loads, and so does account-wide, so the
-choice between them is now a product question rather than a way round a broken client.
-`tests/test_manifest.lua` asserts it.
+**Settings are account-wide, in `PriestlyAccountDB`** (#9). They were per-character only because
+this client never read account-wide storage back; 70009 fixed that, so the workaround is over —
+most of what is stored is knowledge about the *game* rather than the character (`learnedDurations`
+is a property of the build, `shadowInstances` of the content), and a second priest inherits a
+configured setup instead of starting blank.
+
+`PriestlyDB`, per character, is that workaround's data and **stays declared**. It is the only way
+to read what a player already configured, and a variable the TOC stops declaring may never be
+handed back at all. Priestly writes no settings key to it again: it is a backup, the seed for the
+migration, the per-character scope the load check watches, and where this character's **window
+state** lives — whether the window is open is not shared between characters (`Priestly_WindowVisible`
+/ `Priestly_SetWindowVisible`).
+
+`PriestlySVCheck` is no longer a store, but it is **still declared** and read once: the account
+scope's "already told them" latch is in it, and dropping it would announce the SavedVariables fix
+to every existing player a second time. `tests/test_manifest.lua` asserts the whole arrangement.
+
+The first character logged in after the move **that was actually configured** seeds the shared
+table — configured meaning a setting, instance choice or position that *differs from the defaults*,
+because every character that ran a per-character release has a `PriestlyDB` full of defaults and an
+alt holding only those must not claim the settings. No later character overwrites it, and a missing
+key is filled from `DEFAULTS` rather than from whichever alt logged in. Nor does a seed overwrite
+shared settings the player set up by hand: `Priestly_SetConfig` and `Priestly_SetShadowInstance`
+record that a choice was **made**, because a choice whose result equals the default — a buff turned
+off and back on, or Reset Defaults — is invisible to any comparison of values. `/priestly adopt` is how a
+player picks a different character's setup afterwards; it replaces rather than merges, clearing
+optional keys (`pos`, the instance list, the duration cache) that the chosen character never had.
 
 **Settings do persist on 70009.** Code may rely on that — but only as far as the measurement goes:
 it holds for SavedVariables on 70009 and later, not for CVars (unmeasured there) and not for anyone
 still on 69977 or earlier, who loses everything at every restart. Priestly still runs on those
 builds, so nothing may *require* a setting to have survived; read it, and cope when it is absent.
 
-Moving back to account-wide storage is **issue #9**, and it is still not just reverting the TOC
-line: people have configured characters under per-character storage, and seeding the account-wide
-table from them is what stops every setting resetting a second time — which would now be a
-self-inflicted version of the bug the client just fixed. Keep `Tools/PriestlyProbe` until #9
-closes; `/pprobe sv` is how the client gets re-tested, and it reads its counters at `PLAYER_LOGIN`
-for the reason §11 gives.
+Keep `Tools/PriestlyProbe`: `/pprobe sv` is how the client gets re-tested if saved variables ever
+misbehave again, and it reads its counters at `PLAYER_LOGIN` for the reason §11 gives.
 
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,
 `lockFrame`, `showClickHints`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`,
-and `svLoadCheck` (never in `DEFAULTS`, see below). The account-wide
-`PriestlySVCheck` holds nothing but its own `svLoadCheck`: it exists only so the addon can tell
-when account-wide storage is fixed.
+and `svLoadCheck` (never in `DEFAULTS`, see below), plus `seededFrom` — which character the
+shared settings came from. `PriestlySVCheck` is no longer a store: it is read once so the account
+scope inherits its `svLoadCheck` latch, and dropping that would tell a player about the
+SavedVariables fix a second time.
 `learnedDurations` is keyed by **spell name**,
 not by buff id: the single and group forms of one buff share an id and do not share a duration.
 
@@ -466,7 +495,12 @@ pwsh Tools\deploy.ps1
 - A grouped player with a surname renders in full.
 - Options panel: every checkbox, the three shadow radios, the opacity slider, and Select All /
   Deselect All / Reset Defaults.
-- Log in with a pre-existing TBC `PriestlyDB`: settings survive, TBC instance keys are gone.
+- Log in with a pre-existing per-character `PriestlyDB`: its settings become the shared ones, chat
+  says which character they came from, and a TBC-era profile (no `flavor`) also migrates, losing
+  only its TBC instance keys.
+- Log in a second configured character: the shared settings are unchanged and chat points at
+  `/priestly adopt`, which then applies that character's and says a `/reload` is needed if the
+  options window is open.
 
 ## Packaging
 

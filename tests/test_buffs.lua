@@ -23,7 +23,7 @@ end
 
 local function setup()
     WoW.reset()
-    PriestlyDB = nil
+    PriestlyAccountDB = nil
     Priestly_EnsureDefaults()
     H.TeachSpells({ "FORT_SINGLE", "FORT_GROUP" })
     T.RefreshSpellData()

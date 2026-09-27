@@ -48,26 +48,37 @@ H.eq(directive("Interface"), "16001",
 ------------------------------------------------------------
 -- Settings storage
 --
--- Measured on build 1.60.1.69913: this client writes SavedVariables and never
--- reads them back - account-wide AND per-character - so every session starts
--- from defaults. (An earlier note here said per-character storage loads. It
--- does not; that was concluded from reading the saved file, which always looks
--- populated because EnsureDefaults rewrites every default each session.)
+-- Settings are ACCOUNT-WIDE, shared by every character (#9). They were, until
+-- #8 moved them per-character because this client wrote account-wide
+-- SavedVariables and never read them back; build 70009 fixed that
+-- (docs/FOREVER-PROBE.md section 11), so the workaround is over.
 --
--- So this directive does not make settings persist today. It stays because it
--- is no worse than account-wide, and it is where settings will be read from
--- once Blizzard fixes the loader. Issue #9 tracks the client fix, #35 the
--- preparation for it. If you are changing storage, read both first.
+-- The per-character name stays declared, and that is load-bearing rather than
+-- leftover: it holds what players configured under those releases, it is what
+-- the migration seeds the shared table from and what `/priestly adopt`
+-- re-reads, and a variable the TOC stops declaring may never be handed back
+-- at all. Priestly writes no settings key to it again.
+--
+-- One live table in each scope also lets the load check watch both mechanisms,
+-- which is all the old PriestlySVCheck marker table existed for.
 ------------------------------------------------------------
 
+H.eq(directive("SavedVariables"), "PriestlyAccountDB, PriestlySVCheck",
+    "settings are account-wide, which is what #9 decided once the client could load them")
+-- PriestlySVCheck is not a store any more. It stays declared because the
+-- account scope's load-check history lives in it, and an undeclared variable
+-- may never be handed back - losing the latch that says this player was
+-- already told the settings bug was fixed.
+H.check(tostring(directive("SavedVariables")):find("PriestlySVCheck", 1, true) ~= nil,
+    "and the old marker table is still declared, so its load-check latch can be inherited")
 H.eq(directive("SavedVariablesPerCharacter"), "PriestlyDB",
-    "PriestlyDB is declared per character - no worse than account-wide while neither loads")
--- The only account-wide variable is the load check's marker, so the addon can
--- tell when account-wide storage is fixed (#9 wants to move back to it).
-H.eq(directive("SavedVariables"), "PriestlySVCheck",
-    "the only account-wide variable is the load-check marker")
+    "and the per-character table stays declared, because the migration reads it")
+-- Substring, deliberately: "PriestlyAccountDB" does not contain "PriestlyDB",
+-- so this catches the double declaration however the list is punctuated. A
+-- version of this check that looked for "PriestlyDB," passed against exactly
+-- the mistake it names.
 H.check(not tostring(directive("SavedVariables")):find("PriestlyDB", 1, true),
-    "and PriestlyDB is not ALSO declared account-wide - one variable cannot live in both")
+    "and PriestlyDB is not ALSO declared account-wide - one name cannot live in two scopes")
 
 ------------------------------------------------------------
 -- Load order
