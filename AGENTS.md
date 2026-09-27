@@ -218,6 +218,13 @@ builds, so nothing may *require* a setting to have survived; read it, and cope w
 Keep `Tools/PriestlyProbe`: `/pprobe sv` is how the client gets re-tested if saved variables ever
 misbehave again, and it reads its counters at `PLAYER_LOGIN` for the reason §11 gives.
 
+**Spell names come from the client, by ID** — never from the English literals in `DEFS`, which
+are only a fallback. `Priestly_PrintSpellReport` (in `/priestly help`) shows what each one
+resolved to and where it came from, and a login warning fires once when a tracked buff is still on
+its English name. That is issue #21: a localized client matches no aura, every member reads as
+missing, and it looks exactly like a raid with no buffs. Do not gate any of it on `GetLocale()` —
+resolution can fail on an English client too, and a German one whose names all resolved is fine.
+
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,
 `lockFrame`, `showClickHints`, `shadowInstances`, `learnedDurations`, `flavor`, `visible`, `pos`,

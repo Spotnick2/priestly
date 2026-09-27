@@ -125,6 +125,70 @@ local PET_GROUP  = Priestly.Engine.PET_GROUP
 -- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
 -- and talent changes: what a priest knows changes as they level, and at the
 -- current beta cap the group spells do not exist at all.
+-- ─── What names are we actually matching? ────────────────────────────────────
+--
+-- Spell names come from the client, by ID, so they speak whatever language it
+-- does. When that fails the name stays as the English literal in DEFS, which
+-- matches no aura on a localized client - every member reads as unbuffed, and
+-- the addon looks exactly like a raid with no buffs. That was reported once
+-- from CurseForge and never diagnosed, because nothing Priestly said named
+-- the problem (#21).
+--
+-- So `/priestly help` prints what it is matching on. A "not working" report
+-- then arrives carrying its own answer, without the reporter having to know
+-- what to look for.
+local FROM_NOTE = {
+    resolved   = "",
+    remembered = " (remembered)",
+    fallback   = " |cffff6666(UNRESOLVED - English name)|r",
+    unknown    = " (provenance unknown)",
+}
+
+function Priestly_PrintSpellReport()
+    if not DEFAULT_CHAT_FRAME then return end
+    local report = engine:SpellReport()
+    local API = Priestly.API
+    DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Spell names, as this client gave them:")
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  locale %s, game build %s, Priestly %s, library r%s",
+        tostring(report.locale), tostring(API.ClientBuild and API.ClientBuild() or "?"),
+        tostring(API.AddonVersion and API.AddonVersion("Priestly") or "?"),
+        tostring(Priestly.libMinor or "?")))
+    for _, entry in ipairs(report) do
+        for _, form in ipairs(entry.forms) do
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("  %-7s %-6s %s%s%s",
+                entry.id, form.role, tostring(form.name),
+                FROM_NOTE[form.from] or "", form.known and "" or " - not learned"))
+        end
+    end
+    if report.unresolved > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("  |cffff6666" .. report.unresolved
+            .. " name(s) could not be read from the client.|r Buffs Priestly cannot name are "
+            .. "read as missing on everyone. Please report this with the lines above.")
+    end
+end
+
+-- Said once a session, and only when something is actually broken by it: a
+-- name still on its English fallback for a buff the player is tracking.
+-- Deliberately not keyed on the locale - resolution can fail on an English
+-- client too, and a German client whose names all resolved is fine.
+local g_WarnedUnresolved = false
+local function WarnIfNamesUnresolved()
+    if g_WarnedUnresolved or not DEFAULT_CHAT_FRAME then return end
+    local report = engine:SpellReport()
+    for _, entry in ipairs(report) do
+        for _, form in ipairs(entry.forms) do
+            if form.from == "fallback" and Priestly_IsBuffEnabled
+                and Priestly_IsBuffEnabled(entry.id) then
+                g_WarnedUnresolved = true
+                DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Could not read "
+                    .. "some spell names from the game client.|r Buffs it cannot name are shown "
+                    .. "as missing on everyone. |cffffffff/priestly help|r has the details.")
+                return
+            end
+        end
+    end
+end
+
 local function RefreshSpellData()
     engine:RefreshSpells()
     -- PriestlyConfig's "show Shadow Protection when someone has it" mode needs
@@ -337,6 +401,8 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Resolve localized spell names and what this priest actually knows
         -- before anything reads DEFS.
         RefreshSpellData()
+        -- After the first resolve, so it can only fire on a real failure.
+        if g_IsPriest then WarnIfNamesUnresolved() end
 
         ui:Init()
 
@@ -433,6 +499,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage(
             "  |cffffffff/priestly adopt|r      share THIS character's old settings with all")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly help|r       this message")
+        Priestly_PrintSpellReport()
         -- Describe the mapping that is actually live: without the group
         -- Prayers (the whole current level range) left-click is single-target.
         local anyGroup = false

@@ -550,4 +550,107 @@ runScript(candle, "OnEnter")
 H.eq(WoW.tooltipText(), "", "no item means no tooltip at all")
 candle._itemID = 17029
 
+------------------------------------------------------------
+-- What names are we matching? (#21)
+--
+-- A localized client reported every member as unbuffed with a "?" on every
+-- icon: the English names matched no aura and resolved no range. The port
+-- fixed the cause; this is the part that stops the next one going
+-- undiagnosed, because nothing Priestly said named the problem.
+------------------------------------------------------------
+
+local function saidBy(fn)
+    local before = #WoW.messages
+    fn()
+    return table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+end
+
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+T.RefreshSpellData()
+local said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("locale enUS", 1, true), "the report names the client's language: " .. said)
+H.check(said:find("game build", 1, true), "the game build")
+H.check(said:find("library r", 1, true), "and which copy of the library is live")
+H.check(said:find(H.NAME.FORT_SINGLE, 1, true), "with the name each spell resolved to")
+H.check(said:find("not learned", 1, true),
+    "marking a spell the player has not learned, which is ordinary")
+H.check(not said:find("UNRESOLVED", 1, true), "and claiming nothing is broken when nothing is")
+
+-- The failure it exists for: names the client never gave. The defs live for
+-- the whole file and earlier cases resolved them, so a bare failure here
+-- would read as "remembered" - which is right, and not the case under test.
+-- Put them back to how a def starts: the host's own literal, never resolved.
+WoW.reset()
+local realName = Priestly.API.SpellName
+for _, d in ipairs(T.DEFS) do
+    d.snglFrom, d.grpFrom = "fallback", d.grpID and "fallback" or nil
+end
+Priestly.API.SpellName = function() return nil end
+T.RefreshSpellData()
+said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("UNRESOLVED", 1, true), "an unresolved name is called out: " .. said)
+H.check(said:find("read as missing on everyone", 1, true),
+    "with what it means for the player, in their terms")
+H.check(said:find("report this", 1, true), "and a request that closes the loop")
+Priestly.API.SpellName = realName
+
+-- Through the command people actually type. A report that only a test can
+-- reach is not a diagnostic.
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+T.RefreshSpellData()
+said = saidBy(function() SlashCmdList["PRIESTLY"]("help") end)
+H.check(said:find("Spell names, as this client gave them", 1, true),
+    "/priestly help carries the report: " .. said)
+
+-- The warning at login. Only for a buff the player is actually tracking: an
+-- unresolved name for something switched off changes nothing they can see,
+-- and a warning they cannot act on is noise.
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+local realName2 = Priestly.API.SpellName
+WoW.SetUnit("player", { name = "Karuzo Elegia", class = "PRIEST" })
+
+-- Only Spirit unresolved, and Spirit switched off.
+Priestly_SetConfig("trackSpirit", false)
+Priestly.API.SpellName = function(id)
+    if id == H.SPELL.SPIRIT_SINGLE or id == H.SPELL.SPIRIT_GROUP then return nil end
+    return realName2(id)
+end
+for _, d in ipairs(T.DEFS) do
+    if d.id == "spirit" then d.snglFrom, d.grpFrom = "fallback", "fallback" end
+end
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "a buff the player does not track is not worth warning about: " .. said)
+
+-- Now they turn it on, and it matters.
+Priestly_SetConfig("trackSpirit", true)
+for _, d in ipairs(T.DEFS) do
+    d.snglFrom, d.grpFrom = "fallback", d.grpID and "fallback" or nil
+end
+Priestly.API.SpellName = function() return nil end
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(said:find("Could not read some spell names", 1, true),
+    "a priest logging in with unresolved names is told: " .. said)
+H.check(said:find("/priestly help", 1, true), "and pointed at the details")
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "but only once a session, not at every login: " .. said)
+Priestly.API.SpellName = realName2
+
+-- A localized client where everything resolved is NOT a problem, and must
+-- not be warned about: the locale is not the signal, the resolution is.
+WoW.reset()
+-- A real localized client answers for every spell; only the language differs.
+H.TeachSpells({ "FORT_SINGLE" })
+WoW.locale = "deDE"
+WoW.spells[H.SPELL.FORT_SINGLE] = { name = "Machtwort: Seelenstaerke", iconID = 1 }
+T.RefreshSpellData()
+said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("locale deDE", 1, true), "the report says which language: " .. said)
+H.check(said:find("Machtwort", 1, true), "and the names that client gave")
+H.check(not said:find("UNRESOLVED", 1, true), "nothing is called broken")
+
 H.done("test_frames")
