@@ -1,5 +1,5 @@
 ------------------------------------------------------------
--- test_config_seam.lua - one write path for PriestlyDB, and the two checks
+-- test_config_seam.lua - one write path for PriestlyAccountDB, and the two checks
 -- that watch for the client being fixed or updated (issue #35).
 --
 -- Nothing an addon wrote survived a real restart until build 70009 fixed it.
@@ -67,7 +67,7 @@ H.eq(select(3, GetBuildInfo()), CLIENT_DATE, "and the date that build reports")
 ------------------------------------------------------------
 
 WoW.reset()
-PriestlyDB = nil
+PriestlyAccountDB = nil
 Priestly_EnsureDefaults()
 
 local changed = {}
@@ -75,14 +75,14 @@ local realHook = Priestly_OnConfigChanged
 Priestly_OnConfigChanged = function(key) changed[#changed + 1] = key end
 
 Priestly_SetConfig("frameAlpha", 0.5)
-H.eq(PriestlyDB.frameAlpha, 0.5, "SetConfig assigns")
+H.eq(PriestlyAccountDB.frameAlpha, 0.5, "SetConfig assigns")
 H.eq(changed[#changed], "frameAlpha", "and reports the key")
 
 -- Set first, so clearing it is an actual change the test can see fail.
 Priestly_SetConfig("pos", { point = "RIGHT", x = 1, y = 2 })
-H.check(PriestlyDB.pos ~= nil, "a position is stored")
+H.check(PriestlyAccountDB.pos ~= nil, "a position is stored")
 Priestly_SetConfig("pos", nil)
-H.eq(PriestlyDB.pos, nil, "SetConfig can clear a key that was set")
+H.eq(PriestlyAccountDB.pos, nil, "SetConfig can clear a key that was set")
 H.eq(changed[#changed], "pos", "and reports the clear")
 
 -- An unchanged value is not a change. UpdateUI sets `visible` on every
@@ -92,7 +92,7 @@ Priestly_SetConfig("frameAlpha", 0.5)
 H.eq(#changed, count, "setting the same value again does not report")
 
 Priestly_SetShadowInstance("Scholomance", false)
-H.eq(PriestlyDB.shadowInstances["Scholomance"], false, "SetShadowInstance writes one entry")
+H.eq(PriestlyAccountDB.shadowInstances["Scholomance"], false, "SetShadowInstance writes one entry")
 H.eq(changed[#changed], "shadowInstances", "reported under the table's own key")
 count = #changed
 Priestly_SetShadowInstance("Scholomance", false)
@@ -100,14 +100,14 @@ H.eq(#changed, count, "and an unchanged instance does not report either")
 
 -- The learned-duration cache is replaced from inside a getter, so it has to
 -- report there or it never reports at all.
-PriestlyDB.learnedDurations = { build = "old" }
+PriestlyAccountDB.learnedDurations = { build = "old" }
 count = #changed
 Priestly_GetLearnedDuration("Power Word: Fortitude")
 H.eq(changed[#changed], "learnedDurations", "replacing the duration cache reports")
 
-PriestlyDB = nil
+PriestlyAccountDB = nil
 Priestly_SetConfig("lockFrame", true)
-H.eq(PriestlyDB and PriestlyDB.lockFrame, true, "SetConfig survives a missing table")
+H.eq(PriestlyAccountDB and PriestlyAccountDB.lockFrame, true, "SetConfig survives a missing table")
 
 Priestly_OnConfigChanged = realHook
 
@@ -124,14 +124,14 @@ Priestly_OnConfigChanged = realHook
 -- prove it is wired to Priestly's names.
 ------------------------------------------------------------
 
-local SAVED = { "PriestlyDB", "PriestlySVCheck" }
+local SAVED = { "PriestlyAccountDB", "PriestlyDB" }
 local CS = dofile(H.libraryRoot() .. "/tests/config_scan.lua")
 
+H.eq(#CS.Scan("synthetic", "PriestlyAccountDB.lockFrame = true", SAVED), 1,
+    "the scanner catches a direct PriestlyAccountDB write")
 H.eq(#CS.Scan("synthetic", "PriestlyDB.lockFrame = true", SAVED), 1,
-    "the scanner catches a direct PriestlyDB write")
-H.eq(#CS.Scan("synthetic", "PriestlySVCheck.svLoadCheck = {}", SAVED), 1,
-    "and a direct PriestlySVCheck write")
-H.eq(#CS.Scan("synthetic", "local p = PriestlyDB.pos", SAVED), 0, "but not a read")
+    "and a direct write to the legacy per-character table, which is read-only now")
+H.eq(#CS.Scan("synthetic", "local p = PriestlyAccountDB.pos", SAVED), 0, "but not a read")
 
 -- Every file the TOC loads, read from the TOC so a new one cannot be missed.
 local files = H.tocFiles()
@@ -179,7 +179,7 @@ end
 local function freshSession(build)
     WoW.reset()
     WoW.build = build
-    PriestlyDB, PriestlySVCheck = nil, nil
+    PriestlyAccountDB, PriestlyDB = nil, nil
     Priestly_EnsureDefaults()
 end
 
@@ -193,9 +193,10 @@ H.eq(saidSettings(before), "", "no marker at login, nothing announced - today's 
 -- and the other stays quiet.
 H.check(said(before):find("tested on", 1, true),
     "the build notice still fires on the broken build, which is not the measured one")
-H.check(type(PriestlyDB.svLoadCheck) == "table", "the per-character marker is written")
-H.check(type(PriestlySVCheck.svLoadCheck) == "table", "and the account-wide one")
-H.eq(PriestlyDB.svLoadCheck.build, BROKEN, "with the build it was written on")
+H.check(type(PriestlyAccountDB.svLoadCheck) == "table", "the per-character marker is written")
+H.check(type(PriestlyDB.svLoadCheck) == "table",
+    "and the per-character one, so both mechanisms are watched")
+H.eq(PriestlyAccountDB.svLoadCheck.build, BROKEN, "with the build it was written on")
 
 -- The broken build, marker still in memory: that is a relog or a /reload
 -- being served from the client's cache. Neither may announce.
@@ -207,9 +208,9 @@ Priestly_HandleEnteringWorld(false, true)
 H.eq(saidSettings(before), "", "and a /reload never announces")
 
 -- A zone change is neither, and must not touch the marker.
-local marker = PriestlyDB.svLoadCheck
+local marker = PriestlyAccountDB.svLoadCheck
 Priestly_HandleEnteringWorld(false, false)
-H.check(PriestlyDB.svLoadCheck == marker, "a zone change leaves the marker alone")
+H.check(PriestlyAccountDB.svLoadCheck == marker, "a zone change leaves the marker alone")
 
 -- The fix, and what proves it: the marker comes back carrying a DIFFERENT
 -- build from the one running. A build only changes when the client is
@@ -238,22 +239,31 @@ before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
 H.check(not said(before):find("came back", 1, true), "it does not repeat at the next login")
 
--- Account-wide coming back on its own is worth knowing: it is what #9 moves
--- back to. The marker has to carry an OLDER build - a marker stamped with the
--- build already running is what a relog looks like, and r14 says nothing to
--- that, on purpose.
+-- One scope coming back alone is reported as that scope - the two are
+-- separate mechanisms and a client can fix one without the other, which is
+-- why settings live in one and the legacy table is still watched in the
+-- other. The marker has to carry an OLDER build: one stamped with the build
+-- already running is what a relog looks like, and r15 says nothing to that.
 freshSession(FIXED)
-PriestlySVCheck = { svLoadCheck = { stamp = "then", build = BROKEN } }
+PriestlyAccountDB = { svLoadCheck = { stamp = "then", build = BROKEN } }
 before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
 msg = said(before)
 H.check(msg:find("account-wide", 1, true) and not msg:find("per-character", 1, true),
-    "a fix to account-wide storage alone is reported as that: " .. msg)
+    "the settings store coming back alone is reported as account-wide: " .. msg)
+
+freshSession(FIXED)
+PriestlyDB = { svLoadCheck = { stamp = "then", build = BROKEN } }
+before = #WoW.messages
+Priestly_HandleEnteringWorld(true, false)
+msg = said(before)
+H.check(msg:find("per-character", 1, true) and not msg:find("account-wide", 1, true),
+    "and the legacy table coming back alone is reported as per-character: " .. msg)
 
 -- Wired to the real event, not just callable.
 freshSession(BROKEN)
 WoW.dispatch("PLAYER_ENTERING_WORLD", true, false)
-H.check(type(PriestlyDB.svLoadCheck) == "table", "PLAYER_ENTERING_WORLD drives the check")
+H.check(type(PriestlyAccountDB.svLoadCheck) == "table", "PLAYER_ENTERING_WORLD drives the check")
 
 ------------------------------------------------------------
 -- MEASURED_ON_BUILD: did the client update?
@@ -289,6 +299,121 @@ before = #WoW.messages
 Priestly_HandleEnteringWorld(true, false)
 H.check(said(before):find("tested on", 1, true),
     "it warns again at the next real login, until someone re-measures")
-H.eq(PriestlyDB.warnedBuild, nil, "and records nothing that could silence it")
+H.eq(PriestlyAccountDB.warnedBuild, nil, "and records nothing that could silence it")
+
+------------------------------------------------------------
+-- Settings moved back account-wide (#9), and what that owes players
+--
+-- #8 moved them per character because this client never read account-wide
+-- SavedVariables back. 70009 fixed that, so they are shared again - and the
+-- one thing that must not happen is the move resetting a configured player,
+-- which is the failure the per-character move was made to avoid in the first
+-- place.
+------------------------------------------------------------
+
+local function configuredCharacter(over)
+    local legacy = {
+        flavor = "forever",
+        frameAlpha = 0.5,
+        lockFrame = true,
+        shadowMode = "always",
+        shadowInstances = { ["Scholomance"] = true },
+        learnedDurations = { build = "70009", fort = 3600 },
+        pos = { point = "LEFT", x = 3, y = 4 },
+    }
+    for k, v in pairs(over or {}) do legacy[k] = v end
+    return legacy
+end
+
+-- The upgrade: a character configured under the per-character releases logs
+-- in, and their settings become everyone's.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, 0.5, "the seed carries a changed setting across")
+H.eq(PriestlyAccountDB.lockFrame, true, "including one whose default is false")
+H.eq(PriestlyAccountDB.shadowMode, "always", "and a non-default choice")
+H.eq(PriestlyAccountDB.shadowInstances["Scholomance"], true, "and the instance list")
+H.eq(PriestlyAccountDB.learnedDurations.fort, 3600, "and what it learned about this build")
+H.eq(PriestlyAccountDB.pos.x, 3, "and the window position")
+
+-- Copied, not shared: a later change must not reach into the backup, or the
+-- one thing a player can fall back on quietly tracks the thing they changed.
+PriestlyAccountDB.shadowInstances["Scholomance"] = false
+PriestlyAccountDB.pos.x = 99
+H.eq(PriestlyDB.shadowInstances["Scholomance"], true, "the legacy instance list is untouched")
+H.eq(PriestlyDB.pos.x, 3, "and so is its saved position")
+
+-- The second character: their own old settings do NOT overwrite the shared
+-- ones. Whoever logged in first decided, and silently re-deciding every login
+-- would make the shared table depend on who played last.
+WoW.reset()
+PriestlyDB = configuredCharacter({ frameAlpha = 0.11, shadowMode = "detect" })
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, 0.5, "a second character does not overwrite the shared value")
+H.eq(PriestlyAccountDB.shadowMode, "always", "nor any other key")
+
+-- /priestly adopt is how that character wins instead, on purpose.
+local copied = Priestly_AdoptCharacterSettings()
+H.check(copied > 0, "adopt copies this character's settings over the shared ones")
+H.eq(PriestlyAccountDB.frameAlpha, 0.11, "so the shared value is now theirs")
+H.eq(PriestlyAccountDB.shadowMode, "detect", "for every key, not just the first")
+
+-- Adopt with nothing to adopt says nothing happened rather than wiping.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, nil
+Priestly_EnsureDefaults()
+PriestlyAccountDB.frameAlpha = 0.77
+H.eq(Priestly_AdoptCharacterSettings(), 0, "a character with no old settings adopts nothing")
+H.eq(PriestlyAccountDB.frameAlpha, 0.77, "and the shared settings are left alone")
+
+-- A fresh install on a fixed client: nothing to seed, just defaults.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, nil
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, TC.DEFAULTS.frameAlpha, "a first run gets the defaults")
+H.eq(PriestlyAccountDB.flavor, "forever", "and the flavor marker")
+
+-- The load check's marker must never be seeded across: it describes the table
+-- it lives in, and copying one character's would claim a load that scope
+-- never had.
+WoW.reset()
+PriestlyAccountDB = nil
+PriestlyDB = configuredCharacter({ svLoadCheck = { stamp = "then", build = "69913" } })
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.svLoadCheck, nil, "the seed leaves the load-check marker behind")
+
+-- A per-character table the player never configured - one the load check
+-- created on its own - is not a settings backup and must not seed anything.
+WoW.reset()
+PriestlyAccountDB = nil
+PriestlyDB = { svLoadCheck = { stamp = "then", build = "70009" } }
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, TC.DEFAULTS.frameAlpha,
+    "a legacy table with no settings in it seeds nothing")
+
+-- Nor one holding settings-shaped keys without the marker a release writes.
+-- `flavor` is what says "a version of this addon configured this table"; with
+-- no marker there is no telling what wrote it, and a guess here silently
+-- changes what the player sees.
+WoW.reset()
+PriestlyAccountDB = nil
+PriestlyDB = { frameAlpha = 0.2, lockFrame = true }
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, TC.DEFAULTS.frameAlpha,
+    "a legacy table with no flavor marker is not treated as settings")
+
+-- Once the shared table is configured, a second character cannot fill a key
+-- it happens to be missing - a setting added by a later version, or one the
+-- player cleared. Whoever seeded decided; the rest is theirs to change in the
+-- options panel, not to have back-filled from whichever alt logged in.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+Priestly_EnsureDefaults()
+PriestlyAccountDB.shadowMode = nil
+PriestlyDB = configuredCharacter({ shadowMode = "instance" })
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.shadowMode, TC.DEFAULTS.shadowMode,
+    "a missing key is filled by the DEFAULT, not by another character's value")
 
 H.done("test_config_seam")

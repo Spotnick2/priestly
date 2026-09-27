@@ -20,7 +20,7 @@ local function setup(groupSize)
     -- each section is testing the open, not inheriting one.
     WoW.inCombat = false
     T.CloseUI(false)
-    PriestlyDB = nil
+    PriestlyAccountDB = nil
     Priestly_EnsureDefaults()
     H.TeachSpells({ "FORT_SINGLE" })
     T.RefreshSpellData()
@@ -56,11 +56,11 @@ H.check(shown(), "a priest logging in inside a group gets the window")
 ------------------------------------------------------------
 
 setup(2)
-PriestlyDB.visible = false
+PriestlyAccountDB.visible = false
 WoW.dispatch("PLAYER_LOGIN")
 settle()
 H.check(not shown(), "a window closed on purpose stays closed across a reload")
-H.eq(PriestlyDB.visible, false, "and the preference is not overwritten")
+H.eq(PriestlyAccountDB.visible, false, "and the preference is not overwritten")
 
 ------------------------------------------------------------
 -- Roster churn does not reopen a closed window...
@@ -73,14 +73,14 @@ H.check(shown(), "open to start with")
 
 T.CloseUI(true)                     -- /priestly hide
 H.check(not shown(), "closed by hand")
-H.eq(PriestlyDB.visible, false, "which is remembered")
+H.eq(PriestlyAccountDB.visible, false, "which is remembered")
 
 WoW.groupMembers = 3                -- somebody else joins the existing group
 WoW.SetUnit("party2", { name = "Sten Thornbeard", guid = "P2" })
 WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
 H.check(not shown(), "a third member joining does not reopen it")
-H.eq(PriestlyDB.visible, false, "and does not overwrite the preference")
+H.eq(PriestlyAccountDB.visible, false, "and does not overwrite the preference")
 
 ------------------------------------------------------------
 -- ...but joining a group does, because that is the advertised behaviour
@@ -95,7 +95,7 @@ WoW.groupMembers = 2
 WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
 H.check(shown(), "joining a group reopens it - that is what the addon promises")
-H.eq(PriestlyDB.visible, true, "and the preference follows")
+H.eq(PriestlyAccountDB.visible, true, "and the preference follows")
 
 ------------------------------------------------------------
 -- A show asked for during combat happens when combat ends

@@ -35,7 +35,7 @@ local DEFAULTS = {
 -- And one that must NEVER be in DEFAULTS, or it stops working:
 --   svLoadCheck       -- proof the client read the file; see the load check
 
--- ─── One write path for PriestlyDB ─────────────────────────────────────────────
+-- ─── One write path for PriestlyAccountDB ─────────────────────────────────────────────
 --
 -- Nothing an addon wrote survived a real client restart until build 70009,
 -- which fixed it - account-wide and per-character SavedVariables both. CVars
@@ -56,7 +56,7 @@ local DEFAULTS = {
 -- during Select All, so whatever fills it later must be cheap, or debounce.
 --
 -- The contract, enforced by a source scan in tests/test_config_seam.lua: no
--- file writes PriestlyDB or PriestlySVCheck directly except inside a
+-- file writes PriestlyAccountDB or PriestlyDB directly except inside a
 -- `config-owner` region - the code that creates the tables, seeds defaults,
 -- runs migrations and keeps the learned-duration cache. Everything else calls
 -- one of the setters below.
@@ -104,30 +104,99 @@ local DEFAULTS = {
 -- agreeing with itself.
 local MEASURED_ON_BUILD = "70009"
 
+-- ─── Where settings live, and how they got there ──────────────────────────────
+--
+-- PriestlyAccountDB, account-wide: settings are shared by every character on
+-- the account. That is where they were before #8 moved them, because this
+-- client wrote account-wide SavedVariables and never read them back - so
+-- per-character storage was a workaround for a client bug. Build 70009 fixed
+-- the bug (#9, docs/FOREVER-PROBE.md section 11).
+--
+-- PriestlyDB, per character, is that workaround's data. It is still DECLARED
+-- in the TOC, deliberately: it is the only way to read what a player already
+-- configured, and a variable the TOC stops declaring may never be handed back
+-- at all. Priestly never writes a settings key to it again, so it stays as it
+-- was - a backup, and what `/priestly adopt` re-seeds from.
+--
+-- Which character wins, when several were configured differently? The first
+-- one logged in after this update seeds the shared table, and no later
+-- character overwrites it. That is the only rule this code CAN implement -
+-- one character's file is all the client hands over - and it is the one a
+-- player can steer: log in as the character whose setup you want, run
+-- `/priestly adopt`.
+--
+-- Between them the two tables also give the load check one live table in each
+-- scope, which is all PriestlySVCheck ever existed for. It is gone.
+
 -- config-owner: begin
--- The two saved tables, created on first use. PriestlyDB holds the settings
--- (per character); PriestlySVCheck is a small account-wide table declared only
--- so the load check can watch that scope too - account-wide storage is what
--- #9 wants to move back to once it works.
-local function CharacterStore()
+local function AccountStore()
+    if not PriestlyAccountDB then PriestlyAccountDB = {} end
+    return PriestlyAccountDB
+end
+
+-- Absent for anyone who never ran a per-character release, which is the
+-- ordinary case from here on.
+local function LegacyStore()
     if not PriestlyDB then PriestlyDB = {} end
     return PriestlyDB
 end
 
-local function AccountCheckStore()
-    if not PriestlySVCheck then PriestlySVCheck = {} end
-    return PriestlySVCheck
+local function CopyValue(v)
+    if type(v) ~= "table" then return v end
+    local out = {}
+    for k, inner in pairs(v) do out[k] = CopyValue(inner) end
+    return out
+end
+
+-- Copy this character's old settings into the shared table. `force` is
+-- `/priestly adopt`: the player saying this character's setup is the one they
+-- want everywhere. Returns how many keys it copied, so the caller can say.
+local function AdoptCharacterSettings(force)
+    local legacy = PriestlyDB
+    if type(legacy) ~= "table" then return 0 end
+    -- `flavor` is written by EnsureDefaults, so its presence means a table a
+    -- release actually configured - not one the load check just created.
+    if legacy.flavor == nil then return 0 end
+    local account = AccountStore()
+    if not force and account.flavor ~= nil then return 0 end
+
+    local copied = 0
+    for key, value in pairs(legacy) do
+        if key ~= "svLoadCheck" and (force or account[key] == nil) then
+            account[key] = CopyValue(value)
+            copied = copied + 1
+        end
+    end
+    return copied
 end
 -- config-owner: end
 
 function Priestly_OnConfigChanged(key)
 end
 
+-- `/priestly adopt`: use THIS character's pre-70009 settings everywhere.
+-- Only reachable for someone who configured this character under a
+-- per-character release; for everyone else there is nothing to adopt and it
+-- says so rather than pretending.
+function Priestly_AdoptCharacterSettings()
+    local copied = AdoptCharacterSettings(true)
+    if copied > 0 then
+        -- Same path a settings change takes, so the window and the options
+        -- panel redraw rather than showing what was there a moment ago.
+        Priestly_EnsureDefaults()
+        for key in pairs(PriestlyAccountDB) do Priestly_OnConfigChanged(key) end
+    end
+    return copied
+end
+
 local settings = Priestly.Settings.New({
     owner = ADDON_NAME,
     scopes = {
-        { label = "per-character", get = CharacterStore },
-        { label = "account-wide",  get = AccountCheckStore },
+        -- The settings store first: the library keeps its load-check marker
+        -- in every scope, and watching both mechanisms is how a client that
+        -- fixes one and not the other gets noticed.
+        { label = "account-wide",  get = AccountStore },
+        { label = "per-character", get = LegacyStore },
     },
     measuredOnBuild = MEASURED_ON_BUILD,
     report = function(text, kind)
@@ -279,31 +348,35 @@ local g_Build
 
 -- config-owner: begin
 function Priestly_EnsureDefaults()
-    if not PriestlyDB then PriestlyDB = {} end
+    if not PriestlyAccountDB then PriestlyAccountDB = {} end
+    -- BEFORE the defaults below: they fill every key, and a filled key is one
+    -- the seed would decline to overwrite. Runs once, on the first character
+    -- logged in after settings moved account-wide.
+    AdoptCharacterSettings(false)
     -- A client build can only change across a restart, which means a fresh
     -- login, which means this runs again. Re-resolving here is what keeps the
     -- cached build honest while keeping GetBuildInfo off the aura hot path.
     g_Build = nil
     for k, v in pairs(DEFAULTS) do
-        if PriestlyDB[k] == nil then
-            PriestlyDB[k] = v
+        if PriestlyAccountDB[k] == nil then
+            PriestlyAccountDB[k] = v
         end
     end
 
-    if PriestlyDB.shadowInstances == nil then
-        PriestlyDB.shadowInstances = {}
+    if PriestlyAccountDB.shadowInstances == nil then
+        PriestlyAccountDB.shadowInstances = {}
     end
 
     -- One-time migration off the TBC line: drop the instances that build knew
     -- about, and the durations it learned, neither of which mean anything here.
-    if PriestlyDB.flavor ~= FLAVOR then
+    if PriestlyAccountDB.flavor ~= FLAVOR then
         local known = {}
         for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
-        for name in pairs(PriestlyDB.shadowInstances) do
-            if not known[name] then PriestlyDB.shadowInstances[name] = nil end
+        for name in pairs(PriestlyAccountDB.shadowInstances) do
+            if not known[name] then PriestlyAccountDB.shadowInstances[name] = nil end
         end
-        PriestlyDB.learnedDurations = nil
-        PriestlyDB.flavor = FLAVOR
+        PriestlyAccountDB.learnedDurations = nil
+        PriestlyAccountDB.flavor = FLAVOR
     end
 
     -- Deliberately NOT pruning unknown keys on every load. An entry the current
@@ -315,12 +388,12 @@ function Priestly_EnsureDefaults()
 
     -- Backfill instances added since this profile was written
     for _, entry in ipairs(INSTANCE_DB) do
-        if PriestlyDB.shadowInstances[entry[1]] == nil then
-            PriestlyDB.shadowInstances[entry[1]] = entry[3]
+        if PriestlyAccountDB.shadowInstances[entry[1]] == nil then
+            PriestlyAccountDB.shadowInstances[entry[1]] = entry[3]
         end
     end
 
-    PriestlyDB.shadowBosses = nil  -- migration
+    PriestlyAccountDB.shadowBosses = nil  -- migration
 end
 -- config-owner: end
 
@@ -334,12 +407,12 @@ end
 
 -- config-owner: begin
 local function DurationStore()
-    if not PriestlyDB then return nil end
+    if not PriestlyAccountDB then return nil end
     if not g_Build then g_Build = (API and API.ClientBuild()) or "?" end
-    local store = PriestlyDB.learnedDurations
+    local store = PriestlyAccountDB.learnedDurations
     if not store or store.build ~= g_Build then
         store = { build = g_Build }
-        PriestlyDB.learnedDurations = store
+        PriestlyAccountDB.learnedDurations = store
         -- Replaced from inside a getter, so it reports here or not at all.
         settings:Changed("learnedDurations")
     end
@@ -386,7 +459,7 @@ local function CheckCurrentInstance()
         return
     end
 
-    local saved = PriestlyDB and PriestlyDB.shadowInstances
+    local saved = PriestlyAccountDB and PriestlyAccountDB.shadowInstances
     g_InShadowInstance = (saved and saved[name] == true) or false
 
     -- The list is keyed on exact instance names that mostly cannot be verified
@@ -402,7 +475,7 @@ local function CheckCurrentInstance()
     -- being marked as already told, so the warning would never appear when
     -- they did turn it on.
     local relevantType = (instanceType == "party" or instanceType == "raid")
-    local modeActive = PriestlyDB and PriestlyDB.shadowMode == "instance"
+    local modeActive = PriestlyAccountDB and PriestlyAccountDB.shadowMode == "instance"
     if relevantType and modeActive
         and saved and saved[name] == nil and not g_ReportedUnknown[name]
     then
@@ -417,8 +490,8 @@ local function CheckCurrentInstance()
 end
 
 function Priestly_ShouldShowShadow(groups, ord)
-    if not PriestlyDB then return false end
-    local mode = PriestlyDB.shadowMode or "detect"
+    if not PriestlyAccountDB then return false end
+    local mode = PriestlyAccountDB.shadowMode or "detect"
     if mode == "always" then return true end
     if mode == "detect" then
         -- Names come from Priestly.lua's DEFS, which resolves them from spell
@@ -442,40 +515,40 @@ function Priestly_ShouldShowShadow(groups, ord)
 end
 
 function Priestly_TrackPets()
-    return PriestlyDB and PriestlyDB.trackPets ~= false
+    return PriestlyAccountDB and PriestlyAccountDB.trackPets ~= false
 end
 
 function Priestly_IsBuffEnabled(defId)
-    if not PriestlyDB then return true end
-    if defId == "fort"   then return PriestlyDB.trackFort   ~= false end
-    if defId == "spirit" then return PriestlyDB.trackSpirit  ~= false end
+    if not PriestlyAccountDB then return true end
+    if defId == "fort"   then return PriestlyAccountDB.trackFort   ~= false end
+    if defId == "spirit" then return PriestlyAccountDB.trackSpirit  ~= false end
     return true
 end
 
 function Priestly_GetFrameAlpha()
-    return PriestlyDB and PriestlyDB.frameAlpha or 0.96
+    return PriestlyAccountDB and PriestlyAccountDB.frameAlpha or 0.96
 end
 
 -- True when the window must not be dragged. Checked in the drag handler
 -- rather than by unregistering the drag, which keeps this clear of the secure
 -- frame rules and safe to toggle in combat.
 function Priestly_FrameLocked()
-    return PriestlyDB and PriestlyDB.lockFrame == true
+    return PriestlyAccountDB and PriestlyAccountDB.lockFrame == true
 end
 
 -- Whether a row explains what its clicks will cast, on hover.
 function Priestly_ShowClickHints()
-    return not (PriestlyDB and PriestlyDB.showClickHints == false)
+    return not (PriestlyAccountDB and PriestlyAccountDB.showClickHints == false)
 end
 
 -- "auto" | "left" | "right". Auto means "wherever there is room", decided
 -- fresh each time the popover opens - see PopoverSide in Priestly.lua.
 function Priestly_PopoverSide()
-    return (PriestlyDB and PriestlyDB.popoverSide) or "auto"
+    return (PriestlyAccountDB and PriestlyAccountDB.popoverSide) or "auto"
 end
 
 function Priestly_ShowSolo()
-    return PriestlyDB and PriestlyDB.showSolo == true
+    return PriestlyAccountDB and PriestlyAccountDB.showSolo == true
 end
 
 -- ─── Has Blizzard fixed it? Did the client update? ──────────────────────────
@@ -620,7 +693,7 @@ local function MakeCheckbox(parent, yRef, label, dbKey, onChange)
     yRef.v = yRef.v - 4
     local cb = MakeCheckButton(parent, "PriestlyCB_"..dbKey, label)
     cb:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, yRef.v)
-    cb:SetChecked(PriestlyDB[dbKey] ~= false)
+    cb:SetChecked(PriestlyAccountDB[dbKey] ~= false)
     cb:SetScript("OnClick", function(self)
         Priestly_SetConfig(dbKey, self:GetChecked() and true or false)
         if onChange then onChange(self:GetChecked()) end
@@ -753,7 +826,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
                 "PriestlyInst_" .. parent:GetName() .. "_" .. instName:gsub("%W", ""),
                 instName, COL_W - 28)
             icb:SetPoint("TOPLEFT", child, "TOPLEFT", xOff, yOff)
-            icb:SetChecked(PriestlyDB.shadowInstances[instName] == true)
+            icb:SetChecked(PriestlyAccountDB.shadowInstances[instName] == true)
             icb._instName = instName
 
             icb:SetScript("OnClick", function(self)
@@ -963,7 +1036,7 @@ local function BuildPanel(panel)
         { key = "always",   label = "Always show Shadow Protection" },
         { key = "detect",   label = "Show when detected on a group member" },
         { key = "instance", label = "Show by instance (configure in the |cff99ddffInstances|r tab)" },
-    }, PriestlyDB.shadowMode, function(key)
+    }, PriestlyAccountDB.shadowMode, function(key)
         Priestly_SetConfig("shadowMode", key)
         CheckCurrentInstance()
         if Priestly_ForceRebuild then Priestly_ForceRebuild() end
@@ -1034,7 +1107,7 @@ local function BuildPanel(panel)
     alphaSlider:SetMinMaxValues(0.20, 1.00)
     alphaSlider:SetValueStep(0.05)
     if alphaSlider.SetObeyStepOnDrag then alphaSlider:SetObeyStepOnDrag(true) end
-    alphaSlider:SetValue(PriestlyDB.frameAlpha or 0.96)
+    alphaSlider:SetValue(PriestlyAccountDB.frameAlpha or 0.96)
 
     local lowTxt = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lowTxt:SetPoint("TOPLEFT", alphaSlider, "BOTTOMLEFT", 2, 2)
@@ -1045,7 +1118,7 @@ local function BuildPanel(panel)
 
     local alphaVal = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     alphaVal:SetPoint("LEFT", alphaSlider, "RIGHT", 10, 0)
-    alphaVal:SetText(string.format("%d%%", (PriestlyDB.frameAlpha or 0.96) * 100))
+    alphaVal:SetText(string.format("%d%%", (PriestlyAccountDB.frameAlpha or 0.96) * 100))
 
     local function UpdateFill()
         local min, max = alphaSlider:GetMinMaxValues()

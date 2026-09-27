@@ -15,7 +15,7 @@ local H = dofile("tests/harness.lua")
 local T, TC = H.loadAddon()
 
 WoW.reset()
-PriestlyDB = nil
+PriestlyAccountDB = nil
 Priestly_EnsureDefaults()
 H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE", "SHADOW_SINGLE" })
 T.RefreshSpellData()
@@ -61,28 +61,28 @@ H.check(pcall(panel._scripts.OnShow, panel), "showing it again is a no-op")
 -- Settings tab
 ------------------------------------------------------------
 
-PriestlyDB.trackFort = true
+PriestlyAccountDB.trackFort = true
 local cb = _G["PriestlyCB_trackFort"]
 H.check(cb ~= nil, "the Fortitude checkbox was created")
 cb:SetChecked(false)
 click("PriestlyCB_trackFort")
-H.eq(PriestlyDB.trackFort, false, "unchecking it stops tracking Fortitude")
+H.eq(PriestlyAccountDB.trackFort, false, "unchecking it stops tracking Fortitude")
 cb:SetChecked(true)
 click("PriestlyCB_trackFort")
-H.eq(PriestlyDB.trackFort, true, "and checking it starts again")
+H.eq(PriestlyAccountDB.trackFort, true, "and checking it starts again")
 
 for _, key in ipairs({ "trackSpirit", "trackPets", "showSolo" }) do
     local box = _G["PriestlyCB_" .. key]
     H.check(box ~= nil, key .. " has a checkbox")
     box:SetChecked(true)
     click("PriestlyCB_" .. key)
-    H.eq(PriestlyDB[key], true, key .. " follows its checkbox")
+    H.eq(PriestlyAccountDB[key], true, key .. " follows its checkbox")
 end
 
 -- Shadow Protection mode radios
 for _, mode in ipairs({ "always", "detect", "instance" }) do
     click("PriestlyRB_" .. mode)
-    H.eq(PriestlyDB.shadowMode, mode, "the " .. mode .. " radio selects that mode")
+    H.eq(PriestlyAccountDB.shadowMode, mode, "the " .. mode .. " radio selects that mode")
 end
 H.check(_G["PriestlyRB_always"]:GetChecked() == false,
     "selecting one radio clears the others")
@@ -94,25 +94,25 @@ local lockBox = _G["PriestlyCB_lockFrame"]
 H.check(lockBox ~= nil, "the lock checkbox was created")
 lockBox:SetChecked(true)
 click("PriestlyCB_lockFrame")
-H.eq(PriestlyDB.lockFrame, true, "ticking it locks the frame")
+H.eq(PriestlyAccountDB.lockFrame, true, "ticking it locks the frame")
 lockBox:SetChecked(false)
 click("PriestlyCB_lockFrame")
-H.eq(PriestlyDB.lockFrame, false, "and clearing it unlocks again")
+H.eq(PriestlyAccountDB.lockFrame, false, "and clearing it unlocks again")
 -- Click hints. The client toggles a checkbox before OnClick fires, so the test
 -- does too - firing the handler alone just re-reads whatever state it was in.
 local hintBox = _G["PriestlyCB_showClickHints"]
 H.check(hintBox ~= nil, "the click-hints checkbox was created")
 hintBox:SetChecked(false)
 click("PriestlyCB_showClickHints")
-H.eq(PriestlyDB.showClickHints, false, "clearing it turns hints off")
+H.eq(PriestlyAccountDB.showClickHints, false, "clearing it turns hints off")
 hintBox:SetChecked(true)
 click("PriestlyCB_showClickHints")
-H.eq(PriestlyDB.showClickHints, true, "and ticking it turns them back on")
+H.eq(PriestlyAccountDB.showClickHints, true, "and ticking it turns them back on")
 
 -- Popover side radios
 for _, side in ipairs({ "left", "right", "auto" }) do
     click("PriestlyRB_" .. side)
-    H.eq(PriestlyDB.popoverSide, side, "the " .. side .. " radio selects that side")
+    H.eq(PriestlyAccountDB.popoverSide, side, "the " .. side .. " radio selects that side")
 end
 H.check(_G["PriestlyRB_auto"]:GetChecked() == true, "and auto is the one left checked")
 H.check(_G["PriestlyRB_left"]:GetChecked() == false, "with the others cleared")
@@ -123,9 +123,9 @@ H.check(slider ~= nil, "the opacity slider was created")
 local onValue = slider._scripts.OnValueChanged
 H.check(onValue ~= nil, "with a value handler")
 H.check(pcall(onValue, slider, 0.5), "which runs")
-H.eq(PriestlyDB.frameAlpha, 0.5, "and stores the opacity")
+H.eq(PriestlyAccountDB.frameAlpha, 0.5, "and stores the opacity")
 H.check(pcall(onValue, slider, 1.0), "at the top of its range too")
-H.eq(PriestlyDB.frameAlpha, 1.0, "which is full opacity")
+H.eq(PriestlyAccountDB.frameAlpha, 1.0, "which is full opacity")
 
 ------------------------------------------------------------
 -- Tabs
@@ -147,7 +147,7 @@ local box = _G[instBox("Scholomance")]
 H.check(box ~= nil, "each instance gets a checkbox")
 box:SetChecked(false)
 click(instBox("Scholomance"))
-H.eq(PriestlyDB.shadowInstances["Scholomance"], false, "unchecking one saves it")
+H.eq(PriestlyAccountDB.shadowInstances["Scholomance"], false, "unchecking one saves it")
 
 -- Two instances from different categories must not share a global name: the
 -- suffix used to be a per-category index, so The Barrow Deeps (Raids #1) and
@@ -189,7 +189,7 @@ WoW.flushTimers()                                -- the OnShow hook defers its w
 -- something unrelated rebuilt the UI.
 ------------------------------------------------------------
 
-PriestlyDB.shadowMode = "instance"
+PriestlyAccountDB.shadowMode = "instance"
 WoW.instanceName = "Scholomance"
 WoW.instanceType = "party"
 
@@ -197,7 +197,7 @@ queued(function() click(instBox("Scholomance")) end, "ticking one instance")
 
 queued(function() click("PriestlyInstanceContainerAll") end, "Select All")
 for _, entry in ipairs(TC.INSTANCE_DB) do
-    H.check(PriestlyDB.shadowInstances[entry[1]] == true, "Select All checked " .. entry[1])
+    H.check(PriestlyAccountDB.shadowInstances[entry[1]] == true, "Select All checked " .. entry[1])
 end
 H.check(TC.inShadowInstance() == true, "and the detector caught up")
 
@@ -205,8 +205,8 @@ queued(function() click("PriestlyInstanceContainerNone") end, "Deselect All")
 H.check(TC.inShadowInstance() == false, "nothing is a shadow instance now")
 
 queued(function() click("PriestlyInstanceContainerDefaults") end, "Reset Defaults")
-H.eq(PriestlyDB.shadowInstances["Scholomance"], true, "Reset Defaults restored the default")
-H.eq(PriestlyDB.shadowInstances["Onyxia's Lair"], false, "...including the unchecked ones")
+H.eq(PriestlyAccountDB.shadowInstances["Scholomance"], true, "Reset Defaults restored the default")
+H.eq(PriestlyAccountDB.shadowInstances["Onyxia's Lair"], false, "...including the unchecked ones")
 H.check(TC.inShadowInstance() == true, "and the detector caught up again")
 
 WoW.instanceType = nil

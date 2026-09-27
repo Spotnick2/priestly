@@ -11,7 +11,7 @@ local T, TC = H.loadAddon()
 
 local function setup()
     WoW.reset()
-    PriestlyDB = nil
+    PriestlyAccountDB = nil
     Priestly_EnsureDefaults()
     H.TeachSpells({ "FORT_SINGLE" })
     T.RefreshSpellData()
@@ -33,7 +33,7 @@ WoW.SetUnit("player", { name = "Karuzo Elegia", class = "PRIEST" })
 local groups, ord = T.GatherGroups()
 H.eq(#ord, 0, "ungrouped and solo mode off -> nothing to draw")
 
-PriestlyDB.showSolo = true
+PriestlyAccountDB.showSolo = true
 groups, ord = T.GatherGroups()
 H.eq(#ord, 1, "solo mode draws one group")
 H.eq(names(groups[1]), "Karuzo Elegia", "which is just the player, surname included")
@@ -95,7 +95,7 @@ H.eq(ord[2], 99, "and it sorts to the bottom")
 H.eq(names(groups[99]), "Broll", "the pet is in it")
 H.eq(groups[99][1].class, "PET_HUNTER", "with an owner-appropriate icon key")
 
-PriestlyDB.trackPets = false
+PriestlyAccountDB.trackPets = false
 groups, ord = T.GatherGroups()
 H.eq(#ord, 1, "pet tracking off removes the pet group")
 
@@ -131,7 +131,7 @@ for i = 1, 40 do
 end
 H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE", "SHADOW_SINGLE" })
 T.RefreshSpellData()
-PriestlyDB.shadowMode = "always"          -- all three buffs get a row
+PriestlyAccountDB.shadowMode = "always"          -- all three buffs get a row
 
 groups, ord = T.GatherGroups()
 H.eq(#ord, 13, "8 subgroups plus 5 pet buckets")
@@ -160,13 +160,13 @@ H.eq(missingRaiders, 0, "every raider is on screen")
 H.eq(missingPets, 0, "and so is every pet - not just the first bucket")
 
 -- The same roster with pets off must still fit, and must not waste rows.
-PriestlyDB.trackPets = false
+PriestlyAccountDB.trackPets = false
 T.UpdateUI()
 activeRows = 0
 for _, r in ipairs(T.rows()) do
     if r._active then activeRows = activeRows + 1 end
 end
 H.eq(activeRows, 24, "8 subgroups x 3 buffs with pet tracking off")
-PriestlyDB.trackPets = true
+PriestlyAccountDB.trackPets = true
 
 H.done("test_roster")

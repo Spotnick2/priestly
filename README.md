@@ -90,6 +90,12 @@ catch up:
   build, the old behaviour is still the old behaviour — update the game. If settings go missing on
   70009 or later, that *is* worth reporting.
 
+* **Your settings are shared by all your characters again.** While the client bug was live they
+  were stored per character; now that it is fixed they are back to being account-wide, so a second
+  priest starts from your setup rather than from defaults. The first character you log in after
+  updating brings their settings across for everyone. If that was the wrong one, log in as the
+  character whose setup you want and run **`/priestly adopt`**.
+
 ---
 
 ## Feedback

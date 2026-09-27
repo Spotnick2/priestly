@@ -174,21 +174,29 @@ Through 69977 there was no store to fall back to at all: CVars fail across a rea
 (measured in AltStable, PR #33 there). 70009 fixed SavedVariables; **CVars have not been
 re-measured there**, so they are still assumed lost.
 
-`SavedVariablesPerCharacter` stays in the TOC: on 70009 it loads, and so does account-wide, so the
-choice between them is now a product question rather than a way round a broken client.
-`tests/test_manifest.lua` asserts it.
+**Settings are account-wide, in `PriestlyAccountDB`** (#9). They were per-character only because
+this client never read account-wide storage back; 70009 fixed that, so the workaround is over —
+most of what is stored is knowledge about the *game* rather than the character (`learnedDurations`
+is a property of the build, `shadowInstances` of the content), and a second priest inherits a
+configured setup instead of starting blank.
+
+`PriestlyDB`, per character, is that workaround's data and **stays declared**. It is the only way
+to read what a player already configured, and a variable the TOC stops declaring may never be
+handed back at all. Priestly writes no settings key to it again: it is a backup, the seed for the
+migration, and the per-character scope the load check watches — which is all `PriestlySVCheck` ever
+existed for, so that one is gone. `tests/test_manifest.lua` asserts the whole arrangement.
+
+The first character logged in after the move seeds the shared table; no later character overwrites
+it, and a missing key is filled from `DEFAULTS` rather than from whichever alt logged in.
+`/priestly adopt` is how a player picks a different character's setup afterwards.
 
 **Settings do persist on 70009.** Code may rely on that — but only as far as the measurement goes:
 it holds for SavedVariables on 70009 and later, not for CVars (unmeasured there) and not for anyone
 still on 69977 or earlier, who loses everything at every restart. Priestly still runs on those
 builds, so nothing may *require* a setting to have survived; read it, and cope when it is absent.
 
-Moving back to account-wide storage is **issue #9**, and it is still not just reverting the TOC
-line: people have configured characters under per-character storage, and seeding the account-wide
-table from them is what stops every setting resetting a second time — which would now be a
-self-inflicted version of the bug the client just fixed. Keep `Tools/PriestlyProbe` until #9
-closes; `/pprobe sv` is how the client gets re-tested, and it reads its counters at `PLAYER_LOGIN`
-for the reason §11 gives.
+Keep `Tools/PriestlyProbe`: `/pprobe sv` is how the client gets re-tested if saved variables ever
+misbehave again, and it reads its counters at `PLAYER_LOGIN` for the reason §11 gives.
 
 Always call `Priestly_EnsureDefaults()` before assuming saved variable keys exist. Current keys:
 `trackFort`, `trackSpirit`, `shadowMode`, `showSolo`, `trackPets`, `frameAlpha`, `popoverSide`,

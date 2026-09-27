@@ -255,9 +255,9 @@ local ui = Priestly.UI.New({
     popoverSide = function() return Priestly_PopoverSide and Priestly_PopoverSide() or "auto" end,
     showClickHints = function() return not Priestly_ShowClickHints or Priestly_ShowClickHints() end,
     getPos = function()
-        if not PriestlyDB then return nil, "PriestlyDB was nil" end
-        if not PriestlyDB.pos then return nil, "PriestlyDB.pos was nil" end
-        return PriestlyDB.pos
+        if not PriestlyAccountDB then return nil, "PriestlyAccountDB was nil" end
+        if not PriestlyAccountDB.pos then return nil, "PriestlyAccountDB.pos was nil" end
+        return PriestlyAccountDB.pos
     end,
     setPos     = function(pos) SetConfig("pos", pos) end,
     setVisible = function(visible) SetConfig("visible", visible) end,
@@ -331,7 +331,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
         -- Initialise saved state (default: visible on Priests)
         Priestly_EnsureDefaults()
-        if PriestlyDB.visible == nil then SetConfig("visible", true) end
+        if PriestlyAccountDB.visible == nil then SetConfig("visible", true) end
 
         -- Resolve localized spell names and what this priest actually knows
         -- before anything reads DEFS.
@@ -346,7 +346,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- window was deliberately closed, which is a preference that should
         -- survive a reload.
         g_LastGroupSize = GetNumGroupMembers()
-        if g_IsPriest and PriestlyDB.visible ~= false
+        if g_IsPriest and PriestlyAccountDB.visible ~= false
             and (g_LastGroupSize > 0 or Priestly_ShowSolo())
         then
             ui:Open(0.6)
@@ -362,7 +362,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "READY_CHECK" then
         -- A ready check is a good moment to rebuff, but not a reason to
         -- override someone who closed the window.
-        if g_IsPriest and (not PriestlyDB or PriestlyDB.visible ~= false) then
+        if g_IsPriest and (not PriestlyAccountDB or PriestlyAccountDB.visible ~= false) then
             ui:Open(0.4)
         end
 
@@ -383,7 +383,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         g_LastGroupSize = n
         if joined then SetConfig("visible", true) end
         if n > 0 and not ui:IsVisible() and g_IsPriest
-            and (joined or not PriestlyDB or PriestlyDB.visible ~= false)
+            and (joined or not PriestlyAccountDB or PriestlyAccountDB.visible ~= false)
         then
             ui:Open(0.5)
         elseif n == 0 and not Priestly_ShowSolo() then
@@ -429,6 +429,8 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly config|r     open options panel")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly reset|r      reset window position")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly pos|r        why the window is where it is")
+        DEFAULT_CHAT_FRAME:AddMessage(
+            "  |cffffffff/priestly adopt|r      share THIS character's old settings with all")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffffffff/priestly help|r       this message")
         -- Describe the mapping that is actually live: without the group
         -- Prayers (the whole current level range) left-click is single-target.
@@ -459,6 +461,19 @@ SlashCmdList["PRIESTLY"] = function(msg)
     elseif cmd == "config" or cmd == "options" or cmd == "settings" or cmd == "opt" then
         if Priestly_OpenConfig then Priestly_OpenConfig() end
 
+    elseif cmd == "adopt" then
+        -- Settings are account-wide again as of 70009; the first character
+        -- logged in after that change seeded them. This is how a player picks
+        -- a different one afterwards.
+        local copied = Priestly_AdoptCharacterSettings and Priestly_AdoptCharacterSettings() or 0
+        if copied > 0 then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Now using this character's "
+                .. "old settings on every character (" .. copied .. " kept).")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Nothing to adopt: this "
+                .. "character has no settings saved from before they became shared.")
+        end
+
     elseif cmd == "reset" then
         if ui:ResetPosition() then
             DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Window position reset.")
@@ -481,7 +496,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
 
     elseif cmd == "pos" then
         -- Diagnostic for "the window does not remember where I put it".
-        local p = PriestlyDB and PriestlyDB.pos
+        local p = PriestlyAccountDB and PriestlyAccountDB.pos
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r position diagnostic:")
         DEFAULT_CHAT_FRAME:AddMessage("  saved: " .. (p and string.format(
             "%s/%s  %.1f, %.1f", tostring(p.point), tostring(p.relPoint),
