@@ -124,7 +124,8 @@ local PET_GROUP  = Priestly.Engine.PET_GROUP
 
 -- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
 -- and talent changes: what a priest knows changes as they level, and at the
--- current beta cap the group spells do not exist at all.
+-- current beta cap no priest can LEARN the group spells - though the client
+-- still resolves their names by ID, so they are not unresolved (see above).
 local function RefreshSpellData()
     engine:RefreshSpells()
     -- PriestlyConfig's "show Shadow Protection when someone has it" mode needs
@@ -151,6 +152,99 @@ end
 -- ─── State ───────────────────────────────────────────────────────────────────
 local g_IsPriest = false
 local g_LastGroupSize = 0
+
+-- ─── What names are we actually matching? ────────────────────────────────────
+--
+-- Spell names come from the client, by ID, so they speak whatever language it
+-- does. When that fails the name stays as the English literal in DEFS, which
+-- matches no aura on a localized client - every member reads as unbuffed, and
+-- the addon looks exactly like a raid with no buffs. That was reported once
+-- from CurseForge and never diagnosed, because nothing Priestly said named
+-- the problem (#21).
+--
+-- So `/priestly help` prints what it is matching on. A "not working" report
+-- then arrives carrying its own answer, without the reporter having to know
+-- what to look for.
+-- Asked at print time, never captured. The library upgrades IN PLACE: a
+-- sibling addon shipping a newer copy replaces the methods this addon is
+-- already running, so a version read at load would name the copy that lost.
+-- That is the same rule AGENTS.md states for functions, and the line exists
+-- to tell a bug report which code actually ran.
+local function LiveLibraryMinor()
+    if not LibStub then return "?" end
+    local _, live = LibStub("LibGroupBuffs-1.0", true)
+    return live or "?"
+end
+
+local FROM_NOTE = {
+    resolved   = "",
+    remembered = " (remembered)",
+    fallback   = " |cffff6666(UNRESOLVED - English name)|r",
+    unknown    = " (provenance unknown)",
+}
+
+function Priestly_PrintSpellReport()
+    if not DEFAULT_CHAT_FRAME then return end
+    local report = engine:SpellReport()
+    local API = Priestly.API
+    DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Spell names, as this client gave them:")
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  locale %s, game build %s, Priestly %s, library r%s",
+        tostring(report.locale), tostring(API.ClientBuild and API.ClientBuild() or "?"),
+        tostring(API.AddonVersion and API.AddonVersion("Priestly") or "?"),
+        tostring(LiveLibraryMinor())))
+    for _, entry in ipairs(report) do
+        for _, form in ipairs(entry.forms) do
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("  %-7s %-6s %s%s%s",
+                entry.id, form.role, tostring(form.name),
+                FROM_NOTE[form.from] or "", form.known and "" or " - not learned"))
+        end
+    end
+    if report.unresolved > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("  |cffff6666" .. report.unresolved
+            .. " name(s) could not be read from the client.|r Buffs Priestly cannot name are "
+            .. "read as missing on everyone. Please report this with the lines above.")
+    end
+end
+
+-- Said once a session, and only when something is actually broken by it: a
+-- name still on its English fallback for a buff the player is tracking.
+-- Deliberately not keyed on the locale - resolution can fail on an English
+-- client too, and a German client whose names all resolved is fine.
+local g_WarnedUnresolved = false
+local function WarnIfNamesUnresolved()
+    if g_WarnedUnresolved or not DEFAULT_CHAT_FRAME then return end
+    -- Gated HERE rather than at each caller, because the callers are events.
+    -- SPELLS_CHANGED is registered as soon as the files load and can arrive
+    -- before PLAYER_LOGIN, when there is no saved table yet and
+    -- Priestly_IsBuffEnabled answers "enabled" for everything - so a
+    -- character whose Spirit is switched off would spend the once-a-session
+    -- warning before its own settings were readable. g_IsPriest is false
+    -- until login, which makes it the signal for both that and the addon
+    -- having nothing to say to a non-priest.
+    if not g_IsPriest then return end
+    local report = engine:SpellReport()
+    for _, entry in ipairs(report) do
+        for _, form in ipairs(entry.forms) do
+            if form.from == "fallback" and Priestly_IsBuffEnabled
+                and Priestly_IsBuffEnabled(entry.id) then
+                g_WarnedUnresolved = true
+                DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Could not read "
+                    .. "some spell names from the game client.|r Buffs it cannot name are shown "
+                    .. "as missing on everyone. |cffffffff/priestly help|r has the details.")
+                return
+            end
+        end
+    end
+end
+
+-- Filling the extension point PriestlyConfig leaves empty. Turning a buff ON
+-- is the other moment an unresolved name starts to matter: that row reads
+-- MISS on everyone from then on, and without this nothing would explain it
+-- for the rest of the session. Cheap, as that hook asks: the latch returns on
+-- the first line once anything has been said.
+function Priestly_OnConfigChanged(key)
+    if key == "trackFort" or key == "trackSpirit" then WarnIfNamesUnresolved() end
+end
 
 -- Settings writes go through PriestlyConfig's single write path (issue #35).
 -- Guarded like every other cross-file helper in this file: if PriestlyConfig
@@ -337,6 +431,8 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Resolve localized spell names and what this priest actually knows
         -- before anything reads DEFS.
         RefreshSpellData()
+        -- After the first resolve, so it can only fire on a real failure.
+        WarnIfNamesUnresolved()
 
         ui:Init()
 
@@ -396,6 +492,9 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "PLAYER_TALENT_UPDATE" or event == "SPELLS_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
         -- Newly learned spells change which rows exist and how they cast.
         RefreshSpellData()
+        -- A spell just learned may resolve where it did not before, or fail
+        -- where it did not. Latched, so this can only ever speak once.
+        WarnIfNamesUnresolved()
         ui:ApplyAppearance()      -- the spec icon
         -- Full rebuild: available buffs and reagents may change on a respec.
         -- In combat only the counts can move; the rebuild follows the fight.
@@ -458,6 +557,10 @@ SlashCmdList["PRIESTLY"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  R = green (in range) / yellow (out of range) / grey (offline)")
         DEFAULT_CHAT_FRAME:AddMessage("  Timer = green >50% / yellow 10-50% / red <10%")
         DEFAULT_CHAT_FRAME:AddMessage("  ? = buff state unreadable right now (combat aura secrecy)")
+        -- LAST, and deliberately: the login warning sends people here to copy
+        -- these lines, and a default chat frame shows about ten. Printed in
+        -- the middle of the dump they scroll off behind the click legend.
+        Priestly_PrintSpellReport()
 
     elseif cmd == "config" or cmd == "options" or cmd == "settings" or cmd == "opt" then
         if Priestly_OpenConfig then Priestly_OpenConfig() end

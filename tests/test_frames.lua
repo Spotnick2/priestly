@@ -550,4 +550,155 @@ runScript(candle, "OnEnter")
 H.eq(WoW.tooltipText(), "", "no item means no tooltip at all")
 candle._itemID = 17029
 
+------------------------------------------------------------
+-- What names are we matching? (#21)
+--
+-- A localized client reported every member as unbuffed with a "?" on every
+-- icon: the English names matched no aura and resolved no range. The port
+-- fixed the cause; this is the part that stops the next one going
+-- undiagnosed, because nothing Priestly said named the problem.
+------------------------------------------------------------
+
+local function saidBy(fn)
+    local before = #WoW.messages
+    fn()
+    return table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+end
+
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+T.RefreshSpellData()
+local said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("locale enUS", 1, true), "the report names the client's language: " .. said)
+H.check(said:find("game build", 1, true), "the game build")
+-- The LIVE library, by number: the version is asked for at print time, not
+-- captured at load, because a sibling addon shipping a newer copy upgrades
+-- this one in place and a captured number would name the copy that lost.
+local _, liveMinor = LibStub("LibGroupBuffs-1.0", true)
+H.check(said:find("library r" .. tostring(liveMinor), 1, true),
+    "and which copy of the library is live, by number: " .. said)
+H.check(said:find(H.NAME.FORT_SINGLE, 1, true), "with the name each spell resolved to")
+H.check(said:find("not learned", 1, true),
+    "marking a spell the player has not learned, which is ordinary")
+H.check(not said:find("UNRESOLVED", 1, true), "and claiming nothing is broken when nothing is")
+
+-- The failure it exists for: names the client never gave. The defs live for
+-- the whole file and earlier cases resolved them, so a bare failure here
+-- would read as "remembered" - which is right, and not the case under test.
+-- Put them back to how a def starts: the host's own literal, never resolved.
+WoW.reset()
+local realName = Priestly.API.SpellName
+for _, d in ipairs(T.DEFS) do
+    d.snglFrom, d.grpFrom = "fallback", d.grpID and "fallback" or nil
+end
+Priestly.API.SpellName = function() return nil end
+T.RefreshSpellData()
+said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("UNRESOLVED", 1, true), "an unresolved name is called out: " .. said)
+H.check(said:find("read as missing on everyone", 1, true),
+    "with what it means for the player, in their terms")
+H.check(said:find("report this", 1, true), "and a request that closes the loop")
+Priestly.API.SpellName = realName
+
+-- Through the command people actually type. A report that only a test can
+-- reach is not a diagnostic.
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+T.RefreshSpellData()
+said = saidBy(function() SlashCmdList["PRIESTLY"]("help") end)
+H.check(said:find("Spell names, as this client gave them", 1, true),
+    "/priestly help carries the report: " .. said)
+-- LAST in the dump: a default chat frame shows about ten lines, and these are
+-- the ones the warning asks people to copy.
+local lines = {}
+for i = 1, #WoW.messages do lines[i] = WoW.messages[i] end
+local lastReportLine, lastHelpLine
+for i, line in ipairs(lines) do
+    if line:find("locale ", 1, true) or line:find("  fort ", 1, true)
+        or line:find("Spell names", 1, true) then lastReportLine = i end
+    if line:find("buff state unreadable", 1, true) or line:find("/priestly help|r", 1, true)
+        then lastHelpLine = i end
+end
+H.check(lastReportLine and lastHelpLine and lastReportLine > lastHelpLine,
+    "and prints it after the rest, where it is still on screen")
+local headers = 0
+for _, line in ipairs(lines) do
+    if line:find("Spell names, as this client gave them", 1, true) then headers = headers + 1 end
+end
+H.eq(headers, 1, "exactly once, not once in the middle and again at the end")
+
+-- SPELLS_CHANGED is registered as soon as the files load and can arrive
+-- BEFORE login, when there is no saved table and every buff reads as
+-- tracked. Warning then would spend the once-a-session message on a
+-- character whose settings, once readable, say the buff is switched off.
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+local realName0 = Priestly.API.SpellName
+for _, d in ipairs(T.DEFS) do
+    d.snglFrom, d.grpFrom = "fallback", d.grpID and "fallback" or nil
+end
+Priestly.API.SpellName = function() return nil end
+
+-- A warrior logs in: nothing here is for them, whatever the names say.
+WoW.SetUnit("player", { name = "Tanky Person", class = "WARRIOR" })
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "a non-priest is not warned about spell names: " .. said)
+
+-- And a spell change while that is the state stays quiet too, rather than
+-- spending the once-a-session warning where it means nothing.
+said = saidBy(function() WoW.dispatch("SPELLS_CHANGED") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "nor is a spell change before a priest logs in: " .. said)
+Priestly.API.SpellName = realName0
+-- The blocks below prove the latch survived all that: they still warn.
+
+-- The warning at login. Only for a buff the player is actually tracking: an
+-- unresolved name for something switched off changes nothing they can see,
+-- and a warning they cannot act on is noise.
+WoW.reset()
+H.TeachSpells({ "FORT_SINGLE" })
+local realName2 = Priestly.API.SpellName
+WoW.SetUnit("player", { name = "Karuzo Elegia", class = "PRIEST" })
+
+-- Only Spirit unresolved, and Spirit switched off.
+Priestly_SetConfig("trackSpirit", false)
+Priestly.API.SpellName = function(id)
+    if id == H.SPELL.SPIRIT_SINGLE or id == H.SPELL.SPIRIT_GROUP then return nil end
+    return realName2(id)
+end
+for _, d in ipairs(T.DEFS) do
+    if d.id == "spirit" then d.snglFrom, d.grpFrom = "fallback", "fallback" end
+end
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "a buff the player does not track is not worth warning about: " .. said)
+
+-- Now they turn it on, mid-session, and it starts to matter: that row will
+-- read MISS on everyone from here. Waiting for the next login would leave
+-- them staring at it with nothing explaining why.
+said = saidBy(function() Priestly_SetConfig("trackSpirit", true) end)
+H.check(said:find("Could not read some spell names", 1, true),
+    "enabling a buff whose name never resolved says so at once: " .. said)
+H.check(said:find("/priestly help", 1, true), "and points at the details")
+
+-- Once a session, however it is reached - the login after it is silent.
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(not said:find("Could not read some spell names", 1, true),
+    "and only once, not again at the next login: " .. said)
+Priestly.API.SpellName = realName2
+
+-- A localized client where everything resolved is NOT a problem, and must
+-- not be warned about: the locale is not the signal, the resolution is.
+WoW.reset()
+-- A real localized client answers for every spell; only the language differs.
+H.TeachSpells({ "FORT_SINGLE" })
+WoW.locale = "deDE"
+WoW.spells[H.SPELL.FORT_SINGLE] = { name = "Machtwort: Seelenstaerke", iconID = 1 }
+T.RefreshSpellData()
+said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("locale deDE", 1, true), "the report says which language: " .. said)
+H.check(said:find("Machtwort", 1, true), "and the names that client gave")
+H.check(not said:find("UNRESOLVED", 1, true), "nothing is called broken")
+
 H.done("test_frames")

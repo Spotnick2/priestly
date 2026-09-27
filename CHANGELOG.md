@@ -1,5 +1,13 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Added
+- **`/priestly help` now shows the spell names Priestly is matching on**, with your client's
+  language and version numbers. If the addon ever reports everybody as unbuffed when they are not,
+  those lines say why — and pasting them into a bug report is enough to diagnose it. Priestly also
+  says so once at login if it could not read a name for a buff you track.
+
 ## v2.0.7 - 2026-09-27
 
 ### Read this if you had Priestly before
