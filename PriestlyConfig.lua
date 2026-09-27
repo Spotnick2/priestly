@@ -398,7 +398,16 @@ local function AdoptCharacterSettings(force)
     local legacy = PriestlyDB
     if not LooksConfigured(legacy) then return 0 end
     AccountStore()
-    if not force and PriestlyAccountDB[SEED_MARKER] ~= nil then return 0 end
+    if not force then
+        if PriestlyAccountDB[SEED_MARKER] ~= nil then return 0 end
+        -- Nobody seeded, but the shared settings are not untouched either:
+        -- an alt logged in first and the player then changed something in the
+        -- options panel. Those are deliberate choices about the shared table,
+        -- and a character logging in later must not silently undo them. The
+        -- same test as for a legacy table - different from the defaults -
+        -- because that is what "somebody chose this" means either side.
+        if LooksConfigured(PriestlyAccountDB) then return 0 end
+    end
 
     local applied = 0
     -- Replace, not merge. A key this character never set must fall back to
@@ -489,13 +498,13 @@ function Priestly_EnsureDefaults()
     -- once, or the only sign is an addon that looks reset. Marked in the
     -- character's own table - the one bookkeeping key it ever gets - so it is
     -- said once per character rather than at every login.
-    if not seeded and LooksConfigured(PriestlyDB)
-        and PriestlyDB[OFFER_MARKER] == nil
-        and PriestlyAccountDB[SEED_MARKER] ~= nil then
+    if not seeded and LooksConfigured(PriestlyDB) and PriestlyDB[OFFER_MARKER] == nil then
         PriestlyDB[OFFER_MARKER] = true
+        local from = PriestlyAccountDB[SEED_MARKER]
         Announce("This character has its own settings saved from before they were shared. "
-            .. "The shared ones came from " .. tostring(PriestlyAccountDB[SEED_MARKER])
-            .. "; |cffffffff/priestly adopt|r uses this character's for everyone instead.")
+            .. (from and ("The shared ones came from " .. tostring(from) .. "; ")
+                     or "The shared ones are the ones already set up; ")
+            .. "|cffffffff/priestly adopt|r uses this character's for everyone instead.")
     end
     -- A client build can only change across a restart, which means a fresh
     -- login, which means this runs again. Re-resolving here is what keeps the

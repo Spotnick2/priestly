@@ -608,4 +608,26 @@ Priestly_AdoptCharacterSettings()
 H.eq(PriestlyAccountDB.pos, nil, "adopting a character that had none clears it")
 H.eq(PriestlyAccountDB.frameAlpha, 0.42, "while taking what it did have")
 
+-- The order that catches the seed out: an alt logs in first and claims
+-- nothing, the player then sets up the shared settings by hand, and only
+-- afterwards does a character with an old profile arrive. Those are
+-- deliberate choices about the shared table and a seed must not undo them.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, defaultsOnlyCharacter()
+Priestly_EnsureDefaults()                         -- the alt
+Priestly_SetConfig("frameAlpha", 0.23)            -- chosen in the options panel
+Priestly_SetShadowInstance(TC.INSTANCE_DB[1][1], not TC.INSTANCE_DB[1][3])
+
+PriestlyDB = configuredCharacter()                -- the old profile arrives
+before = #WoW.messages
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, 0.23, "a deliberate shared setting is not overwritten")
+H.eq(PriestlyAccountDB[TC.SEED_MARKER], nil, "and nothing claims to have seeded")
+
+-- It is offered instead, so the player can still have it.
+said2 = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+H.check(said2:find("adopt", 1, true), "the character is told adopt will use its own: " .. said2)
+H.check(Priestly_AdoptCharacterSettings() > 0, "and adopt honours that")
+H.eq(PriestlyAccountDB.frameAlpha, 0.5, "replacing the chosen value on purpose")
+
 H.done("test_config_seam")

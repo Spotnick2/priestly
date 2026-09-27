@@ -118,8 +118,13 @@ Load order from `Priestly.toc`:
 which the config's event frame calls.
 
 **Every write to `PriestlyAccountDB` goes through `Priestly_SetConfig` or
-`Priestly_SetShadowInstance`.** `PriestlyDB`, the legacy per-character table, is read-only apart
-from one bookkeeping key the seed sets, and `PriestlySVCheck` is read once and never written. The only exceptions are inside `-- config-owner: begin/end` regions
+`Priestly_SetShadowInstance`.**
+
+`PriestlyDB`, the per-character table, takes exactly three kinds of write and no settings:
+`visible` through `Priestly_SetWindowVisible` (window state belongs to the character), the seed's
+one bookkeeping key, and the library renewing its own `svLoadCheck` marker. Its settings — what a
+per-character release left there — are never written again, because they are the backup
+`/priestly adopt` reads. `PriestlySVCheck` is read once and never written. The only exceptions are inside `-- config-owner: begin/end` regions
 in `PriestlyConfig.lua`: the two saved-table accessors, `EnsureDefaults` and the learned-duration
 cache. `tests/test_config_seam.lua` scans the source with LibGroupBuffs' `tests/config_scan.lua`
 (from the library checkout the suite runs against) and fails on any other write, and counts the
