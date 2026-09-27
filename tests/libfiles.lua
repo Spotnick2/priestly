@@ -45,6 +45,18 @@ end
 
 -- Returns load (Lua files, in order) and ship (every required file), both as
 -- paths relative to root. Raises an error naming any missing file.
+-- Named here rather than globbed, so a texture that stops being drawn stops
+-- being shipped, and one that is added has to be added deliberately. They are
+-- the files Glass.lua names; its own tests check the two lists agree.
+L.MEDIA = {
+    "Media/body_mask.tga", "Media/body_mask_small.tga",
+    "Media/rim5.tga", "Media/rim5_small.tga",
+    "Media/rim_dark5.tga", "Media/rim_dark5_small.tga",
+    "Media/shadow.tga", "Media/shadow_small.tga",
+    "Media/bar_mask.tga", "Media/bar_fill.tga", "Media/bar_edge.tga",
+    "Media/gloss.tga", "Media/grain.tga", "Media/sheen2.tga",
+}
+
 function L.resolve(root, entry)
     entry = entry or L.ENTRY
     local load, ship, seen = {}, {}, {}
@@ -72,6 +84,19 @@ function L.resolve(root, entry)
     end
 
     visit(entry)
+
+    -- Textures are not in any XML: the client loads them by PATH, when the
+    -- glass material draws. They still have to be in the addon folder, so a
+    -- dev deploy copies them like everything else - and a missing one is a
+    -- window drawn with holes in it, which no Lua error announces.
+    for _, rel in ipairs(L.MEDIA) do
+        if not read(root .. "/" .. rel) then
+            error("LibGroupBuffs: " .. rel .. " is missing from " .. root
+                .. " - the glass material draws it", 0)
+        end
+        ship[#ship + 1] = rel
+    end
+
     return load, ship
 end
 
