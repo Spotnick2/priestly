@@ -260,7 +260,7 @@ local ui = Priestly.UI.New({
         return PriestlyAccountDB.pos
     end,
     setPos     = function(pos) SetConfig("pos", pos) end,
-    setVisible = function(visible) SetConfig("visible", visible) end,
+    setVisible = function(visible) Priestly_SetWindowVisible(visible) end,
     -- The window parents secure buttons, so in combat the client refuses to
     -- hide it (docs/FOREVER-PROBE.md section 13). Every way of closing - the X
     -- button, /priestly hide, the toggle - lands here, so none of them looks
@@ -288,7 +288,7 @@ function Priestly_OnSoloToggle(enabled)
     if InCombatLockdown() then return end
     if enabled then
         if not ui:IsVisible() and g_IsPriest then
-            SetConfig("visible", true)
+            Priestly_SetWindowVisible(true)
             ui:Open(0.1)
         end
     elseif GetNumGroupMembers() == 0 then
@@ -331,7 +331,8 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
         -- Initialise saved state (default: visible on Priests)
         Priestly_EnsureDefaults()
-        if PriestlyAccountDB.visible == nil then SetConfig("visible", true) end
+        -- Per character, not shared: see Priestly_SetWindowVisible.
+        if Priestly_WindowVisible() == nil then Priestly_SetWindowVisible(true) end
 
         -- Resolve localized spell names and what this priest actually knows
         -- before anything reads DEFS.
@@ -346,7 +347,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- window was deliberately closed, which is a preference that should
         -- survive a reload.
         g_LastGroupSize = GetNumGroupMembers()
-        if g_IsPriest and PriestlyAccountDB.visible ~= false
+        if g_IsPriest and Priestly_WindowVisible() ~= false
             and (g_LastGroupSize > 0 or Priestly_ShowSolo())
         then
             ui:Open(0.6)
@@ -362,7 +363,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     elseif event == "READY_CHECK" then
         -- A ready check is a good moment to rebuff, but not a reason to
         -- override someone who closed the window.
-        if g_IsPriest and (not PriestlyAccountDB or PriestlyAccountDB.visible ~= false) then
+        if g_IsPriest and Priestly_WindowVisible() ~= false then
             ui:Open(0.4)
         end
 
@@ -381,9 +382,9 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- churn leaves a deliberate close alone.
         local joined = (g_LastGroupSize == 0 and n > 0)
         g_LastGroupSize = n
-        if joined then SetConfig("visible", true) end
+        if joined then Priestly_SetWindowVisible(true) end
         if n > 0 and not ui:IsVisible() and g_IsPriest
-            and (joined or not PriestlyAccountDB or PriestlyAccountDB.visible ~= false)
+            and (joined or Priestly_WindowVisible() ~= false)
         then
             ui:Open(0.5)
         elseif n == 0 and not Priestly_ShowSolo() then
@@ -531,14 +532,14 @@ SlashCmdList["PRIESTLY"] = function(msg)
         ui:Close(true)      -- onCloseDeferred says so if combat refuses it
 
     elseif cmd == "show" then
-        SetConfig("visible", true)
+        Priestly_SetWindowVisible(true)
         ui:Update()
 
     else
         if ui:IsVisible() then
             ui:Close(true)
         else
-            SetConfig("visible", true)
+            Priestly_SetWindowVisible(true)
             ui:Update()
         end
     end

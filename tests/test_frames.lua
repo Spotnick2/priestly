@@ -149,7 +149,7 @@ local closeBtn = T.mainFrame().closeBtn
 H.check(closeBtn ~= nil, "the close button is reachable")
 runScript(closeBtn, "OnClick")
 H.check(not T.mainFrame():IsShown(), "clicking it closes the window")
-H.eq(PriestlyAccountDB.visible, false, "and records that as deliberate")
+H.eq(PriestlyDB.visible, false, "and records that as deliberate")
 
 ------------------------------------------------------------
 -- Close, in and out of combat
@@ -273,7 +273,7 @@ SlashCmdList["PRIESTLY"]("hide")
 local hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
 H.check(mainFrame:IsShown(), "the window is still up during the fight")
 H.check(hideSaid:find("leave combat"), "and the player is told when it goes: " .. hideSaid)
-H.eq(PriestlyAccountDB.visible, false, "the preference is saved straight away")
+H.eq(PriestlyDB.visible, false, "the preference is saved straight away")
 
 -- The X button, the same way: it is the library's, and it reaches Priestly
 -- through the onCloseDeferred callback rather than a return value.
@@ -331,11 +331,11 @@ WoW.flushTimers()
 
 -- A ready check is not a reason to reopen a window the user closed.
 T.CloseUI(true)
-H.eq(PriestlyAccountDB.visible, false, "closed by hand")
+H.eq(PriestlyDB.visible, false, "closed by hand")
 WoW.dispatch("READY_CHECK")
 WoW.flushTimers()
 H.check(not (T.mainFrame():IsShown()), "a ready check does not resurrect it")
-H.eq(PriestlyAccountDB.visible, false, "nor overwrite the preference")
+H.eq(PriestlyDB.visible, false, "nor overwrite the preference")
 
 -- A group Prayer reaches further than the single-target spell, so the range
 -- check must test whichever spell the click will actually cast.

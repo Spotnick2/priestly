@@ -111,7 +111,8 @@ Load order from `Priestly.toc`:
 `Priestly_IsBuffEnabled`, `Priestly_ShouldShowShadow`, `Priestly_GetFrameAlpha`,
 `Priestly_OpenConfig`, `Priestly_LearnDuration`, `Priestly_GetLearnedDuration`,
 `Priestly_PopoverSide`, `Priestly_FrameLocked`, `Priestly_ShowClickHints`,
-`Priestly_AdoptCharacterSettings`, `Priestly_ConfigPanelBuilt`, and the write path:
+`Priestly_AdoptCharacterSettings`, `Priestly_ConfigPanelBuilt`, `Priestly_WindowVisible`,
+`Priestly_SetWindowVisible`, and the write path:
 `Priestly_SetConfig(key, value)`, `Priestly_SetShadowInstance(name, tracked)`,
 `Priestly_OnConfigChanged(key)`. Plus `Priestly_HandleEnteringWorld` and `Priestly_CheckClientBuild`,
 which the config's event frame calls.
@@ -185,12 +186,21 @@ configured setup instead of starting blank.
 `PriestlyDB`, per character, is that workaround's data and **stays declared**. It is the only way
 to read what a player already configured, and a variable the TOC stops declaring may never be
 handed back at all. Priestly writes no settings key to it again: it is a backup, the seed for the
-migration, and the per-character scope the load check watches — which is all `PriestlySVCheck` ever
-existed for, so that one is gone. `tests/test_manifest.lua` asserts the whole arrangement.
+migration, the per-character scope the load check watches, and where this character's **window
+state** lives — whether the window is open is not shared between characters (`Priestly_WindowVisible`
+/ `Priestly_SetWindowVisible`).
 
-The first character logged in after the move seeds the shared table; no later character overwrites
-it, and a missing key is filled from `DEFAULTS` rather than from whichever alt logged in.
-`/priestly adopt` is how a player picks a different character's setup afterwards.
+`PriestlySVCheck` is no longer a store, but it is **still declared** and read once: the account
+scope's "already told them" latch is in it, and dropping it would announce the SavedVariables fix
+to every existing player a second time. `tests/test_manifest.lua` asserts the whole arrangement.
+
+The first character logged in after the move **that was actually configured** seeds the shared
+table — configured meaning a setting, instance choice or position that *differs from the defaults*,
+because every character that ran a per-character release has a `PriestlyDB` full of defaults and an
+alt holding only those must not claim the settings. No later character overwrites it, and a missing
+key is filled from `DEFAULTS` rather than from whichever alt logged in. `/priestly adopt` is how a
+player picks a different character's setup afterwards; it replaces rather than merges, clearing
+optional keys (`pos`, the instance list, the duration cache) that the chosen character never had.
 
 **Settings do persist on 70009.** Code may rely on that — but only as far as the measurement goes:
 it holds for SavedVariables on 70009 and later, not for CVars (unmeasured there) and not for anyone

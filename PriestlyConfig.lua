@@ -125,8 +125,15 @@ local MEASURED_ON_BUILD = "70009"
 -- player can steer: log in as the character whose setup you want, run
 -- `/priestly adopt`.
 --
--- Between them the two tables also give the load check one live table in each
--- scope, which is all PriestlySVCheck ever existed for. It is gone.
+-- The per-character table is not only history: this character's window state
+-- lives there too, because whether the window is open is not something to
+-- share between characters. See Priestly_SetWindowVisible.
+--
+-- Between them the two tables give the load check one live table in each
+-- scope, which is all PriestlySVCheck ever existed for as a store. It is
+-- still DECLARED and read once, though - the account scope's "already told
+-- them" latch is in it, and dropping that would announce the SavedVariables
+-- fix to every existing player a second time. See InheritLoadCheck.
 
 -- config-owner: begin
 local SEED_MARKER = "seededFrom"     -- who the shared settings came from
@@ -167,90 +174,6 @@ local function CopyValue(value, seen)
     return out
 end
 
--- Did a release configure this table? Any setting, the instance list or a
--- saved position says yes.
---
--- NOT `flavor`, which was the first attempt and was wrong twice over:
--- EnsureDefaults stamps it on ANY character's first login, so an alt that has
--- never configured anything would have claimed the shared table and locked
--- the real settings out forever; and a TBC-era table has no `flavor` at all -
--- its absence is what triggers that migration - so the one profile most in
--- need of carrying across was the one refused.
-local function LooksConfigured(t)
-    if type(t) ~= "table" then return false end
-    for key in pairs(DEFAULTS) do
-        if t[key] ~= nil then return true end
-    end
-    return t.pos ~= nil or t.shadowInstances ~= nil or t.learnedDurations ~= nil
-end
-
--- Never carried across. The load check's marker describes the table it lives
--- in; `visible` is this session's window state, and one character closing the
--- window must not close it for everybody; the two markers are bookkeeping.
-local function Carried(key)
-    return key ~= LoadCheckKey() and key ~= "visible"
-        and key ~= SEED_MARKER and key ~= OFFER_MARKER and key ~= "flavor"
-end
-
--- Settings a player would recognise as theirs - what the count reports.
--- `learnedDurations` is a cache the addon rebuilds, and the flavor migration
--- may drop it moments later, so counting it would overstate what was kept.
-local function Countable(key)
-    return DEFAULTS[key] ~= nil or key == "pos" or key == "shadowInstances"
-end
-
--- Copy this character's old settings into the shared table. `force` is
--- `/priestly adopt`: the player saying this character's setup is the one they
--- want everywhere. Returns how many settings were applied.
---
--- Writes go to PriestlyAccountDB by name, not through a local alias: the
--- scanner in tests/config_scan.lua reads source text and cannot follow an
--- alias, and an unseen write is how this file's one rule gets broken quietly.
-local function AdoptCharacterSettings(force)
-    local legacy = PriestlyDB
-    if not LooksConfigured(legacy) then return 0 end
-    AccountStore()
-    if not force and PriestlyAccountDB[SEED_MARKER] ~= nil then return 0 end
-
-    local applied = 0
-    -- Replace, not merge. A key this character never set must fall back to
-    -- the default rather than keep whichever other character's value happens
-    -- to be sitting there - "use this character's settings" has to mean it.
-    for key, default in pairs(DEFAULTS) do
-        if legacy[key] == nil and PriestlyAccountDB[key] ~= default then
-            PriestlyAccountDB[key] = default
-            applied = applied + 1
-        end
-    end
-    for key, value in pairs(legacy) do
-        if Carried(key) then
-            PriestlyAccountDB[key] = CopyValue(value)
-            if Countable(key) then applied = applied + 1 end
-        end
-    end
-    -- Carried deliberately, nil included: a table from the TBC line has no
-    -- flavor, and copying that absence is what re-runs the migration over the
-    -- instance names and learned durations it just brought with it.
-    PriestlyAccountDB.flavor = legacy.flavor
-    PriestlyAccountDB[SEED_MARKER] =
-        (GetUnitName and GetUnitName("player", false)) or "another character"
-    -- Nothing left to offer THIS character: the shared settings are its own.
-    if type(PriestlyDB) == "table" then PriestlyDB[OFFER_MARKER] = true end
-    return applied
-end
-
--- The account scope's load-check history used to live in PriestlySVCheck,
--- which existed only to give that scope a table. Carry its marker over, or
--- the move throws away the latch saying this player was already told the
--- settings bug was fixed - and the next client patch tells them again.
-local function InheritLoadCheck()
-    local previous = PriestlySVCheck
-    if type(previous) ~= "table" then return end
-    local key = LoadCheckKey()
-    if PriestlyAccountDB[key] == nil and type(previous[key]) == "table" then
-        PriestlyAccountDB[key] = CopyValue(previous[key])
-    end
-end
 -- config-owner: end
 
 function Priestly_OnConfigChanged(key)
@@ -415,8 +338,143 @@ local FLAVOR = "forever"
 local g_Build
 
 -- config-owner: begin
+-- Did a release configure this table? Any setting, the instance list or a
+-- saved position says yes.
+--
+-- Configured means DIFFERENT FROM THE DEFAULTS, not merely present. The
+-- per-character releases ran EnsureDefaults on every character, priest or
+-- not, so every one of them has a PriestlyDB holding the whole DEFAULTS table
+-- and the whole instance list. Treating a key's presence as evidence let an
+-- alt nobody ever configured claim the shared settings and lock the real ones
+-- out - the same failure as the first attempt, which used `flavor`: that is
+-- stamped at login too. `flavor` is doubly wrong as the test, since a TBC-era
+-- profile has none at all - its absence is what triggers that migration - so
+-- the profile most in need of carrying across was the one refused.
+local function LooksConfigured(t)
+    if type(t) ~= "table" then return false end
+    for key, default in pairs(DEFAULTS) do
+        if t[key] ~= nil and t[key] ~= default then return true end
+    end
+    if t.pos ~= nil then return true end
+    if type(t.shadowInstances) == "table" then
+        local default = {}
+        for _, entry in ipairs(INSTANCE_DB) do default[entry[1]] = entry[3] end
+        for name, tracked in pairs(t.shadowInstances) do
+            -- A name this build does not know is a TBC-era choice, and the
+            -- player made it; anything else counts only if it differs.
+            if default[name] == nil then
+                if tracked then return true end
+            elseif tracked ~= default[name] then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Never carried across. The load check's marker describes the table it lives
+-- in; `visible` is this session's window state, and one character closing the
+-- window must not close it for everybody; the two markers are bookkeeping.
+local function Carried(key)
+    return key ~= LoadCheckKey() and key ~= "visible"
+        and key ~= SEED_MARKER and key ~= OFFER_MARKER and key ~= "flavor"
+end
+
+-- Settings a player would recognise as theirs - what the count reports.
+-- `learnedDurations` is a cache the addon rebuilds, and the flavor migration
+-- may drop it moments later, so counting it would overstate what was kept.
+local function Countable(key)
+    return DEFAULTS[key] ~= nil or key == "pos" or key == "shadowInstances"
+end
+
+-- Copy this character's old settings into the shared table. `force` is
+-- `/priestly adopt`: the player saying this character's setup is the one they
+-- want everywhere. Returns how many settings were applied.
+--
+-- Writes go to PriestlyAccountDB by name, not through a local alias: the
+-- scanner in tests/config_scan.lua reads source text and cannot follow an
+-- alias, and an unseen write is how this file's one rule gets broken quietly.
+local function AdoptCharacterSettings(force)
+    local legacy = PriestlyDB
+    if not LooksConfigured(legacy) then return 0 end
+    AccountStore()
+    if not force and PriestlyAccountDB[SEED_MARKER] ~= nil then return 0 end
+
+    local applied = 0
+    -- Replace, not merge. A key this character never set must fall back to
+    -- the default rather than keep whichever other character's value happens
+    -- to be sitting there - "use this character's settings" has to mean it.
+    for key, default in pairs(DEFAULTS) do
+        if legacy[key] == nil and PriestlyAccountDB[key] ~= default then
+            PriestlyAccountDB[key] = default
+            applied = applied + 1
+        end
+    end
+    -- The optional keys have no default to fall back to, so they are cleared:
+    -- a window position, an instance list or a duration cache this character
+    -- never had must not be left standing from whoever seeded first.
+    -- EnsureDefaults rebuilds the instance list from INSTANCE_DB afterwards.
+    for _, key in ipairs({ "pos", "shadowInstances", "learnedDurations" }) do
+        if legacy[key] == nil and PriestlyAccountDB[key] ~= nil then
+            PriestlyAccountDB[key] = nil
+            if Countable(key) then applied = applied + 1 end
+        end
+    end
+    for key, value in pairs(legacy) do
+        if Carried(key) then
+            PriestlyAccountDB[key] = CopyValue(value)
+            if Countable(key) then applied = applied + 1 end
+        end
+    end
+    -- Carried deliberately, nil included: a table from the TBC line has no
+    -- flavor, and copying that absence is what re-runs the migration over the
+    -- instance names and learned durations it just brought with it.
+    PriestlyAccountDB.flavor = legacy.flavor
+    PriestlyAccountDB[SEED_MARKER] =
+        (GetUnitName and GetUnitName("player", false)) or "another character"
+    -- Nothing left to offer THIS character: the shared settings are its own.
+    if type(PriestlyDB) == "table" then PriestlyDB[OFFER_MARKER] = true end
+    return applied
+end
+
+-- ─── Window state stays with the character ───────────────────────────────────
+--
+-- Whether the window is open is not a preference to share: it is where you
+-- left it on THIS character, and a priest you park in a city should not close
+-- the window for the one you raid on. So it lives in the per-character table,
+-- which is the one thing that table holds going forward. The seed leaves
+-- `visible` behind for the same reason, and an upgrading character keeps its
+-- own because that is where it already was.
+function Priestly_WindowVisible()
+    local per = LegacyStore()
+    return per.visible
+end
+
+function Priestly_SetWindowVisible(visible)
+    local per = LegacyStore()
+    if per.visible == visible then return end
+    per.visible = visible
+    settings:Changed("visible")
+end
+
+-- The account scope's load-check history used to live in PriestlySVCheck,
+-- which existed only to give that scope a table. Carry its marker over, or
+-- the move throws away the latch saying this player was already told the
+-- settings bug was fixed - and the next client patch tells them again.
+local function InheritLoadCheck()
+    local previous = PriestlySVCheck
+    if type(previous) ~= "table" then return end
+    local key = LoadCheckKey()
+    if PriestlyAccountDB[key] == nil and type(previous[key]) == "table" then
+        PriestlyAccountDB[key] = CopyValue(previous[key])
+    end
+end
+
 function Priestly_EnsureDefaults()
     if not PriestlyAccountDB then PriestlyAccountDB = {} end
+    -- Both tables: the shared settings, and the per-character one that holds
+    -- this character's window state.
+    LegacyStore()
     InheritLoadCheck()
     -- BEFORE the defaults below: the seed replaces a key this character never
     -- set with the DEFAULT, and it can only tell which those are while the

@@ -42,7 +42,6 @@ PriestlyAccountDB = {
     trackFort   = false,            -- a setting the user changed
     shadowMode  = "always",
     frameAlpha  = 0.5,
-    visible     = false,
     shadowInstances = {
         ["Karazhan"]        = true,     -- TBC content: cannot occur here
         ["Black Temple"]    = true,
@@ -56,7 +55,10 @@ Priestly_EnsureDefaults()
 H.eq(PriestlyAccountDB.trackFort, false, "the user's own settings survive the migration")
 H.eq(PriestlyAccountDB.shadowMode, "always", "...all of them")
 H.eq(PriestlyAccountDB.frameAlpha, 0.5, "...including the slider")
-H.eq(PriestlyAccountDB.visible, false, "...and the window state")
+-- The window state is NOT here: it belongs to the character, not the
+-- account, so it lives in the per-character table (see
+-- Priestly_SetWindowVisible). tests/test_visibility.lua covers it.
+H.eq(PriestlyAccountDB.visible, nil, "...and the shared table holds no window state")
 
 H.check(PriestlyAccountDB.shadowInstances["Karazhan"] == nil, "TBC instances are dropped")
 H.check(PriestlyAccountDB.shadowInstances["Black Temple"] == nil, "all of them")

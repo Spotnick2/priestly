@@ -311,7 +311,10 @@ H.eq(PriestlyAccountDB.warnedBuild, nil, "and records nothing that could silence
 -- place.
 ------------------------------------------------------------
 
-local function configuredCharacter(over)
+-- `drop` is a list of keys to leave out. It cannot be done through `over`:
+-- `{ pos = nil }` is an empty table in Lua, so an override that means "this
+-- character never had one" silently means nothing at all.
+local function configuredCharacter(over, drop)
     local legacy = {
         flavor = "forever",
         frameAlpha = 0.5,
@@ -322,6 +325,7 @@ local function configuredCharacter(over)
         pos = { point = "LEFT", x = 3, y = 4 },
     }
     for k, v in pairs(over or {}) do legacy[k] = v end
+    for _, key in ipairs(drop or {}) do legacy[key] = nil end
     return legacy
 end
 
@@ -440,7 +444,9 @@ H.check(PriestlyAccountDB[TC.SEED_MARKER] ~= nil, "and the shared table records 
 WoW.reset()
 PriestlyAccountDB, PriestlyDB = nil, configuredCharacter({ visible = false })
 Priestly_EnsureDefaults()
-H.eq(PriestlyAccountDB.visible, nil, "a closed window is not carried across")
+H.eq(PriestlyAccountDB.visible, nil,
+    "the shared table never holds the window state - it stays with the character")
+H.eq(PriestlyDB.visible, false, "which is where the closed window is still recorded")
 
 -- The account scope's load-check latch used to live in PriestlySVCheck. It is
 -- not a store any more, but dropping its marker would un-latch a fix this
@@ -462,7 +468,7 @@ WoW.reset()
 PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
 Priestly_EnsureDefaults()
 Priestly_SetConfig("showClickHints", false)    -- the first character's choice
-PriestlyDB = configuredCharacter({ showClickHints = nil })
+PriestlyDB = configuredCharacter(nil, { "showClickHints" })
 H.check(Priestly_AdoptCharacterSettings() > 0, "the second character adopts")
 H.eq(PriestlyAccountDB.showClickHints, TC.DEFAULTS.showClickHints,
     "a setting they never had reverts to the default, not the other character's")
@@ -555,5 +561,51 @@ H.check(applied.changed.shadowMode, "every one of them, not just the first")
 
 Priestly_ApplyAlpha, Priestly_ForceRebuild = realAlpha, realRebuild
 Priestly_OnConfigChanged = realHook
+
+-- The alt that matters is not one with NO table - every character that ran a
+-- per-character release has one, filled with every default and the whole
+-- instance list by EnsureDefaults. Treating that as "configured" let a
+-- never-touched alt claim the shared settings and lock the real ones out.
+local function defaultsOnlyCharacter()
+    local t = {}
+    for key, value in pairs(TC.DEFAULTS) do t[key] = value end
+    t.flavor = "forever"
+    t.shadowInstances = {}
+    for _, entry in ipairs(TC.INSTANCE_DB) do t.shadowInstances[entry[1]] = entry[3] end
+    return t
+end
+
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, defaultsOnlyCharacter()
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB[TC.SEED_MARKER], nil,
+    "an alt holding nothing but the defaults claims nothing")
+
+PriestlyDB = configuredCharacter()
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, 0.5, "so the configured character still seeds afterwards")
+
+-- One changed key is enough to count as configured, including an instance
+-- choice that differs from what the list ships with.
+WoW.reset()
+PriestlyAccountDB = nil
+local justOneInstance = defaultsOnlyCharacter()
+justOneInstance.shadowInstances[TC.INSTANCE_DB[1][1]] = not TC.INSTANCE_DB[1][3]
+PriestlyDB = justOneInstance
+Priestly_EnsureDefaults()
+H.check(PriestlyAccountDB[TC.SEED_MARKER] ~= nil,
+    "but a single instance ticked differently is a configured character")
+
+-- Adopt has to clear what this character never had, not only reset the keys
+-- with defaults: a window position from whoever seeded first would otherwise
+-- survive "use THIS character's settings".
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, configuredCharacter()
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.pos.x, 3, "the first character's position is shared")
+PriestlyDB = configuredCharacter({ frameAlpha = 0.42 }, { "pos" })
+Priestly_AdoptCharacterSettings()
+H.eq(PriestlyAccountDB.pos, nil, "adopting a character that had none clears it")
+H.eq(PriestlyAccountDB.frameAlpha, 0.42, "while taking what it did have")
 
 H.done("test_config_seam")
