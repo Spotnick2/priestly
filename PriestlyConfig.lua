@@ -137,6 +137,7 @@ local MEASURED_ON_BUILD = "70009"
 
 -- config-owner: begin
 local SEED_MARKER = "seededFrom"     -- who the shared settings came from
+local CHOICE_MARKER = "playerChose"  -- the player has set these up by hand
 local OFFER_MARKER = "adoptOffered"  -- the one key written back to a legacy table
 
 local function Announce(text)
@@ -155,6 +156,16 @@ end
 local function LegacyStore()
     if not PriestlyDB then PriestlyDB = {} end
     return PriestlyDB
+end
+
+-- A choice is an ACT, and its result can be a default: turn a buff off and
+-- back on, or press Reset Defaults, and every value matches DEFAULTS again
+-- while the player has plainly configured the shared settings. Comparing
+-- values cannot see that, so the setters record that it happened - and an
+-- automatic seed then declines even when nothing looks different.
+local function RememberPlayerChose()
+    AccountStore()
+    PriestlyAccountDB[CHOICE_MARKER] = true
 end
 
 local function LoadCheckKey()
@@ -204,11 +215,13 @@ local settings = Priestly.Settings.New({
 -- refresh, which would otherwise run the hook on the aura hot path. Tables
 -- are always reported.
 function Priestly_SetConfig(key, value)
+    RememberPlayerChose()
     settings:Set(key, value)
 end
 
 -- One entry of the Shadow Protection instance list.
 function Priestly_SetShadowInstance(name, tracked)
+    RememberPlayerChose()
     settings:SetIn("shadowInstances", name, tracked)
 end
 
@@ -376,8 +389,8 @@ end
 -- in; `visible` is this session's window state, and one character closing the
 -- window must not close it for everybody; the two markers are bookkeeping.
 local function Carried(key)
-    return key ~= LoadCheckKey() and key ~= "visible"
-        and key ~= SEED_MARKER and key ~= OFFER_MARKER and key ~= "flavor"
+    return key ~= LoadCheckKey() and key ~= "visible" and key ~= SEED_MARKER
+        and key ~= OFFER_MARKER and key ~= CHOICE_MARKER and key ~= "flavor"
 end
 
 -- Settings a player would recognise as theirs - what the count reports.
@@ -406,7 +419,9 @@ local function AdoptCharacterSettings(force)
         -- and a character logging in later must not silently undo them. The
         -- same test as for a legacy table - different from the defaults -
         -- because that is what "somebody chose this" means either side.
-        if LooksConfigured(PriestlyAccountDB) then return 0 end
+        if PriestlyAccountDB[CHOICE_MARKER] or LooksConfigured(PriestlyAccountDB) then
+            return 0
+        end
     end
 
     local applied = 0
@@ -1431,4 +1446,5 @@ Priestly._testConfig = {
     -- The key that records which character the shared settings came from.
     -- Exported so a test names it once rather than spelling it everywhere.
     SEED_MARKER = SEED_MARKER,
+    CHOICE_MARKER = CHOICE_MARKER,
 }

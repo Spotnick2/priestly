@@ -630,4 +630,43 @@ H.check(said2:find("adopt", 1, true), "the character is told adopt will use its 
 H.check(Priestly_AdoptCharacterSettings() > 0, "and adopt honours that")
 H.eq(PriestlyAccountDB.frameAlpha, 0.5, "replacing the chosen value on purpose")
 
+-- The bookkeeping keys describe the SHARED table, so they are never carried
+-- from a character's own. One character's "the player set this up" must not
+-- arrive as the account's.
+WoW.reset()
+PriestlyAccountDB = nil
+PriestlyDB = configuredCharacter({ [TC.CHOICE_MARKER] = true, [TC.SEED_MARKER] = "Someone" })
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB[TC.CHOICE_MARKER], nil, "a legacy table's choice marker is not carried")
+H.check(PriestlyAccountDB[TC.SEED_MARKER] ~= "Someone",
+    "nor its record of who seeded - this seed sets that itself")
+
+-- A choice whose RESULT is a default is still a choice: turn a buff off and
+-- back on, or press Reset Defaults, and every value matches DEFAULTS again
+-- while the player has plainly set the shared settings up. Comparing values
+-- cannot see that, so the act itself is recorded.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, defaultsOnlyCharacter()
+Priestly_EnsureDefaults()                          -- the alt
+Priestly_SetConfig("trackFort", false)             -- changed...
+Priestly_SetConfig("trackFort", TC.DEFAULTS.trackFort)   -- ...and changed back
+H.eq(PriestlyAccountDB.trackFort, TC.DEFAULTS.trackFort, "the value is back to the default")
+
+PriestlyDB = configuredCharacter({ trackFort = false })
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.trackFort, TC.DEFAULTS.trackFort,
+    "and a later character's old profile does not undo the choice")
+H.eq(PriestlyAccountDB[TC.SEED_MARKER], nil, "nothing seeded over it")
+
+-- The instance tab counts too, including setting one back to its default.
+WoW.reset()
+PriestlyAccountDB, PriestlyDB = nil, defaultsOnlyCharacter()
+Priestly_EnsureDefaults()
+local firstInstance = TC.INSTANCE_DB[1][1]
+Priestly_SetShadowInstance(firstInstance, TC.INSTANCE_DB[1][3])
+PriestlyDB = configuredCharacter({ frameAlpha = 0.66 })
+Priestly_EnsureDefaults()
+H.eq(PriestlyAccountDB.frameAlpha, TC.DEFAULTS.frameAlpha,
+    "an instance choice, even one that equals the default, protects the shared settings")
+
 H.done("test_config_seam")

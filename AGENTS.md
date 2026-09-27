@@ -203,7 +203,10 @@ The first character logged in after the move **that was actually configured** se
 table — configured meaning a setting, instance choice or position that *differs from the defaults*,
 because every character that ran a per-character release has a `PriestlyDB` full of defaults and an
 alt holding only those must not claim the settings. No later character overwrites it, and a missing
-key is filled from `DEFAULTS` rather than from whichever alt logged in. `/priestly adopt` is how a
+key is filled from `DEFAULTS` rather than from whichever alt logged in. Nor does a seed overwrite
+shared settings the player set up by hand: `Priestly_SetConfig` and `Priestly_SetShadowInstance`
+record that a choice was **made**, because a choice whose result equals the default — a buff turned
+off and back on, or Reset Defaults — is invisible to any comparison of values. `/priestly adopt` is how a
 player picks a different character's setup afterwards; it replaces rather than merges, clearing
 optional keys (`pos`, the instance list, the duration cache) that the chosen character never had.
 
