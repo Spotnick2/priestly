@@ -543,8 +543,11 @@ Priestly.RegisterEvents(evtFrame,
     "RAID_ROSTER_UPDATE",
     "GROUP_ROSTER_UPDATE",
     -- The client saying you JOINED, rather than us inferring it from the
-    -- roster changing. Declared on 70009 (Event.PartyInfo.GroupJoined) - and
-    -- declared is not working, so the roster heuristic stays as a fallback.
+    -- roster changing. It fires: Blizzard's own UI for this build registers
+    -- and acts on it (Blizzard_DamageMeter/DamageMeter.lua:78,
+    -- Blizzard_QuickJoin/QuickJoin.lua:19, in C:/Projects/wow-ui-source).
+    -- The roster heuristic stays as the fallback anyway - it costs nothing
+    -- and covers every join we can see for ourselves.
     "GROUP_JOINED",
     "PLAYER_TALENT_UPDATE",
     "ACTIVE_TALENT_GROUP_CHANGED",
