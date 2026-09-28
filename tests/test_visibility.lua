@@ -305,15 +305,46 @@ H.eq(Priestly_WindowVisible(), false, "and the preference is untouched")
 
 -- A window that closed ITSELF - no rows to show - is not a close the player
 -- asked for, so a setting that could give it rows again may reopen it.
-setup(0)
-Priestly_SetWindowVisible(true)
-T.CloseUI(false)                   -- auto-close, not manual
+--
+-- The window is really OPENED and then driven to zero rows, rather than a
+-- CloseUI(false) call standing in for it. The first version of this called
+-- CloseUI on a window that had never been shown, so "an empty window closes
+-- itself" was true before the section began and the reopen was from a
+-- never-opened state - neither of which is the case being described.
+setup(2)
+Priestly_SetConfig("showSolo", true)
+WoW.dispatch("PLAYER_LOGIN")
 settle()
-H.check(not shown(), "an empty window closes itself")
-Priestly_ShowSolo = function() return true end
+H.check(shown(), "the window is open, with a group to show")
+
+-- Every buff switched off: UI:Update finds no rows and closes it ITSELF,
+-- without recording a close the player asked for.
+Priestly_SetConfig("trackFort", false)
+Priestly_SetConfig("trackSpirit", false)
+Priestly_ForceRebuild()
+settle()
+H.check(not shown(), "a window with nothing to show closes itself")
+H.eq(Priestly_WindowVisible(), true, "and does not call that the player's doing")
+
+-- ...and a setting that gives it rows again brings it back, which is the whole
+-- point of telling the two kinds of close apart.
+Priestly_SetConfig("trackFort", true)
 Priestly_ForceRebuild()
 settle()
 H.check(shown(), "and a setting that gives it rows again reopens it")
+
+-- ...and not for somebody the addon is not for. Nothing would appear anyway -
+-- a non-priest has no rows, so Update closes the window straight back - but
+-- /priestly config has no class gate, so without this every config click on a
+-- warrior in a group scheduled a full rebuild to produce nothing.
+setup(2)
+WoW.SetUnit("player", { name = "Tanky Person", guid = "P0", class = "WARRIOR" })
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+Priestly_SetWindowVisible(true)
+local rebuilds = #WoW.timers
+Priestly_ForceRebuild()
+H.eq(#WoW.timers, rebuilds, "a settings change on a non-priest schedules nothing")
 
 ------------------------------------------------------------
 -- The solo toggle is honoured in combat, not dropped
@@ -329,6 +360,13 @@ Priestly_SetWindowVisible(false)
 WoW.dispatch("PLAYER_LOGIN")
 settle()
 WoW.inCombat = true
+-- Through the setting, the way the checkbox does it: the handler is what the
+-- config calls AFTER writing showSolo, and a test that only calls the handler
+-- leaves the window with no reason to have rows. The first version of this
+-- passed only because an earlier section had replaced Priestly_ShowSolo with a
+-- stub and never put it back - so the assertion was resting on a leak, and
+-- would have broken silently if the sections were ever reordered.
+Priestly_SetConfig("showSolo", true)
 Priestly_OnSoloToggle(true)
 settle()
 H.eq(Priestly_WindowVisible(), true,

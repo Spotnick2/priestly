@@ -476,6 +476,12 @@ end
 -- Would the window open by itself right now? In a group, or solo mode - and
 -- never over a deliberate close. Same shape as Wildly's and Magely's.
 local function WantsOpen()
+    -- The class guard the other two have. Nothing appears without it either -
+    -- ActiveDefs is empty for a non-priest, so Update closes the window again
+    -- immediately - but /priestly config has no class gate and PLAYER_LOGIN
+    -- writes visible = true for anybody, so every config click on a warrior in
+    -- a group scheduled a full rebuild to produce nothing.
+    if not g_IsPriest then return false end
     if Priestly_WindowVisible() == false then return false end
     return GetNumGroupMembers() > 0 or Priestly_ShowSolo()
 end
