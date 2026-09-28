@@ -78,10 +78,6 @@ H.check(warned, "and says the listing may not be the tier it claims")
 WoW.ejSelectThrows = false
 
 ------------------------------------------------------------
--- `here` accumulates rather than overwriting
-------------------------------------------------------------
-
-------------------------------------------------------------
 -- reset() puts the journal back the way this client has it
 --
 -- The sections above set three tiers and a throwing EJ_SelectTier. If a reset
@@ -94,6 +90,10 @@ WoW.reset()
 H.eq(EJ_GetNumTiers(), 0, "a reset client reports no tiers, the way this one does")
 H.check(not WoW.ejSelectThrows, "and EJ_SelectTier is back to working")
 H.eq(next(WoW.ejDungeons), nil, "with no instances left over from the section before")
+
+------------------------------------------------------------
+-- `here` accumulates rather than overwriting
+------------------------------------------------------------
 
 WoW.reset()
 WoW.instanceName = "The Hall of Thanes"

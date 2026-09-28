@@ -101,7 +101,7 @@ WoW.allowGlobal(
     "Priestly_EnsureDefaults", "Priestly_ShowSolo", "Priestly_TrackPets",
     "Priestly_IsBuffEnabled", "Priestly_ShouldShowShadow", "Priestly_GetFrameAlpha",
     "Priestly_OpenConfig", "Priestly_SetConfig", "Priestly_FrameLocked",
-    "Priestly_PopoverSide",
+    "Priestly_PopoverSide", "Priestly_ShowClickHints", "Priestly_WindowVisible",
     -- The probe's saved variables and frames, which start nil like any others.
     "PriestlyProbeDB", "PriestlyProbePersist", "PriestlyProbeChar",
     "PriestlyProbeCopyFrame", "PriestlyProbeBench",

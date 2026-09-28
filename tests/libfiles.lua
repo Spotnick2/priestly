@@ -112,9 +112,24 @@ function L.resolve(root, entry)
     -- `= "name", <thing>Margin` entries in Glass.SIZES.
     local drawn = {}
     for _, rel in ipairs(load) do
-        local src = sources[rel] or ""
-        for name in src:gmatch('MEDIA %.%. "([%w_]+)"') do drawn["Media/" .. name .. ".tga"] = rel end
-        for name in src:gmatch('= "([%w_]+)", [%w]*[Mm]argin') do drawn["Media/" .. name .. ".tga"] = rel end
+        -- Comments stripped first: a commented-out draw is not a draw, and
+        -- leaving one in would demand a texture nothing uses and fail every
+        -- caller of resolve - the harness, run.ps1, deploy.ps1 and CI.
+        local src = (sources[rel] or ""):gsub("%-%-[^\n]*", "")
+        local function seen(pattern)
+            for name in src:gmatch(pattern) do drawn["Media/" .. name .. ".tga"] = rel end
+        end
+        -- Every form the material names a texture in. The first version of
+        -- this knew only the first two and so missed three of the fourteen,
+        -- including bar_mask - which is passed to Mask() as an argument, the
+        -- form the library uses most.
+        seen('MEDIA %.%. "([%w_]+)"')
+        seen('= "([%w_]+)", [%w]*[Mm]argin')
+        seen('Mask%([^,]+, "([%w_]+)"')
+        seen('mask%s*=%s*"([%w_]+)"')
+        seen('rim%s*=%s*"([%w_]+)"')
+        seen('dark%s*=%s*"([%w_]+)"')
+        seen('shadow%s*=%s*"([%w_]+)"')
     end
     for rel, by in pairs(drawn) do
         if not listed[rel] then

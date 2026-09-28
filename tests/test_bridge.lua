@@ -299,7 +299,12 @@ do
 
         -- Now Priestly's own, as its TOC does.
         local L = dofile("tests/libfiles.lua")
-        for _, file in ipairs(select(2, pcall(L.resolve, root))) do
+        -- Not `ipairs(select(2, pcall(...)))`: on failure that is a STRING,
+        -- and ipairs then throws "table expected, got string" over the real
+        -- message, which is the only one that says what went wrong.
+        local resolved, files = pcall(L.resolve, root)
+        H.check(resolved, "the library resolves: " .. tostring(files))
+        for _, file in ipairs(resolved and files or {}) do
             loadfile(root .. "/" .. file)()
         end
         local _, after = LibStub:GetLibrary("LibGroupBuffs-1.0")
@@ -341,12 +346,25 @@ LibStub, Priestly = savedLibStub, savedPriestly
 -- other here rather than kept in step by hand.
 ------------------------------------------------------------
 
+-- The source JOINED, not line by line, and every boolean position - not
+-- just `if X` and `X and`. The first version of this scan matched only those
+-- two forms on single lines, and missed both
+-- `not Priestly_ShowClickHints or Priestly_ShowClickHints()` and a guard whose
+-- `and` sits on the next line. A check that half-covers the thing it claims
+-- to make impossible is worse than none, because AGENTS.md and the README
+-- now both say the drift cannot happen.
 local guarded = {}
 for file, lines in pairs(SOURCES) do
-    for _, code in ipairs(lines) do
-        for name in code:gmatch("if%s+(Priestly_[%a_][%w_]*)%s+") do guarded[name] = file end
-        for name in code:gmatch("(Priestly_[%a_][%w_]*)%s+and%s+") do guarded[name] = file end
+    local joined = table.concat(lines, " ")
+    local function find(pattern)
+        for name in joined:gmatch(pattern) do guarded[name] = file end
     end
+    find("[^%w_](Priestly_[%a_][%w_]*)%s+and[%s(]")
+    find("[^%w_](Priestly_[%a_][%w_]*)%s+or[%s(]")
+    find("[^%w_](Priestly_[%a_][%w_]*)%s+then[%s(]")
+    find("%f[%w_]not%s+(Priestly_[%a_][%w_]*)")
+    find("%f[%w_]if%s+(Priestly_[%a_][%w_]*)")
+    find("%f[%w_]elseif%s+(Priestly_[%a_][%w_]*)")
 end
 local nGuarded = 0
 for name, file in pairs(guarded) do
