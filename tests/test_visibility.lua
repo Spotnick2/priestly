@@ -44,6 +44,31 @@ local function settle()
     WoW.flushTimers()   -- a deferred UpdateUI can queue another
 end
 
+
+------------------------------------------------------------
+-- A roster arriving before PLAYER_LOGIN has ever run is not a join
+--
+-- FIRST in this file on purpose. The guard is "have we ever seen the roster?",
+-- and the answer starts as "no" when the file loads - so any section that has
+-- already dispatched a login has answered it and could not tell a correct
+-- starting value from a wrong one. This section can, and it is the only one
+-- that can.
+--
+-- Reachable: the events are registered at file scope, and unlike Wildly and
+-- Magely, Priestly does not discard non-login events before it knows the
+-- player's class - so the roster branch really does run here.
+------------------------------------------------------------
+
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.groupMembers = 5
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.eq(Priestly_WindowVisible(), false, "a roster arriving before login is not a join")
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "and the window the player closed stays closed")
+
 ------------------------------------------------------------
 -- Login opens the window for a priest in a group
 ------------------------------------------------------------
@@ -98,6 +123,124 @@ WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
 H.check(shown(), "joining a group reopens it - that is what the addon promises")
 H.eq(PriestlyDB.visible, true, "and the preference follows")
+
+------------------------------------------------------------
+-- A roster arriving just after login is the client catching up, not a join
+--
+-- GetNumGroupMembers() can still read 0 at PLAYER_LOGIN while already in a
+-- group, and the roster lands a moment later. That 0-to-n change looked
+-- exactly like joining - the one thing that reopens a window the player
+-- deliberately closed - so logging in already grouped with the window shut
+-- reopened it AND overwrote the preference, every single login.
+--
+-- Wildly and Magely fixed this when their review found it; Priestly had the
+-- same code and did not, which is what sharing by copying does.
+------------------------------------------------------------
+
+setup(0)                       -- the client has not caught up yet
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "a priest who closed the window does not get it back at login")
+
+WoW.groupMembers = 5           -- ...and now the roster arrives
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(not shown(),
+    "the roster catching up a moment later does not count as joining")
+H.eq(Priestly_WindowVisible(), false,
+    "and the deliberate close is still the player's preference")
+
+-- A real invite still reopens it, once we have actually seen them alone.
+WoW.groupMembers = 0
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+WoW.groupMembers = 3
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(shown(), "a real invite later in the session still reopens it")
+H.eq(Priestly_WindowVisible(), true, "and that is remembered")
+------------------------------------------------------------
+-- Logging in alone and THEN being invited still reopens the window
+--
+-- The regression the roster guard nearly shipped. "Have we ever seen the
+-- roster?" answers the login catch-up correctly, but on its own it costs the
+-- thing it was protecting: log in alone, get invited, and if the client sent
+-- no zero-member roster in between, the invite IS the first observation - so
+-- it would not count as joining, and the window would stay shut for the rest
+-- of the session.
+--
+-- GROUP_JOINED is the client saying you joined rather than us inferring it.
+-- Note there is deliberately NO zero-member roster update here: that is the
+-- whole point, and a test that sent one would pass without the event.
+------------------------------------------------------------
+
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")        -- a fresh session: nothing seen yet
+settle()
+H.check(not shown(), "logging in alone with the window closed leaves it closed")
+
+WoW.groupMembers = 3
+WoW.dispatch("GROUP_JOINED")
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(shown(), "and an invite after it reopens the window")
+H.eq(Priestly_WindowVisible(), true, "and is remembered as the player's preference")
+
+-- The event does not make the catch-up roster a join: it is not sent for one.
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.groupMembers = 5
+WoW.dispatch("GROUP_ROSTER_UPDATE")   -- no GROUP_JOINED: the client caught up
+settle()
+H.check(not shown(), "a roster catching up without a join event is still not a join")
+H.eq(Priestly_WindowVisible(), false, "and the close still stands")
+
+-- And the latch is spent, not sticky: the next roster change is ordinary
+-- churn, not a second join.
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.groupMembers = 2
+WoW.dispatch("GROUP_JOINED")
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+Priestly_SetWindowVisible(false)
+T.CloseUI(true)
+settle()
+WoW.groupMembers = 3
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(not shown(), "a third member arriving is not another join")
+
+------------------------------------------------------------
+-- The two ways a few seconds' grace would still have got this wrong
+--
+-- The first version of this guard gave the roster five seconds after
+-- PLAYER_LOGIN to arrive. That is a guess at the wrong question: it has to be
+-- longer than the slowest loading screen and shorter than a real invite, and
+-- when it is wrong it fails silently and looks exactly like the bug. Asking
+-- whether we have EVER seen the roster needs no clock.
+------------------------------------------------------------
+
+-- A loading screen longer than any grace period would have been. The clock is
+-- not consulted at all now, so thirty seconds between login and the roster
+-- changes nothing.
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.time = WoW.time + 300
+WoW.groupMembers = 5
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.eq(Priestly_WindowVisible(), false,
+    "however long the world takes to load, the first roster is not a join")
+H.check(not shown(), "and the window stays closed")
 
 ------------------------------------------------------------
 -- A show asked for during combat happens when combat ends

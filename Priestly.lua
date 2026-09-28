@@ -151,7 +151,35 @@ end
 
 -- ─── State ───────────────────────────────────────────────────────────────────
 local g_IsPriest = false
-local g_LastGroupSize = 0
+-- How many people we have SEEN in the group, or nil for "we have not looked
+-- yet". The difference is the whole point: joining is the one thing that
+-- reopens a window the player deliberately closed, and a join is a 0-to-n
+-- change where the 0 was actually observed.
+--
+-- GetNumGroupMembers() can still read 0 at PLAYER_LOGIN while already in a
+-- group - the roster lands a moment later - so starting this at 0 made that
+-- catch-up look exactly like joining, and logging in already grouped with the
+-- window shut reopened it and overwrote the preference. Every login.
+--
+-- nil rather than a few seconds' grace: the grace period is a guess at the
+-- wrong question. It has to be long enough for the slowest loading screen and
+-- short enough not to swallow a real invite, it is defeated by a roster event
+-- arriving before PLAYER_LOGIN at all, and when it is wrong it fails silently
+-- and looks exactly like the bug it replaced. "Have we ever seen the roster?"
+-- needs no clock and cannot be outrun.
+--
+-- On its own, though, it costs the thing it was protecting: log in alone, get
+-- invited, and if the client never sent a zero-member roster in between, the
+-- invite IS the first observation and would not count as joining. So the
+-- roster is the FALLBACK and GROUP_JOINED is the answer - the client saying
+-- you joined, rather than us inferring it from a number changing.
+local g_LastGroupSize = nil
+
+-- Set by GROUP_JOINED, spent by the roster update that follows it. The event
+-- is declared on 70009, and declared is not working on this client, so it
+-- makes the answer certain where it fires and changes nothing where it does
+-- not: the roster heuristic still catches every join we actually observed.
+local g_JoinedPending = false
 
 -- ─── What names are we actually matching? ────────────────────────────────────
 --
@@ -482,6 +510,10 @@ Priestly.RegisterEvents(evtFrame,
     "UNIT_PET",
     "RAID_ROSTER_UPDATE",
     "GROUP_ROSTER_UPDATE",
+    -- The client saying you JOINED, rather than us inferring it from the
+    -- roster changing. Declared on 70009 (Event.PartyInfo.GroupJoined) - and
+    -- declared is not working, so the roster heuristic stays as a fallback.
+    "GROUP_JOINED",
     "PLAYER_TALENT_UPDATE",
     "ACTIVE_TALENT_GROUP_CHANGED",
     "PLAYER_REGEN_ENABLED",
@@ -516,9 +548,19 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Auto-open if Priest and in a group (or solo mode) - unless the
         -- window was deliberately closed, which is a preference that should
         -- survive a reload.
-        g_LastGroupSize = GetNumGroupMembers()
+        -- A new session: whatever we saw before this login is not something
+        -- we have seen in it. Said out loud rather than left to the file being
+        -- re-executed, because that is what makes the rule true rather than
+        -- incidentally true.
+        g_LastGroupSize = nil
+        g_JoinedPending = false
+        -- Read, not recorded. What the client says right now is good enough to
+        -- decide whether to open, and wrong as an observation: a 0 here may
+        -- just mean the roster has not arrived, and recording it is what made
+        -- the roster's arrival look like a join.
+        local atLogin = GetNumGroupMembers()
         if g_IsPriest and Priestly_WindowVisible() ~= false
-            and (g_LastGroupSize > 0 or Priestly_ShowSolo())
+            and (atLogin > 0 or Priestly_ShowSolo())
         then
             ui:Open(0.6)
         end
@@ -544,13 +586,26 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Pet summoned or dismissed: rebuild to add/remove pet rows
         ui:ScheduleRefresh()
 
+    elseif event == "GROUP_JOINED" then
+        -- The client saying it, rather than us inferring it. Latched rather
+        -- than acted on here: the roster that follows is what knows how many
+        -- people there are, and acting twice would open the window and then
+        -- decide again whether it should be open.
+        g_JoinedPending = true
+
     elseif event == "RAID_ROSTER_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
         PruneAuraCache()
         local n = GetNumGroupMembers()
         -- Joining a group is the one case that reopens a window the user
         -- closed: that is the addon's advertised behaviour. Any other roster
         -- churn leaves a deliberate close alone.
-        local joined = (g_LastGroupSize == 0 and n > 0)
+        -- GROUP_JOINED if the client sent one, and otherwise the roster: nil
+        -- is not 0, so the first roster we ever see tells us where we are and
+        -- not that somebody just invited us. The event is what makes logging
+        -- in alone and then being invited work, because there may be no
+        -- zero-member roster in between for the fallback to measure against.
+        local joined = g_JoinedPending or (g_LastGroupSize == 0 and n > 0)
+        g_JoinedPending = false
         g_LastGroupSize = n
         if joined then Priestly_SetWindowVisible(true) end
         if n > 0 and not ui:IsVisible() and g_IsPriest
