@@ -44,6 +44,11 @@ local function settle()
     WoW.flushTimers()   -- a deferred UpdateUI can queue another
 end
 
+-- Past the few seconds after login in which a roster arriving is the client
+-- catching up rather than the player joining. Wildly and Magely have the same
+-- helper, for the same reason.
+local function afterLogin() WoW.time = WoW.time + 30 end
+
 ------------------------------------------------------------
 -- Login opens the window for a priest in a group
 ------------------------------------------------------------
@@ -94,9 +99,48 @@ settle()
 H.check(not shown(), "leaving the group leaves it closed")
 
 WoW.groupMembers = 2
+afterLogin()
 WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
 H.check(shown(), "joining a group reopens it - that is what the addon promises")
+
+------------------------------------------------------------
+-- A roster arriving just after login is the client catching up, not a join
+--
+-- GetNumGroupMembers() can still read 0 at PLAYER_LOGIN while already in a
+-- group, and the roster lands a moment later. That 0-to-n change looked
+-- exactly like joining - the one thing that reopens a window the player
+-- deliberately closed - so logging in already grouped with the window shut
+-- reopened it AND overwrote the preference, every single login.
+--
+-- Wildly and Magely fixed this when their review found it; Priestly had the
+-- same code and did not, which is what sharing by copying does.
+------------------------------------------------------------
+
+setup(0)                       -- the client has not caught up yet
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "a priest who closed the window does not get it back at login")
+
+WoW.groupMembers = 5           -- ...and now the roster arrives
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(not shown(),
+    "the roster catching up a moment later does not count as joining")
+H.eq(Priestly_WindowVisible(), false,
+    "and the deliberate close is still the player's preference")
+
+-- A real invite, once things have settled, still reopens it.
+afterLogin()
+WoW.groupMembers = 0
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+WoW.groupMembers = 3
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(shown(), "a real invite later in the session still reopens it")
+H.eq(Priestly_WindowVisible(), true, "and that is remembered")
 H.eq(PriestlyDB.visible, true, "and the preference follows")
 
 ------------------------------------------------------------

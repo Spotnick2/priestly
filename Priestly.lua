@@ -152,6 +152,19 @@ end
 -- ─── State ───────────────────────────────────────────────────────────────────
 local g_IsPriest = false
 local g_LastGroupSize = 0
+local g_LoginAt = 0
+
+-- The roster can arrive a moment after PLAYER_LOGIN: GetNumGroupMembers() may
+-- still read 0 at login inside a group. A 0-to-n change that soon is the
+-- client catching up, not the player joining, and joining is the one thing
+-- that reopens a window the player deliberately closed - so without this,
+-- logging in already grouped with the window shut reopened it and overwrote
+-- the preference.
+--
+-- Not measured on this client (AGENTS.md, the in-game list); five seconds is a
+-- guess on the safe side - a real invite that soon after login is rare. Same
+-- value as Wildly and Magely, which had this first.
+local ROSTER_SETTLE_SECONDS = 5
 
 -- ─── What names are we actually matching? ────────────────────────────────────
 --
@@ -517,6 +530,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- window was deliberately closed, which is a preference that should
         -- survive a reload.
         g_LastGroupSize = GetNumGroupMembers()
+        g_LoginAt = GetTime()
         if g_IsPriest and Priestly_WindowVisible() ~= false
             and (g_LastGroupSize > 0 or Priestly_ShowSolo())
         then
@@ -550,7 +564,8 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Joining a group is the one case that reopens a window the user
         -- closed: that is the addon's advertised behaviour. Any other roster
         -- churn leaves a deliberate close alone.
-        local joined = (g_LastGroupSize == 0 and n > 0)
+        local settling = (GetTime() - g_LoginAt) < ROSTER_SETTLE_SECONDS
+        local joined = (g_LastGroupSize == 0 and n > 0) and not settling
         g_LastGroupSize = n
         if joined then Priestly_SetWindowVisible(true) end
         if n > 0 and not ui:IsVisible() and g_IsPriest
