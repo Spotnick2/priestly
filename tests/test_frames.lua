@@ -527,6 +527,36 @@ H.check(tip:find("in your bags"), "and how many you have: " .. tip)
 H.check(tip:find("group Prayers"), "and what consumes it: " .. tip)
 runScript(candle, "OnLeave")
 
+------------------------------------------------------------
+-- A rank Priestly cannot read hides the candle, rather than naming one
+--
+-- Rank decides WHICH candle a Prayer burns: rank 1 a Holy Candle, higher a
+-- Sacred one. The subtext it is read from is localized, so a client that
+-- spells the number gives nothing to match - and falling back to rank 1 used
+-- to name the Holy Candle to a priest who burns Sacred ones, counting the
+-- wrong item in their bags with nothing saying why (#64).
+------------------------------------------------------------
+
+setup()
+WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
+WoW.Know(1706, "Levitate")
+T.RefreshSpellData()
+T.UpdateUI()
+H.eq(T.GetPrayerRank(), nil, "a rank written in words reads as unknown")
+H.eq(T.footerButton(17028), nil, "so no Holy Candle is offered")
+H.eq(T.footerButton(17029), nil, "and no Sacred Candle either - we do not know which")
+H.check(T.footerButton(17056) ~= nil,
+    "while Levitate's feather, which does not depend on a rank, is still there")
+
+-- And it comes back the moment the client says something readable.
+setup()
+WoW.Know(21562, "Prayer of Fortitude", "Rank 2")
+WoW.Know(1706, "Levitate")
+T.RefreshSpellData()
+T.UpdateUI()
+H.eq(T.GetPrayerRank(), 2, "a readable rank reads")
+H.check(T.footerButton(17029) ~= nil, "and the right candle is offered again")
+
 WoW.clearTooltip()
 runScript(feather, "OnEnter")
 tip = WoW.tooltipText()
@@ -599,6 +629,96 @@ H.check(said:find("read as missing on everyone", 1, true),
     "with what it means for the player, in their terms")
 H.check(said:find("report this", 1, true), "and a request that closes the loop")
 Priestly.API.SpellName = realName
+
+------------------------------------------------------------
+-- A rank the client described in words Priestly cannot read
+--
+-- The candle simply stops existing otherwise, and "the footer disappeared" is
+-- no easier for a player to act on than "the count looks wrong" - the whole
+-- argument for not guessing the candle applies to not staying quiet about it.
+-- Nothing executed these AddMessage calls until this existed, which is the
+-- failure mode this file's own header is about (#29).
+------------------------------------------------------------
+
+setup()
+WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
+T.RefreshSpellData()
+said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("rank unreadable", 1, true), "the report calls the rank out: " .. said)
+H.check(said:find("Prayer of Fortitude", 1, true), "naming the spell")
+H.check(said:find("Rang zwei", 1, true),
+    "and quoting what the client said, which is the part worth pasting")
+H.check(said:find("which candle", 1, true), "with what it means for the player, in their terms")
+
+-- The report primes itself. Whether a rank could be read is recorded as a
+-- side effect of reading one, and the only thing that reads one is the
+-- reagent footer - which is not drawn while the window is shut. A solo priest
+-- whose candle vanished, who opens no window and types /priestly help to find
+-- out why, would otherwise get a report silent about exactly what they asked.
+setup()
+WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
+T.RefreshSpellData()
+Priestly.API.rankUnreadable["Prayer of Fortitude"] = nil
+T.CloseUI()
+said = saidBy(Priestly_PrintSpellReport)
+H.check(said:find("rank unreadable", 1, true),
+    "the report says so even when the window was never opened: " .. said)
+
+-- Nothing to say when the rank reads.
+setup()
+WoW.Know(21562, "Prayer of Fortitude", "Rank 2")
+T.RefreshSpellData()
+said = saidBy(Priestly_PrintSpellReport)
+H.check(not said:find("rank unreadable", 1, true),
+    "and a readable rank is not mentioned at all: " .. said)
+
+------------------------------------------------------------
+-- And a priest is told once, in chat, without having to ask
+--
+-- The reagent counter just stops existing otherwise. "The footer
+-- disappeared" is no easier to act on than "the count looks wrong", so the
+-- same once-a-session line an unresolved NAME gets applies here.
+------------------------------------------------------------
+
+setup()
+T.ResetWarnings()
+WoW.SetUnit("player", { name = "Karuzo Elegia", guid = "P0", class = "PRIEST" })
+WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(said:find("which candle it burns", 1, true),
+    "a priest is warned once, unasked: " .. said)
+said = saidBy(function() WoW.dispatch("SPELLS_CHANGED") end)
+H.check(not said:find("which candle it burns", 1, true),
+    "and only once a session: " .. said)
+
+-- The two warnings are separate latches, and one spent must not spend the
+-- other. Nesting the rank check inside the name check put it after that
+-- function's own early return, so a priest already warned about a NAME - who
+-- then learned a Prayer whose rank will not read - was never told why their
+-- reagent counter had vanished.
+setup()
+T.ResetWarnings()
+WoW.SetUnit("player", { name = "Karuzo Elegia", guid = "P0", class = "PRIEST" })
+local realName1 = Priestly.API.SpellName
+for _, d in ipairs(T.DEFS) do
+    d.snglFrom, d.grpFrom = "fallback", d.grpID and "fallback" or nil
+end
+Priestly.API.SpellName = function() return nil end
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(said:find("Could not read some spell names", 1, true),
+    "the name warning is spent first: " .. said)
+H.check(not said:find("which candle it burns", 1, true), "with no rank to complain about yet")
+
+-- NOW a Prayer arrives whose rank will not read.
+Priestly.API.SpellName = realName1
+WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
+said = saidBy(function() WoW.dispatch("SPELLS_CHANGED") end)
+H.check(said:find("which candle it burns", 1, true),
+    "the rank warning still fires, though the name warning was already spent: " .. said)
+-- Put the defs and the latches back for the sections after this one, which
+-- were written expecting an unspent name warning.
+T.RefreshSpellData()
+T.ResetWarnings()
 
 -- Through the command people actually type. A report that only a test can
 -- reach is not a diagnostic.
