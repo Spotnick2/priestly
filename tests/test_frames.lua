@@ -681,6 +681,7 @@ H.check(not said:find("rank unreadable", 1, true),
 ------------------------------------------------------------
 
 setup()
+T.ResetWarnings()
 WoW.SetUnit("player", { name = "Karuzo Elegia", guid = "P0", class = "PRIEST" })
 WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
 said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
@@ -689,6 +690,35 @@ H.check(said:find("which candle it burns", 1, true),
 said = saidBy(function() WoW.dispatch("SPELLS_CHANGED") end)
 H.check(not said:find("which candle it burns", 1, true),
     "and only once a session: " .. said)
+
+-- The two warnings are separate latches, and one spent must not spend the
+-- other. Nesting the rank check inside the name check put it after that
+-- function's own early return, so a priest already warned about a NAME - who
+-- then learned a Prayer whose rank will not read - was never told why their
+-- reagent counter had vanished.
+setup()
+T.ResetWarnings()
+WoW.SetUnit("player", { name = "Karuzo Elegia", guid = "P0", class = "PRIEST" })
+local realName1 = Priestly.API.SpellName
+for _, d in ipairs(T.DEFS) do
+    d.snglFrom, d.grpFrom = "fallback", d.grpID and "fallback" or nil
+end
+Priestly.API.SpellName = function() return nil end
+said = saidBy(function() WoW.dispatch("PLAYER_LOGIN") end)
+H.check(said:find("Could not read some spell names", 1, true),
+    "the name warning is spent first: " .. said)
+H.check(not said:find("which candle it burns", 1, true), "with no rank to complain about yet")
+
+-- NOW a Prayer arrives whose rank will not read.
+Priestly.API.SpellName = realName1
+WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
+said = saidBy(function() WoW.dispatch("SPELLS_CHANGED") end)
+H.check(said:find("which candle it burns", 1, true),
+    "the rank warning still fires, though the name warning was already spent: " .. said)
+-- Put the defs and the latches back for the sections after this one, which
+-- were written expecting an unspent name warning.
+T.RefreshSpellData()
+T.ResetWarnings()
 
 -- Through the command people actually type. A report that only a test can
 -- reach is not a diagnostic.

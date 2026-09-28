@@ -246,6 +246,10 @@ local g_WarnedRank = false
 local function WarnIfRankUnreadable()
     if g_WarnedRank or not DEFAULT_CHAT_FRAME then return end
     if not g_IsPriest then return end
+    -- Asked for here: whether a rank could be read is recorded as a side
+    -- effect of reading one, and the only thing that reads one is the reagent
+    -- footer, which is not drawn while the window is shut.
+    GetPrayerRank()
     local report = engine:SpellReport()
     if not report.ranks then return end
     g_WarnedRank = true
@@ -266,10 +270,6 @@ local function WarnIfNamesUnresolved()
     -- until login, which makes it the signal for both that and the addon
     -- having nothing to say to a non-priest.
     if not g_IsPriest then return end
-    -- Same priming as the report: nothing has read a rank unless the footer
-    -- has been drawn.
-    GetPrayerRank()
-    WarnIfRankUnreadable()
     local report = engine:SpellReport()
     for _, entry in ipairs(report) do
         for _, form in ipairs(entry.forms) do
@@ -285,13 +285,24 @@ local function WarnIfNamesUnresolved()
     end
 end
 
+-- Both warnings, from every path that had one. They are SEPARATE latches
+-- and must be tried separately: nesting the rank check inside the name check
+-- put it after that function's own early return, so a priest who had already
+-- been warned about a name - and then learned a Prayer whose rank will not
+-- read - was never told why their reagent counter vanished. One latch spent
+-- must not spend the other.
+local function WarnAboutSpells()
+    WarnIfRankUnreadable()
+    WarnIfNamesUnresolved()
+end
+
 -- Filling the extension point PriestlyConfig leaves empty. Turning a buff ON
 -- is the other moment an unresolved name starts to matter: that row reads
 -- MISS on everyone from then on, and without this nothing would explain it
 -- for the rest of the session. Cheap, as that hook asks: the latch returns on
 -- the first line once anything has been said.
 function Priestly_OnConfigChanged(key)
-    if key == "trackFort" or key == "trackSpirit" then WarnIfNamesUnresolved() end
+    if key == "trackFort" or key == "trackSpirit" then WarnAboutSpells() end
 end
 
 -- Settings writes go through PriestlyConfig's single write path (issue #35).
@@ -327,7 +338,12 @@ end
 -- described the rank in a way we could not read (see GetCandleInfo).
 function GetPrayerRank()
     local fort = DEFS[1]
-    if not fort.hasGroup then return 0 end
+    -- Gated on the NAME, not on hasGroup. The library clears its record of an
+    -- unreadable rank when asked about a spell that is no longer in the book,
+    -- and it can only do that if it is asked - returning early for a Prayer
+    -- the priest does not know left the old failure standing, so a report
+    -- went on naming a rank problem for a spell they had never learned.
+    if not fort.grp then return 0 end
     return (API.GetSpellRank(fort.grp))
 end
 
@@ -490,7 +506,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- before anything reads DEFS.
         RefreshSpellData()
         -- After the first resolve, so it can only fire on a real failure.
-        WarnIfNamesUnresolved()
+        WarnAboutSpells()
 
         ui:Init()
 
@@ -552,7 +568,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         RefreshSpellData()
         -- A spell just learned may resolve where it did not before, or fail
         -- where it did not. Latched, so this can only ever speak once.
-        WarnIfNamesUnresolved()
+        WarnAboutSpells()
         ui:ApplyAppearance()      -- the spec icon
         -- Full rebuild: available buffs and reagents may change on a respec.
         -- In combat only the counts can move; the rebuild follows the fight.
@@ -722,6 +738,9 @@ Priestly._test = {
     PruneAuraCache   = PruneAuraCache,
     IsValidTarget    = IsValidTarget,
     GetPrayerRank    = GetPrayerRank,
+    -- The once-a-session latches, so a test can exercise a warning without
+    -- depending on which earlier section already spent it.
+    ResetWarnings    = function() g_WarnedUnresolved, g_WarnedRank = false, false end,
     GetCandleInfo    = GetCandleInfo,
     FooterItems      = FooterItems,
     AuraEventIsRelevant = AuraEventIsRelevant,
