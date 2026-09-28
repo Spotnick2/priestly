@@ -6,7 +6,8 @@
 - **Closing the window now sticks when you log in already in a group.** The game reports your
   group a moment after you log in, and Priestly read that as you having just joined — which is the
   one thing that reopens a window you closed on purpose. So it came back every login, and forgot
-  that you had closed it. It stays closed now, and a real invite still reopens it.
+  that you had closed it. It stays closed now, however long the game takes to load, and a real
+  invite still reopens it.
 
 ## v2.0.8 - 2026-09-27
 

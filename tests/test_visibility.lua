@@ -44,10 +44,6 @@ local function settle()
     WoW.flushTimers()   -- a deferred UpdateUI can queue another
 end
 
--- Past the few seconds after login in which a roster arriving is the client
--- catching up rather than the player joining. Wildly and Magely have the same
--- helper, for the same reason.
-local function afterLogin() WoW.time = WoW.time + 30 end
 
 ------------------------------------------------------------
 -- Login opens the window for a priest in a group
@@ -99,10 +95,10 @@ settle()
 H.check(not shown(), "leaving the group leaves it closed")
 
 WoW.groupMembers = 2
-afterLogin()
 WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
 H.check(shown(), "joining a group reopens it - that is what the addon promises")
+H.eq(PriestlyDB.visible, true, "and the preference follows")
 
 ------------------------------------------------------------
 -- A roster arriving just after login is the client catching up, not a join
@@ -131,8 +127,7 @@ H.check(not shown(),
 H.eq(Priestly_WindowVisible(), false,
     "and the deliberate close is still the player's preference")
 
--- A real invite, once things have settled, still reopens it.
-afterLogin()
+-- A real invite still reopens it, once we have actually seen them alone.
 WoW.groupMembers = 0
 WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
@@ -141,7 +136,46 @@ WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
 H.check(shown(), "a real invite later in the session still reopens it")
 H.eq(Priestly_WindowVisible(), true, "and that is remembered")
-H.eq(PriestlyDB.visible, true, "and the preference follows")
+
+------------------------------------------------------------
+-- The two ways a few seconds' grace would still have got this wrong
+--
+-- The first version of this guard gave the roster five seconds after
+-- PLAYER_LOGIN to arrive. That is a guess at the wrong question: it has to be
+-- longer than the slowest loading screen and shorter than a real invite, and
+-- when it is wrong it fails silently and looks exactly like the bug. Asking
+-- whether we have EVER seen the roster needs no clock.
+------------------------------------------------------------
+
+-- A roster event that arrives BEFORE PLAYER_LOGIN. The events are registered
+-- at file scope, so this is reachable, and under a time window g_LoginAt was
+-- still 0 - making GetTime() - 0 the client's uptime, the grace long expired,
+-- and the very first roster a "join".
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.groupMembers = 5
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.eq(Priestly_WindowVisible(), false,
+    "a roster arriving before login is not a join either")
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "and the window the player closed stays closed")
+
+-- A loading screen longer than any grace period would have been. The clock is
+-- not consulted at all now, so thirty seconds between login and the roster
+-- changes nothing.
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.time = WoW.time + 300
+WoW.groupMembers = 5
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.eq(Priestly_WindowVisible(), false,
+    "however long the world takes to load, the first roster is not a join")
+H.check(not shown(), "and the window stays closed")
 
 ------------------------------------------------------------
 -- A show asked for during combat happens when combat ends

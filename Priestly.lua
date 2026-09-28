@@ -151,20 +151,23 @@ end
 
 -- ─── State ───────────────────────────────────────────────────────────────────
 local g_IsPriest = false
-local g_LastGroupSize = 0
-local g_LoginAt = 0
-
--- The roster can arrive a moment after PLAYER_LOGIN: GetNumGroupMembers() may
--- still read 0 at login inside a group. A 0-to-n change that soon is the
--- client catching up, not the player joining, and joining is the one thing
--- that reopens a window the player deliberately closed - so without this,
--- logging in already grouped with the window shut reopened it and overwrote
--- the preference.
+-- How many people we have SEEN in the group, or nil for "we have not looked
+-- yet". The difference is the whole point: joining is the one thing that
+-- reopens a window the player deliberately closed, and a join is a 0-to-n
+-- change where the 0 was actually observed.
 --
--- Not measured on this client (AGENTS.md, the in-game list); five seconds is a
--- guess on the safe side - a real invite that soon after login is rare. Same
--- value as Wildly and Magely, which had this first.
-local ROSTER_SETTLE_SECONDS = 5
+-- GetNumGroupMembers() can still read 0 at PLAYER_LOGIN while already in a
+-- group - the roster lands a moment later - so starting this at 0 made that
+-- catch-up look exactly like joining, and logging in already grouped with the
+-- window shut reopened it and overwrote the preference. Every login.
+--
+-- nil rather than a few seconds' grace: the grace period is a guess at the
+-- wrong question. It has to be long enough for the slowest loading screen and
+-- short enough not to swallow a real invite, it is defeated by a roster event
+-- arriving before PLAYER_LOGIN at all, and when it is wrong it fails silently
+-- and looks exactly like the bug it replaced. "Have we ever seen the roster?"
+-- needs no clock and cannot be outrun.
+local g_LastGroupSize = nil
 
 -- ─── What names are we actually matching? ────────────────────────────────────
 --
@@ -529,10 +532,13 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Auto-open if Priest and in a group (or solo mode) - unless the
         -- window was deliberately closed, which is a preference that should
         -- survive a reload.
-        g_LastGroupSize = GetNumGroupMembers()
-        g_LoginAt = GetTime()
+        -- Read, not recorded. What the client says right now is good enough to
+        -- decide whether to open, and wrong as an observation: a 0 here may
+        -- just mean the roster has not arrived, and recording it is what made
+        -- the roster's arrival look like a join.
+        local atLogin = GetNumGroupMembers()
         if g_IsPriest and Priestly_WindowVisible() ~= false
-            and (g_LastGroupSize > 0 or Priestly_ShowSolo())
+            and (atLogin > 0 or Priestly_ShowSolo())
         then
             ui:Open(0.6)
         end
@@ -564,8 +570,9 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Joining a group is the one case that reopens a window the user
         -- closed: that is the addon's advertised behaviour. Any other roster
         -- churn leaves a deliberate close alone.
-        local settling = (GetTime() - g_LoginAt) < ROSTER_SETTLE_SECONDS
-        local joined = (g_LastGroupSize == 0 and n > 0) and not settling
+        -- nil is not 0: the first roster we ever see tells us where we are, it
+        -- does not tell us somebody just invited us.
+        local joined = (g_LastGroupSize == 0 and n > 0)
         g_LastGroupSize = n
         if joined then Priestly_SetWindowVisible(true) end
         if n > 0 and not ui:IsVisible() and g_IsPriest
