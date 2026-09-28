@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- **Changing a setting no longer reopens a window you closed.** Any settings change — the Shadow
+  Protection mode, an instance checkbox, anything — used to bring the window straight back. A
+  window that closed *itself* because there was nothing to show still reopens when a setting gives
+  it rows again.
+- **Turning solo mode on during a fight now works.** It was silently ignored until the fight ended,
+  and then forgotten.
 - **Closing the window now sticks when you log in already in a group.** The game reports your
   group a moment after you log in, and Priestly read that as you having just joined — which is the
   one thing that reopens a window you closed on purpose. So it came back every login, and forgot

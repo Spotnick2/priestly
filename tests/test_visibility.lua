@@ -277,4 +277,65 @@ SlashCmdList["PRIESTLY"]("")
 settle()
 H.check(shown(), "and back open")
 
+------------------------------------------------------------
+-- A settings change does not reopen a window the player closed
+--
+-- Priestly_ForceRebuild runs on EVERY settings change - the shadow mode, an
+-- instance checkbox, adopting another character's settings - and it used to
+-- call ui:Open unconditionally. So closing the window and then touching any
+-- setting brought it straight back.
+--
+-- Wildly's review found this and fixed it there and in Magely. Priestly had
+-- the same code and kept it, which is the second defect this duplication has
+-- produced (LibGroupBuffs#22).
+------------------------------------------------------------
+
+setup(2)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(shown(), "the window is open to begin with")
+
+T.CloseUI(true)                    -- the player closes it
+settle()
+H.check(not shown(), "and closed when the player says so")
+Priestly_ForceRebuild()
+settle()
+H.check(not shown(), "a settings change does not bring it back")
+H.eq(Priestly_WindowVisible(), false, "and the preference is untouched")
+
+-- A window that closed ITSELF - no rows to show - is not a close the player
+-- asked for, so a setting that could give it rows again may reopen it.
+setup(0)
+Priestly_SetWindowVisible(true)
+T.CloseUI(false)                   -- auto-close, not manual
+settle()
+H.check(not shown(), "an empty window closes itself")
+Priestly_ShowSolo = function() return true end
+Priestly_ForceRebuild()
+settle()
+H.check(shown(), "and a setting that gives it rows again reopens it")
+
+------------------------------------------------------------
+-- The solo toggle is honoured in combat, not dropped
+--
+-- ui:Open and ui:Close both remember what was asked and carry it out when the
+-- fight ends, so there is nothing to protect against here - and returning
+-- early meant ticking the box mid-fight did nothing at all, silently. Wildly
+-- and Magely already worked this way.
+------------------------------------------------------------
+
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.inCombat = true
+Priestly_OnSoloToggle(true)
+settle()
+H.eq(Priestly_WindowVisible(), true,
+    "ticking solo mode in combat is recorded, not dropped")
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+settle()
+H.check(shown(), "and the window it asked for arrives when the fight ends")
+
 H.done("test_visibility")

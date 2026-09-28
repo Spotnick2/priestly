@@ -473,15 +473,41 @@ function Priestly_ScheduleRefresh()
     ui:ScheduleRefresh()
 end
 
--- Force a full UI rebuild (used when config changes affect layout)
+-- Would the window open by itself right now? In a group, or solo mode - and
+-- never over a deliberate close. Same shape as Wildly's and Magely's.
+local function WantsOpen()
+    if Priestly_WindowVisible() == false then return false end
+    return GetNumGroupMembers() > 0 or Priestly_ShowSolo()
+end
+
+-- Force a full UI rebuild (used when config changes affect layout).
+--
+-- This is called on EVERY settings change, and it used to open the window
+-- unconditionally - so changing any setting reopened a window the player had
+-- deliberately closed. That is the bug Wildly's review found and fixed there
+-- and in Magely; Priestly had the same code and kept it (LibGroupBuffs#22).
+--
+-- A window that closed ITSELF because a setting left it no rows is not a close
+-- the player asked for, so the next setting that could give it rows reopens
+-- it - which is what WantsOpen answers.
+--
+-- In combat: an open window is left to the library, which rebuilds it at
+-- combat end. A closed one that would open has nothing recorded for combat end
+-- to act on, so it asks ui:Open, which remembers a show made under lockdown.
 function Priestly_ForceRebuild()
-    if InCombatLockdown() then return end
-    ui:Open(0.1)
+    if ui:IsVisible() then
+        if not InCombatLockdown() then ui:Open(0.1) end
+    elseif WantsOpen() then
+        ui:Open(0.1)
+    end
 end
 
 -- Called when the solo checkbox is toggled in config
+-- Not refused in combat: ui:Open and ui:Close both remember what was asked and
+-- carry it out when the fight ends, so ticking the box mid-fight is honoured
+-- rather than lost. Wildly and Magely already worked this way; Priestly
+-- returned early and dropped it (LibGroupBuffs#22).
 function Priestly_OnSoloToggle(enabled)
-    if InCombatLockdown() then return end
     if enabled then
         if not ui:IsVisible() and g_IsPriest then
             Priestly_SetWindowVisible(true)
