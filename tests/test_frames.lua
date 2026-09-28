@@ -527,6 +527,36 @@ H.check(tip:find("in your bags"), "and how many you have: " .. tip)
 H.check(tip:find("group Prayers"), "and what consumes it: " .. tip)
 runScript(candle, "OnLeave")
 
+------------------------------------------------------------
+-- A rank Priestly cannot read hides the candle, rather than naming one
+--
+-- Rank decides WHICH candle a Prayer burns: rank 1 a Holy Candle, higher a
+-- Sacred one. The subtext it is read from is localized, so a client that
+-- spells the number gives nothing to match - and falling back to rank 1 used
+-- to name the Holy Candle to a priest who burns Sacred ones, counting the
+-- wrong item in their bags with nothing saying why (#64).
+------------------------------------------------------------
+
+setup()
+WoW.Know(21562, "Prayer of Fortitude", "Rang zwei")
+WoW.Know(1706, "Levitate")
+T.RefreshSpellData()
+T.UpdateUI()
+H.eq(T.GetPrayerRank(), nil, "a rank written in words reads as unknown")
+H.eq(T.footerButton(17028), nil, "so no Holy Candle is offered")
+H.eq(T.footerButton(17029), nil, "and no Sacred Candle either - we do not know which")
+H.check(T.footerButton(17056) ~= nil,
+    "while Levitate's feather, which does not depend on a rank, is still there")
+
+-- And it comes back the moment the client says something readable.
+setup()
+WoW.Know(21562, "Prayer of Fortitude", "Rank 2")
+WoW.Know(1706, "Levitate")
+T.RefreshSpellData()
+T.UpdateUI()
+H.eq(T.GetPrayerRank(), 2, "a readable rank reads")
+H.check(T.footerButton(17029) ~= nil, "and the right candle is offered again")
+
 WoW.clearTooltip()
 runScript(feather, "OnEnter")
 tip = WoW.tooltipText()

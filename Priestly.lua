@@ -199,6 +199,17 @@ function Priestly_PrintSpellReport()
                 FROM_NOTE[form.from] or "", form.known and "" or " - not learned"))
         end
     end
+    if report.ranks then
+        for _, r in ipairs(report.ranks) do
+            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                "  |cffff6666rank unreadable|r  %s  - the client says \"%s\", "
+                .. "which carries no number Priestly can read",
+                tostring(r.name), tostring(r.subtext)))
+        end
+        DEFAULT_CHAT_FRAME:AddMessage("  Rank decides which candle a Prayer "
+            .. "burns, so the reagent counter stays hidden rather than count "
+            .. "the wrong one. Please report this with the line above.")
+    end
     if report.unresolved > 0 then
         DEFAULT_CHAT_FRAME:AddMessage("  |cffff6666" .. report.unresolved
             .. " name(s) could not be read from the client.|r Buffs Priestly cannot name are "
@@ -275,16 +286,26 @@ end
 
 -- ─── Data ────────────────────────────────────────────────────────────────────
 
--- Returns highest rank of Prayer of Fortitude known (0 if none)
+-- Highest rank of Prayer of Fortitude known: 0 if none, nil if the client
+-- described the rank in a way we could not read (see GetCandleInfo).
 local function GetPrayerRank()
     local fort = DEFS[1]
     if not fort.hasGroup then return 0 end
-    return API.GetSpellRank(fort.grp)
+    return (API.GetSpellRank(fort.grp))
 end
 
 -- Determine which candle item ID and icon to use
+-- Which candle a Prayer consumes, decided from its RANK - rank 1 burns a Holy
+-- Candle, higher ranks a Sacred one.
+--
+-- A nil rank means the client described the rank in words we could not read a
+-- number out of, so we do not know which. Showing nothing is the honest answer
+-- and the safe one: naming a candle on a guess counts the wrong item in the
+-- player's bags and reads as the addon being confused, with nothing saying
+-- why. /priestly help says what the client actually told us (#64).
 local function GetCandleInfo()
     local rank = GetPrayerRank()
+    if rank == nil then return nil, nil, nil end
     if rank <= 0 then return nil, nil, nil end
     if rank == 1 then
         return HOLY_CANDLE_ID, ItemIcon(HOLY_CANDLE_ID), "Holy Candle"
