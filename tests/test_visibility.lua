@@ -160,6 +160,62 @@ WoW.dispatch("GROUP_ROSTER_UPDATE")
 settle()
 H.check(shown(), "a real invite later in the session still reopens it")
 H.eq(Priestly_WindowVisible(), true, "and that is remembered")
+------------------------------------------------------------
+-- Logging in alone and THEN being invited still reopens the window
+--
+-- The regression the roster guard nearly shipped. "Have we ever seen the
+-- roster?" answers the login catch-up correctly, but on its own it costs the
+-- thing it was protecting: log in alone, get invited, and if the client sent
+-- no zero-member roster in between, the invite IS the first observation - so
+-- it would not count as joining, and the window would stay shut for the rest
+-- of the session.
+--
+-- GROUP_JOINED is the client saying you joined rather than us inferring it.
+-- Note there is deliberately NO zero-member roster update here: that is the
+-- whole point, and a test that sent one would pass without the event.
+------------------------------------------------------------
+
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")        -- a fresh session: nothing seen yet
+settle()
+H.check(not shown(), "logging in alone with the window closed leaves it closed")
+
+WoW.groupMembers = 3
+WoW.dispatch("GROUP_JOINED")
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(shown(), "and an invite after it reopens the window")
+H.eq(Priestly_WindowVisible(), true, "and is remembered as the player's preference")
+
+-- The event does not make the catch-up roster a join: it is not sent for one.
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.groupMembers = 5
+WoW.dispatch("GROUP_ROSTER_UPDATE")   -- no GROUP_JOINED: the client caught up
+settle()
+H.check(not shown(), "a roster catching up without a join event is still not a join")
+H.eq(Priestly_WindowVisible(), false, "and the close still stands")
+
+-- And the latch is spent, not sticky: the next roster change is ordinary
+-- churn, not a second join.
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.groupMembers = 2
+WoW.dispatch("GROUP_JOINED")
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+Priestly_SetWindowVisible(false)
+T.CloseUI(true)
+settle()
+WoW.groupMembers = 3
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.check(not shown(), "a third member arriving is not another join")
 
 ------------------------------------------------------------
 -- The two ways a few seconds' grace would still have got this wrong
