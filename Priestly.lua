@@ -183,8 +183,22 @@ local FROM_NOTE = {
     unknown    = " (provenance unknown)",
 }
 
+-- Forward-declared: the report and the once-a-session warning both ask for
+-- the rank, and both are written above the function that reads it. A local
+-- declared further down is a GLOBAL inside a closure written above it, which
+-- the strict-global stub catches at the first call rather than at load.
+local GetPrayerRank
+
 function Priestly_PrintSpellReport()
     if not DEFAULT_CHAT_FRAME then return end
+    -- Asked for here, before the report is built. Whether a rank could be
+    -- read is recorded as a SIDE EFFECT of reading it, and the only thing
+    -- that reads one is the reagent footer - which is not drawn while the
+    -- window is shut. So a solo priest whose candle vanished, who opens no
+    -- window and types /priestly help to find out why, would get a report
+    -- with nothing in it about the rank: silent in exactly the case someone
+    -- is asking.
+    GetPrayerRank()
     local report = engine:SpellReport()
     local API = Priestly.API
     DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Spell names, as this client gave them:")
@@ -222,6 +236,25 @@ end
 -- Deliberately not keyed on the locale - resolution can fail on an English
 -- client too, and a German client whose names all resolved is fine.
 local g_WarnedUnresolved = false
+local g_WarnedRank = false
+
+-- Said once a session when a rank could not be read, on the same footing as
+-- an unresolved name. The reagent counter simply stops existing otherwise,
+-- and "the footer disappeared" is no easier to act on than "the count looks
+-- wrong" - the whole argument for not guessing the candle applies to not
+-- staying quiet about it either.
+local function WarnIfRankUnreadable()
+    if g_WarnedRank or not DEFAULT_CHAT_FRAME then return end
+    if not g_IsPriest then return end
+    local report = engine:SpellReport()
+    if not report.ranks then return end
+    g_WarnedRank = true
+    DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Could not read which rank "
+        .. "of a group Prayer you know.|r Rank decides which candle it burns, so the reagent "
+        .. "counter is hidden rather than counting the wrong one. |cffffffff/priestly help|r "
+        .. "has the details.")
+end
+
 local function WarnIfNamesUnresolved()
     if g_WarnedUnresolved or not DEFAULT_CHAT_FRAME then return end
     -- Gated HERE rather than at each caller, because the callers are events.
@@ -233,6 +266,10 @@ local function WarnIfNamesUnresolved()
     -- until login, which makes it the signal for both that and the addon
     -- having nothing to say to a non-priest.
     if not g_IsPriest then return end
+    -- Same priming as the report: nothing has read a rank unless the footer
+    -- has been drawn.
+    GetPrayerRank()
+    WarnIfRankUnreadable()
     local report = engine:SpellReport()
     for _, entry in ipairs(report) do
         for _, form in ipairs(entry.forms) do
@@ -288,7 +325,7 @@ end
 
 -- Highest rank of Prayer of Fortitude known: 0 if none, nil if the client
 -- described the rank in a way we could not read (see GetCandleInfo).
-local function GetPrayerRank()
+function GetPrayerRank()
     local fort = DEFS[1]
     if not fort.hasGroup then return 0 end
     return (API.GetSpellRank(fort.grp))
