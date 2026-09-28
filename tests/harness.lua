@@ -77,8 +77,16 @@ function H.loadAddon()
     local L = dofile("tests/libfiles.lua")
     local ok, load = pcall(L.resolve, root)
     if not ok then
-        error(tostring(load) .. ". Check LibGroupBuffs out next to this repository "
-            .. "(../LibGroupBuffs) or set LIBGROUPBUFFS to its path.", 2)
+        -- Only a MISSING checkout gets the "check your checkout" advice.
+        -- resolve also fails now when a texture is absent or undeclared, and
+        -- telling someone with a perfectly good clone to re-clone it sends
+        -- them away from the one line that says what is actually wrong.
+        local why = tostring(load)
+        if why:find("not found in", 1, true) or why:find(H.ENTRY or "\0", 1, true) then
+            why = why .. ". Check LibGroupBuffs out next to this repository "
+                .. "(../LibGroupBuffs) or set LIBGROUPBUFFS to its path."
+        end
+        error(why, 2)
     end
     for _, file in ipairs(load) do run(root .. "/" .. file) end
     for _, file in ipairs(H.tocFiles()) do run(file) end

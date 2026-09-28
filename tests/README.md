@@ -31,7 +31,15 @@ vendored copy to fall back to, on purpose.
 
 ## How it works
 
-- **`wow_stubs.lua`** — a minimal WoW: Forever API mock: chainable
+- **`wow_stubs.lua`** — Priestly's thin layer over the **shared** stub in
+  `../LibGroupBuffs/tests/wow_stubs.lua`. The client surface itself lives
+  there, so every absence and refusal measured on this client is measured
+  once, for Priestly, Wildly and Magely. What stays local is Priestly's alone:
+  a priest as the default unit, the globals this addon owns, the Encounter
+  Journal functions only its probe calls, and the journal's defaults re-applied
+  on every `WoW.reset()`. **Add a new global here; look for an API's stub in
+  the library.**
+- **The shared stub** — a minimal WoW: Forever API mock: chainable
   `CreateFrame` whose frames *record their secure attributes*, a `C_Timer` that
   collects callbacks instead of waiting, `C_UnitAuras` backed by an injectable
   per-unit aura table with a secrecy switch, `C_Spell` / `C_SpellBook` backed
@@ -64,8 +72,15 @@ vendored copy to fall back to, on purpose.
 
 ## The stub is an allowlist, and it must model absences
 
-`wow_stubs.lua` fails the run on the read of any global it does not define, so it is the list of
-APIs verified present on this client. That only works if it is also honest about what is *missing*
+The shared stub fails the run on the read of any global it does not define, so it is the list of
+APIs verified present on this client. Priestly's own globals are added on top of it, in the local
+`wow_stubs.lua`, with `WoW.allowGlobal`.
+
+Anything the addon reads **guarded** — `if Priestly_OpenConfig then`, which exists because
+`PriestlyConfig.lua` can fail to load while `Priestly.lua` carries on — has to be allowed as nil
+there, or the guard throws inside the stub and the branch it protects can never be tested.
+`tests/test_bridge.lua` scans the source for those guards and checks them against the list, so the
+two cannot drift. That only works if it is also honest about what is *missing*
 and about behaviour that differs:
 
 - `MouseIsOver` is deliberately **not** defined — Forever removed it. Defining it is how a call to

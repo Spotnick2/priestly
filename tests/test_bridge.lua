@@ -299,7 +299,12 @@ do
 
         -- Now Priestly's own, as its TOC does.
         local L = dofile("tests/libfiles.lua")
-        for _, file in ipairs(select(2, pcall(L.resolve, root))) do
+        -- Not `ipairs(select(2, pcall(...)))`: on failure that is a STRING,
+        -- and ipairs then throws "table expected, got string" over the real
+        -- message, which is the only one that says what went wrong.
+        local resolved, files = pcall(L.resolve, root)
+        H.check(resolved, "the library resolves: " .. tostring(files))
+        for _, file in ipairs(resolved and files or {}) do
             loadfile(root .. "/" .. file)()
         end
         local _, after = LibStub:GetLibrary("LibGroupBuffs-1.0")
@@ -329,5 +334,45 @@ H.eq(frames, 0, "and creates no frames")
 CreateFrame = realCreateFrame
 
 LibStub, Priestly = savedLibStub, savedPriestly
+
+------------------------------------------------------------
+-- Every hook the source reads GUARDED is a global the stub allows
+--
+-- `if Priestly_OpenConfig then` exists because PriestlyConfig.lua can fail to
+-- load while Priestly.lua carries on. Under the strict-global stub a name not
+-- on the allow-list does not read as nil - it throws - so a guard whose name
+-- is missing can never be exercised, and the branch it protects is untested
+-- while looking covered. The list and the guards are checked against each
+-- other here rather than kept in step by hand.
+------------------------------------------------------------
+
+-- The source JOINED, not line by line, and every boolean position - not
+-- just `if X` and `X and`. The first version of this scan matched only those
+-- two forms on single lines, and missed both
+-- `not Priestly_ShowClickHints or Priestly_ShowClickHints()` and a guard whose
+-- `and` sits on the next line. A check that half-covers the thing it claims
+-- to make impossible is worse than none, because AGENTS.md and the README
+-- now both say the drift cannot happen.
+local guarded = {}
+for file, lines in pairs(SOURCES) do
+    local joined = table.concat(lines, " ")
+    local function find(pattern)
+        for name in joined:gmatch(pattern) do guarded[name] = file end
+    end
+    find("[^%w_](Priestly_[%a_][%w_]*)%s+and[%s(]")
+    find("[^%w_](Priestly_[%a_][%w_]*)%s+or[%s(]")
+    find("[^%w_](Priestly_[%a_][%w_]*)%s+then[%s(]")
+    find("%f[%w_]not%s+(Priestly_[%a_][%w_]*)")
+    find("%f[%w_]if%s+(Priestly_[%a_][%w_]*)")
+    find("%f[%w_]elseif%s+(Priestly_[%a_][%w_]*)")
+end
+local nGuarded = 0
+for name, file in pairs(guarded) do
+    nGuarded = nGuarded + 1
+    H.check(WoW.hostGlobals[name],
+        file .. " reads " .. name .. " guarded, so tests/wow_stubs.lua must allow it as nil")
+end
+H.check(nGuarded >= 5,
+    "and the scan found the guards rather than nothing: " .. nGuarded)
 
 H.done("test_bridge")

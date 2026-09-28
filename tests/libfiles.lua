@@ -45,9 +45,24 @@ end
 
 -- Returns load (Lua files, in order) and ship (every required file), both as
 -- paths relative to root. Raises an error naming any missing file.
+-- Named here rather than globbed, so a texture that stops being drawn stops
+-- being shipped, and one that is added has to be added deliberately. This is
+-- a third copy of a list the library also keeps, so `resolve` below reads the
+-- library's own source and checks the two agree BOTH ways: a texture a newer
+-- revision starts drawing is one this list does not have, and a dev deploy
+-- would quietly leave it out and draw the window with a hole in it.
+L.MEDIA = {
+    "Media/body_mask.tga", "Media/body_mask_small.tga",
+    "Media/rim5.tga", "Media/rim5_small.tga",
+    "Media/rim_dark5.tga", "Media/rim_dark5_small.tga",
+    "Media/shadow.tga", "Media/shadow_small.tga",
+    "Media/bar_mask.tga", "Media/bar_fill.tga", "Media/bar_edge.tga",
+    "Media/gloss.tga", "Media/grain.tga", "Media/sheen2.tga",
+}
+
 function L.resolve(root, entry)
     entry = entry or L.ENTRY
-    local load, ship, seen = {}, {}, {}
+    local load, ship, seen, sources = {}, {}, {}, {}
 
     local function visit(xmlRel)
         if seen[xmlRel] then return end
@@ -62,9 +77,11 @@ function L.resolve(root, entry)
             if tag == "Include" then
                 visit(rel)
             elseif tag == "Script" then
-                if not read(root .. "/" .. rel) then
+                local src = read(root .. "/" .. rel)
+                if not src then
                     error("LibGroupBuffs: " .. xmlRel .. " lists " .. rel .. ", which is not in " .. root, 0)
                 end
+                sources[rel] = src
                 load[#load + 1] = rel
                 ship[#ship + 1] = rel
             end
@@ -72,6 +89,55 @@ function L.resolve(root, entry)
     end
 
     visit(entry)
+
+    -- Textures are not in any XML: the client loads them by PATH, when the
+    -- glass material draws. They still have to be in the addon folder, so a
+    -- dev deploy copies them like everything else - and a missing one is a
+    -- window drawn with holes in it, which no Lua error announces.
+    local listed = {}
+    for _, rel in ipairs(L.MEDIA) do
+        if not read(root .. "/" .. rel) then
+            error("LibGroupBuffs: " .. rel .. " is missing from " .. root
+                .. " - the glass material draws it", 0)
+        end
+        listed[rel] = true
+        ship[#ship + 1] = rel
+    end
+
+    -- The other direction, which is the one that goes wrong quietly. Nothing
+    -- above notices a texture the library ADDED: every file this list names
+    -- exists, so it passes, while the new one is never copied. So read what
+    -- the library's own source draws and require this list to cover it. Both
+    -- spellings the material uses: `MEDIA .. "name"` at the draw, and the
+    -- `= "name", <thing>Margin` entries in Glass.SIZES.
+    local drawn = {}
+    for _, rel in ipairs(load) do
+        -- Comments stripped first: a commented-out draw is not a draw, and
+        -- leaving one in would demand a texture nothing uses and fail every
+        -- caller of resolve - the harness, run.ps1, deploy.ps1 and CI.
+        local src = (sources[rel] or ""):gsub("%-%-[^\n]*", "")
+        local function seen(pattern)
+            for name in src:gmatch(pattern) do drawn["Media/" .. name .. ".tga"] = rel end
+        end
+        -- Every form the material names a texture in. The first version of
+        -- this knew only the first two and so missed three of the fourteen,
+        -- including bar_mask - which is passed to Mask() as an argument, the
+        -- form the library uses most.
+        seen('MEDIA %.%. "([%w_]+)"')
+        seen('= "([%w_]+)", [%w]*[Mm]argin')
+        seen('Mask%([^,]+, "([%w_]+)"')
+        seen('mask%s*=%s*"([%w_]+)"')
+        seen('rim%s*=%s*"([%w_]+)"')
+        seen('dark%s*=%s*"([%w_]+)"')
+        seen('shadow%s*=%s*"([%w_]+)"')
+    end
+    for rel, by in pairs(drawn) do
+        if not listed[rel] then
+            error("LibGroupBuffs: " .. by .. " draws " .. rel
+                .. ", which tests/libfiles.lua does not ship - add it to L.MEDIA", 0)
+        end
+    end
+
     return load, ship
 end
 
