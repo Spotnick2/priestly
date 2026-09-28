@@ -571,7 +571,7 @@ local function defaultsOnlyCharacter()
     for key, value in pairs(TC.DEFAULTS) do t[key] = value end
     t.flavor = "forever"
     t.shadowInstances = {}
-    for _, entry in ipairs(TC.INSTANCE_DB) do t.shadowInstances[entry[1]] = entry[3] end
+    for _, entry in ipairs(TC.INSTANCE_DB) do t.shadowInstances[entry.name] = entry.default end
     return t
 end
 
@@ -590,7 +590,7 @@ H.eq(PriestlyAccountDB.frameAlpha, 0.5, "so the configured character still seeds
 WoW.reset()
 PriestlyAccountDB = nil
 local justOneInstance = defaultsOnlyCharacter()
-justOneInstance.shadowInstances[TC.INSTANCE_DB[1][1]] = not TC.INSTANCE_DB[1][3]
+justOneInstance.shadowInstances[TC.INSTANCE_DB[1].name] = not TC.INSTANCE_DB[1].default
 PriestlyDB = justOneInstance
 Priestly_EnsureDefaults()
 H.check(PriestlyAccountDB[TC.SEED_MARKER] ~= nil,
@@ -616,7 +616,7 @@ WoW.reset()
 PriestlyAccountDB, PriestlyDB = nil, defaultsOnlyCharacter()
 Priestly_EnsureDefaults()                         -- the alt
 Priestly_SetConfig("frameAlpha", 0.23)            -- chosen in the options panel
-Priestly_SetShadowInstance(TC.INSTANCE_DB[1][1], not TC.INSTANCE_DB[1][3])
+Priestly_SetShadowInstance(TC.INSTANCE_DB[1].name, not TC.INSTANCE_DB[1].default)
 
 PriestlyDB = configuredCharacter()                -- the old profile arrives
 before = #WoW.messages
@@ -662,8 +662,8 @@ H.eq(PriestlyAccountDB[TC.SEED_MARKER], nil, "nothing seeded over it")
 WoW.reset()
 PriestlyAccountDB, PriestlyDB = nil, defaultsOnlyCharacter()
 Priestly_EnsureDefaults()
-local firstInstance = TC.INSTANCE_DB[1][1]
-Priestly_SetShadowInstance(firstInstance, TC.INSTANCE_DB[1][3])
+local firstInstance = TC.INSTANCE_DB[1].name
+Priestly_SetShadowInstance(firstInstance, TC.INSTANCE_DB[1].default)
 PriestlyDB = configuredCharacter({ frameAlpha = 0.66 })
 Priestly_EnsureDefaults()
 H.eq(PriestlyAccountDB.frameAlpha, TC.DEFAULTS.frameAlpha,

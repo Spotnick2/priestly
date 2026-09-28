@@ -265,81 +265,81 @@ end
 -- instead, which is both verifiable and locale-proof.
 local INSTANCE_DB = {
     -- ── Raids, by size ───────────────────────────────────────────────
-    { "The Barrow Deeps", "Raids", true,
-      "10 player. NEW in Forever. Encounters are not catalogued yet - pre-checked because a raid "
+    { name = "The Barrow Deeps", category = "Raids", default = true,
+      tooltip = "10 player. NEW in Forever. Encounters are not catalogued yet - pre-checked because a raid "
       .. "is where missing Shadow Protection costs the most, while an unnecessary row costs "
       .. "little." },
-    { "Hyjal Summit",    "Raids", true,
-      "20 player. NEW in Forever. Encounters are not catalogued yet - pre-checked for the same "
+    { name = "Hyjal Summit", category = "Raids", default = true,
+      tooltip = "20 player. NEW in Forever. Encounters are not catalogued yet - pre-checked for the same "
       .. "reason. Note this is Forever's own raid, not the TBC one of the same name." },
-    { "Onyxia's Lair",   "Raids", false,
-      "40 player. Primarily Fire damage (Breath, Fireball)." },
+    { name = "Onyxia's Lair", category = "Raids", default = false,
+      tooltip = "40 player. Primarily Fire damage (Breath, Fireball)." },
 
     -- ── Dungeons, by level ───────────────────────────────────────────
-    { "Ragefire Chasm",  "Dungeons", true,
-      "Levels 13-18. Jergosh the Invoker casts Shadow Bolt and Curse of Weakness." },
-    { "The Hall of Thanes", "Dungeons", false,
-      "Levels 13-18. NEW in Forever. Encounters are not catalogued yet." },
-    { "Ruins of Lordaeron", "Dungeons", false,
-      "Levels 15-20. NEW in Forever. Encounters are not catalogued yet." },
-    { "Wailing Caverns", "Dungeons", false,
-      "Levels 15-25. Primarily Nature and poison damage." },
-    { "The Deadmines",   "Dungeons", false,
-      "Levels 18-23. Primarily physical and Fire damage." },
-    { "Shadowfang Keep", "Dungeons", true,
-      "Levels 22-30. Arugal (Shadow Bolt, Void Bolt), Wolf Master Nandos, and shadow casters "
+    { name = "Ragefire Chasm", category = "Dungeons", default = true,
+      tooltip = "Levels 13-18. Jergosh the Invoker casts Shadow Bolt and Curse of Weakness." },
+    { name = "The Hall of Thanes", category = "Dungeons", default = false,
+      tooltip = "Levels 13-18. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Ruins of Lordaeron", mapID = 2999, category = "Dungeons", default = false,
+      tooltip = "Levels 15-20. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Wailing Caverns", category = "Dungeons", default = false,
+      tooltip = "Levels 15-25. Primarily Nature and poison damage." },
+    { name = "The Deadmines", category = "Dungeons", default = false,
+      tooltip = "Levels 18-23. Primarily physical and Fire damage." },
+    { name = "Shadowfang Keep", category = "Dungeons", default = true,
+      tooltip = "Levels 22-30. Arugal (Shadow Bolt, Void Bolt), Wolf Master Nandos, and shadow casters "
       .. "throughout." },
-    { "The Stockade",    "Dungeons", false,
-      "Levels 22-30. Primarily physical damage." },
-    { "Excavation Site: Wetlands", "Dungeons", false,
-      "Levels 24-29. NEW in Forever. Encounters are not catalogued yet." },
-    { "Blackfathom Deeps", "Dungeons", false,
-      "Levels 24-32. Twilight Lord Kelris casts Mind Blast; the rest is Nature and Frost." },
-    { "City of Dalaran", "Dungeons", false,
-      "Levels 28-33. NEW in Forever. Encounters are not catalogued yet." },
-    { "Scarlet Monastery", "Dungeons", true,
-      "Levels 28-45, all four wings. Bloodmage Thalnos (Shadow Bolt) in the Graveyard; the "
+    { name = "The Stockade", category = "Dungeons", default = false,
+      tooltip = "Levels 22-30. Primarily physical damage." },
+    { name = "Excavation Site: Wetlands", category = "Dungeons", default = false,
+      tooltip = "Levels 24-29. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Blackfathom Deeps", category = "Dungeons", default = false,
+      tooltip = "Levels 24-32. Twilight Lord Kelris casts Mind Blast; the rest is Nature and Frost." },
+    { name = "City of Dalaran", category = "Dungeons", default = false,
+      tooltip = "Levels 28-33. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Scarlet Monastery", category = "Dungeons", default = true,
+      tooltip = "Levels 28-45, all four wings. Bloodmage Thalnos (Shadow Bolt) in the Graveyard; the "
       .. "Armory and Cathedral are physical. One entry because GetInstanceInfo() reports every "
       .. "wing under the same name." },
-    { "Gnomeregan",      "Dungeons", false,
-      "Levels 29-38. Primarily Nature, Fire and mechanical damage." },
-    { "Razorfen Kraul",  "Dungeons", false,
-      "Levels 30-40. Primarily Nature and poison damage." },
-    { "The Drowned City", "Dungeons", false,
-      "Levels 35-40. NEW in Forever. Encounters are not catalogued yet." },
-    { "Krol'Dok Stronghold", "Dungeons", false,
-      "Levels 40-45. NEW in Forever. Encounters are not catalogued yet." },
-    { "Razorfen Downs",  "Dungeons", true,
-      "Levels 40-50. Amnennar the Coldbringer deals Shadow and Frost damage; the rest is Nature." },
-    { "Uldaman",         "Dungeons", false,
-      "Levels 42-52. Primarily physical, Nature and Arcane damage." },
-    { "Zul'Farrak",      "Dungeons", true,
-      "Levels 44-54. Witch Doctor Zum'rah casts Shadow Bolt; the rest is Nature and physical." },
-    { "Maraudon",        "Dungeons", false,
-      "Levels 45-57, all entrances. Princess Theradras has a Shadow component; the rest is "
+    { name = "Gnomeregan", category = "Dungeons", default = false,
+      tooltip = "Levels 29-38. Primarily Nature, Fire and mechanical damage." },
+    { name = "Razorfen Kraul", category = "Dungeons", default = false,
+      tooltip = "Levels 30-40. Primarily Nature and poison damage." },
+    { name = "The Drowned City", category = "Dungeons", default = false,
+      tooltip = "Levels 35-40. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Krol'Dok Stronghold", category = "Dungeons", default = false,
+      tooltip = "Levels 40-45. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Razorfen Downs", category = "Dungeons", default = true,
+      tooltip = "Levels 40-50. Amnennar the Coldbringer deals Shadow and Frost damage; the rest is Nature." },
+    { name = "Uldaman", category = "Dungeons", default = false,
+      tooltip = "Levels 42-52. Primarily physical, Nature and Arcane damage." },
+    { name = "Zul'Farrak", category = "Dungeons", default = true,
+      tooltip = "Levels 44-54. Witch Doctor Zum'rah casts Shadow Bolt; the rest is Nature and physical." },
+    { name = "Maraudon", category = "Dungeons", default = false,
+      tooltip = "Levels 45-57, all entrances. Princess Theradras has a Shadow component; the rest is "
       .. "Nature. One entry: GetInstanceInfo() does not distinguish the entrances." },
-    { "Alcaz Prison",    "Dungeons", false,
-      "Levels 48-53. NEW in Forever. Encounters are not catalogued yet." },
-    { "The Temple of Atal'Hakkar", "Dungeons", true,
-      "Levels 50-60. Shade of Eranikus (Shadow Bolt Volley), Jammal'an the Prophet (Shadow "
+    { name = "Alcaz Prison", category = "Dungeons", default = false,
+      tooltip = "Levels 48-53. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "The Temple of Atal'Hakkar", category = "Dungeons", default = true,
+      tooltip = "Levels 50-60. Shade of Eranikus (Shadow Bolt Volley), Jammal'an the Prophet (Shadow "
       .. "Bolt). Known to players as the Sunken Temple." },
-    { "Blackrock Depths", "Dungeons", false,
-      "Levels 52-60. Ambassador Flamelash and scattered shadow casters. Generally not required." },
-    { "Blackrock Spire", "Dungeons", false,
-      "Levels 55-60, Lower and Upper. Some shadow casters, generally not required. One entry "
+    { name = "Blackrock Depths", category = "Dungeons", default = false,
+      tooltip = "Levels 52-60. Ambassador Flamelash and scattered shadow casters. Generally not required." },
+    { name = "Blackrock Spire", category = "Dungeons", default = false,
+      tooltip = "Levels 55-60, Lower and Upper. Some shadow casters, generally not required. One entry "
       .. "because both halves share an instance name." },
-    { "Blackmaw Hold",   "Dungeons", false,
-      "Levels 55-60. NEW in Forever. Encounters are not catalogued yet." },
-    { "Dire Maul",       "Dungeons", true,
-      "Levels 58-60, all wings. Immol'thar (Shadow Bolt, Portal of Immol'thar); the West wing "
+    { name = "Blackmaw Hold", category = "Dungeons", default = false,
+      tooltip = "Levels 55-60. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Dire Maul", category = "Dungeons", default = true,
+      tooltip = "Levels 58-60, all wings. Immol'thar (Shadow Bolt, Portal of Immol'thar); the West wing "
       .. "warlocks cast Shadow throughout." },
-    { "Scholomance",     "Dungeons", true,
-      "Levels 58-60. Darkmaster Gandling, Rattlegore, and heavy shadow trash throughout." },
-    { "Stratholme",      "Dungeons", true,
-      "Levels 58-60, both sides. Baron Rivendare (Shadow Bolt), Baroness Anastari (Shadow Bolt), "
+    { name = "Scholomance", category = "Dungeons", default = true,
+      tooltip = "Levels 58-60. Darkmaster Gandling, Rattlegore, and heavy shadow trash throughout." },
+    { name = "Stratholme", category = "Dungeons", default = true,
+      tooltip = "Levels 58-60, both sides. Baron Rivendare (Shadow Bolt), Baroness Anastari (Shadow Bolt), "
       .. "undead shadow casters throughout." },
-    { "Shaper's Terrace", "Dungeons", false,
-      "Levels 58-60. NEW in Forever. Encounters are not catalogued yet." },
+    { name = "Shaper's Terrace", category = "Dungeons", default = false,
+      tooltip = "Levels 58-60. NEW in Forever. Encounters are not catalogued yet." },
 }
 
 -- ─── Ensure defaults ────────────────────────────────────────────────────────
@@ -371,7 +371,7 @@ local function LooksConfigured(t)
     if t.pos ~= nil then return true end
     if type(t.shadowInstances) == "table" then
         local default = {}
-        for _, entry in ipairs(INSTANCE_DB) do default[entry[1]] = entry[3] end
+        for _, entry in ipairs(INSTANCE_DB) do default[entry.name] = entry.default end
         for name, tracked in pairs(t.shadowInstances) do
             -- A name this build does not know is a TBC-era choice, and the
             -- player made it; anything else counts only if it differs.
@@ -539,7 +539,7 @@ function Priestly_EnsureDefaults()
     -- about, and the durations it learned, neither of which mean anything here.
     if PriestlyAccountDB.flavor ~= FLAVOR then
         local known = {}
-        for _, entry in ipairs(INSTANCE_DB) do known[entry[1]] = true end
+        for _, entry in ipairs(INSTANCE_DB) do known[entry.name] = true end
         for name in pairs(PriestlyAccountDB.shadowInstances) do
             if not known[name] then PriestlyAccountDB.shadowInstances[name] = nil end
         end
@@ -556,8 +556,8 @@ function Priestly_EnsureDefaults()
 
     -- Backfill instances added since this profile was written
     for _, entry in ipairs(INSTANCE_DB) do
-        if PriestlyAccountDB.shadowInstances[entry[1]] == nil then
-            PriestlyAccountDB.shadowInstances[entry[1]] = entry[3]
+        if PriestlyAccountDB.shadowInstances[entry.name] == nil then
+            PriestlyAccountDB.shadowInstances[entry.name] = entry.default
         end
     end
 
@@ -615,6 +615,29 @@ local g_InShadowInstance = false
 -- session rather than on every zone-in.
 local g_ReportedUnknown = {}
 
+-- Which INSTANCE_DB entry we are standing in, by the client's own id where
+-- we have one and by name otherwise.
+--
+-- The id is the point of the exercise: it is identical in every locale, and a
+-- French client returns French instance names, so name matching has been
+-- broken for everyone not playing in English since the feature existed. It is
+-- also verifiable - a name one character off fails silently, while an id
+-- either matches or does not, and `/pprobe here` prints it.
+--
+-- Only one id is measured so far (Ruins of Lordaeron, 2999): almost every
+-- zone in the list is above the current level cap. So the name is still the
+-- fallback, and an entry gains its id the day somebody stands in it.
+local function FindInstanceEntry(name, mapID)
+    if mapID and mapID ~= 0 then
+        for _, entry in ipairs(INSTANCE_DB) do
+            if entry.mapID == mapID then return entry end
+        end
+    end
+    for _, entry in ipairs(INSTANCE_DB) do
+        if entry.name == name then return entry end
+    end
+end
+
 local function CheckCurrentInstance()
     -- Out in the world this returns the CONTINENT ("Eastern Kingdoms" while
     -- standing in Undercity), not an empty string, so the name alone is not a
@@ -622,13 +645,18 @@ local function CheckCurrentInstance()
     -- "party"/"raid" inside one - gate on that rather than relying on the
     -- continent never matching an entry in INSTANCE_DB.
     local name, instanceType = GetInstanceInfo()
+    local mapID = select(8, GetInstanceInfo())
     if not name or name == "" or instanceType == "none" then
         g_InShadowInstance = false
         return
     end
 
+    -- Saved settings stay keyed on the entry's NAME, which is Priestly's own
+    -- English constant and not the string the client hands back. So a player's
+    -- choices survive this change, and survive an id being filled in later.
+    local entry = FindInstanceEntry(name, mapID)
     local saved = PriestlyAccountDB and PriestlyAccountDB.shadowInstances
-    g_InShadowInstance = (saved and saved[name] == true) or false
+    g_InShadowInstance = (entry and saved and saved[entry.name] == true) or false
 
     -- The list is keyed on exact instance names that mostly cannot be verified
     -- until the level cap rises, and a wrong key fails SILENTLY - the mode
@@ -644,15 +672,18 @@ local function CheckCurrentInstance()
     -- they did turn it on.
     local relevantType = (instanceType == "party" or instanceType == "raid")
     local modeActive = PriestlyAccountDB and PriestlyAccountDB.shadowMode == "instance"
-    if relevantType and modeActive
-        and saved and saved[name] == nil and not g_ReportedUnknown[name]
-    then
+    if relevantType and modeActive and not entry and not g_ReportedUnknown[name] then
         g_ReportedUnknown[name] = true
         if DEFAULT_CHAT_FRAME then
+            -- The id as well as the name, because the id is the half that can
+            -- be trusted: it is the same in every language, and pasting it
+            -- into a report is enough to add the entry correctly for
+            -- everybody. The name alone only fixes English clients.
             DEFAULT_CHAT_FRAME:AddMessage(
                 "|cff99ddff[Priestly]|r does not recognise this instance: |cffffffff\"" ..
-                tostring(name) .. "\"|r - Shadow Protection's \"by instance\" mode cannot " ..
-                "work here. Please report that name so it can be added.")
+                tostring(name) .. "\"|r (id |cffffffff" .. tostring(mapID) ..
+                "|r) - Shadow Protection's \"by instance\" mode cannot " ..
+                "work here. Please report that id so it can be added.")
         end
     end
 end
@@ -988,7 +1019,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     local categories = {}
     local catOrder = {}
     for _, entry in ipairs(instanceDB) do
-        local cat = entry[2]
+        local cat = entry.category
         if not categories[cat] then
             categories[cat] = {}
             catOrder[#catOrder+1] = cat
@@ -1010,8 +1041,8 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
         local startY = iy.v
 
         for idx, entry in ipairs(entries) do
-            local instName    = entry[1]
-            local tooltip     = entry[4] or ""
+            local instName    = entry.name
+            local tooltip     = entry.tooltip or ""
             local col = math.floor((idx - 1) / numRows)
             local row = (idx - 1) % numRows
             local xOff = col * (COL_W + COL_GAP)
@@ -1063,7 +1094,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     btnAll:SetText("Select All")
     btnAll:SetScript("OnClick", function()
         for _, entry in ipairs(instanceDB) do
-            Priestly_SetShadowInstance(entry[1], true)
+            Priestly_SetShadowInstance(entry.name, true)
         end
         for _, cb in ipairs(allCheckboxes) do cb:SetChecked(true) end
         CheckCurrentInstance()
@@ -1076,7 +1107,7 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     btnNone:SetText("Deselect All")
     btnNone:SetScript("OnClick", function()
         for _, entry in ipairs(instanceDB) do
-            Priestly_SetShadowInstance(entry[1], false)
+            Priestly_SetShadowInstance(entry.name, false)
         end
         for _, cb in ipairs(allCheckboxes) do cb:SetChecked(false) end
         CheckCurrentInstance()
@@ -1089,13 +1120,13 @@ local function BuildInstanceTab(parent, instanceDB, panelWidth)
     btnDefaults:SetText("Reset Defaults")
     btnDefaults:SetScript("OnClick", function()
         for _, entry in ipairs(instanceDB) do
-            Priestly_SetShadowInstance(entry[1], entry[3])
+            Priestly_SetShadowInstance(entry.name, entry.default)
         end
         for _, cb in ipairs(allCheckboxes) do
             if cb._instName then
                 for _, entry in ipairs(instanceDB) do
-                    if entry[1] == cb._instName then
-                        cb:SetChecked(entry[3])
+                    if entry.name == cb._instName then
+                        cb:SetChecked(entry.default)
                         break
                     end
                 end

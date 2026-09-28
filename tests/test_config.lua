@@ -27,7 +27,7 @@ H.eq(PriestlyAccountDB.flavor, TC.FLAVOR, "the flavor marker is stamped")
 
 local seeded = 0
 for _, entry in ipairs(TC.INSTANCE_DB) do
-    if PriestlyAccountDB.shadowInstances[entry[1]] ~= nil then seeded = seeded + 1 end
+    if PriestlyAccountDB.shadowInstances[entry.name] ~= nil then seeded = seeded + 1 end
 end
 H.eq(seeded, #TC.INSTANCE_DB, "every instance gets a saved default")
 H.eq(PriestlyAccountDB.shadowInstances["Scholomance"], true, "heavy-shadow instances start checked")
@@ -182,6 +182,57 @@ H.check(TC.inShadowInstance() == true, "...but a real instance still counts")
 WoW.instanceType = nil
 
 ------------------------------------------------------------
+-- Matched on the client's instance ID, not on its NAME
+--
+-- The name is localized: a French client returns French instance names, so
+-- name matching has been broken for everyone not playing in English since the
+-- feature existed. It is also unverifiable - almost every zone in the list is
+-- above the current level cap, and a name one character off fails SILENTLY,
+-- with the mode simply never firing.
+--
+-- The ID is identical in every locale and either matches or does not. Only
+-- one is measured so far (Ruins of Lordaeron, 2999, with `/pprobe here`), so
+-- the name stays as the fallback for entries whose ID nobody has stood in
+-- yet.
+------------------------------------------------------------
+
+-- A client that answers in another language, with the ID we know.
+WoW.instanceName = "Ruines de Lordaeron"
+WoW.instanceType = "party"
+WoW.instanceMapID = 2999
+PriestlyAccountDB.shadowInstances["Ruins of Lordaeron"] = true
+TC.CheckCurrentInstance()
+H.check(TC.inShadowInstance() == true,
+    "a localized instance name still matches, because the ID does")
+
+-- And the setting is still keyed on OUR name, so a player's choices survive.
+PriestlyAccountDB.shadowInstances["Ruins of Lordaeron"] = false
+TC.CheckCurrentInstance()
+H.check(TC.inShadowInstance() == false,
+    "and the saved choice is read under the entry's own name, not the client's")
+
+-- An ID we do not know falls back to the name, which is how every entry
+-- behaves until somebody stands in it.
+PriestlyAccountDB.shadowInstances["Scholomance"] = true
+WoW.instanceName = "Scholomance"
+WoW.instanceMapID = 4242            -- nothing in the list claims this
+TC.CheckCurrentInstance()
+H.check(TC.inShadowInstance() == true, "an unknown ID falls back to matching the name")
+
+-- The ID WINS over the name. A client that reuses a name we know for a
+-- different instance must not be taken at its word.
+WoW.instanceName = "Scholomance"
+WoW.instanceMapID = 2999
+PriestlyAccountDB.shadowInstances["Scholomance"] = true
+PriestlyAccountDB.shadowInstances["Ruins of Lordaeron"] = false
+TC.CheckCurrentInstance()
+H.check(TC.inShadowInstance() == false,
+    "the ID decides which entry it is, and the name does not overrule it")
+
+WoW.instanceMapID = 0
+WoW.instanceType = nil
+
+------------------------------------------------------------
 -- An instance the list does not know must say so
 --
 -- The keys are exact instance names, most of which cannot be verified until
@@ -207,6 +258,18 @@ TC.CheckCurrentInstance()
 H.check(#WoW.messages > before, "an instance the list does not know is reported")
 H.check(WoW.messages[#WoW.messages]:find("Some Unlisted Dungeon", 1, true) ~= nil,
     "and the message names it, so it can be reported and added")
+-- And carries the ID, which is the half worth reporting: it is the same in
+-- every language, so pasting it fixes the entry for everybody. The name alone
+-- only ever fixes English clients.
+-- A name of its own: the once-per-session latch is keyed on the name, and a
+-- later section uses "Another Unlisted Dungeon" to prove the warning still
+-- arrives when the mode is switched on.
+WoW.instanceName = "An Unlisted Dungeon With An Id"
+WoW.instanceMapID = 5150
+TC.CheckCurrentInstance()
+H.check(WoW.messages[#WoW.messages]:find("5150", 1, true) ~= nil,
+    "with the instance ID: " .. WoW.messages[#WoW.messages])
+WoW.instanceMapID = 0
 
 -- Once per session, not once per zone-in.
 before = #WoW.messages

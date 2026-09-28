@@ -197,7 +197,7 @@ queued(function() click(instBox("Scholomance")) end, "ticking one instance")
 
 queued(function() click("PriestlyInstanceContainerAll") end, "Select All")
 for _, entry in ipairs(TC.INSTANCE_DB) do
-    H.check(PriestlyAccountDB.shadowInstances[entry[1]] == true, "Select All checked " .. entry[1])
+    H.check(PriestlyAccountDB.shadowInstances[entry.name] == true, "Select All checked " .. entry.name)
 end
 H.check(TC.inShadowInstance() == true, "and the detector caught up")
 
