@@ -46,6 +46,30 @@ end
 
 
 ------------------------------------------------------------
+-- A roster arriving before PLAYER_LOGIN has ever run is not a join
+--
+-- FIRST in this file on purpose. The guard is "have we ever seen the roster?",
+-- and the answer starts as "no" when the file loads - so any section that has
+-- already dispatched a login has answered it and could not tell a correct
+-- starting value from a wrong one. This section can, and it is the only one
+-- that can.
+--
+-- Reachable: the events are registered at file scope, and unlike Wildly and
+-- Magely, Priestly does not discard non-login events before it knows the
+-- player's class - so the roster branch really does run here.
+------------------------------------------------------------
+
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.groupMembers = 5
+WoW.dispatch("GROUP_ROSTER_UPDATE")
+settle()
+H.eq(Priestly_WindowVisible(), false, "a roster arriving before login is not a join")
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "and the window the player closed stays closed")
+
+------------------------------------------------------------
 -- Login opens the window for a priest in a group
 ------------------------------------------------------------
 
@@ -146,21 +170,6 @@ H.eq(Priestly_WindowVisible(), true, "and that is remembered")
 -- when it is wrong it fails silently and looks exactly like the bug. Asking
 -- whether we have EVER seen the roster needs no clock.
 ------------------------------------------------------------
-
--- A roster event that arrives BEFORE PLAYER_LOGIN. The events are registered
--- at file scope, so this is reachable, and under a time window g_LoginAt was
--- still 0 - making GetTime() - 0 the client's uptime, the grace long expired,
--- and the very first roster a "join".
-setup(0)
-Priestly_SetWindowVisible(false)
-WoW.groupMembers = 5
-WoW.dispatch("GROUP_ROSTER_UPDATE")
-settle()
-H.eq(Priestly_WindowVisible(), false,
-    "a roster arriving before login is not a join either")
-WoW.dispatch("PLAYER_LOGIN")
-settle()
-H.check(not shown(), "and the window the player closed stays closed")
 
 -- A loading screen longer than any grace period would have been. The clock is
 -- not consulted at all now, so thirty seconds between login and the roster

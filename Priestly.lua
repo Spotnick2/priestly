@@ -532,6 +532,11 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Auto-open if Priest and in a group (or solo mode) - unless the
         -- window was deliberately closed, which is a preference that should
         -- survive a reload.
+        -- A new session: whatever we saw before this login is not something
+        -- we have seen in it. Said out loud rather than left to the file being
+        -- re-executed, because that is what makes the rule true rather than
+        -- incidentally true.
+        g_LastGroupSize = nil
         -- Read, not recorded. What the client says right now is good enough to
         -- decide whether to open, and wrong as an observation: a 0 here may
         -- just mean the roster has not arrived, and recording it is what made
