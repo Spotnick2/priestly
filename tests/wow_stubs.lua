@@ -39,6 +39,19 @@ WoW.SetPlayerDefaults({ name = "Priestly Testcase", class = "PRIEST", level = 20
 -- exists to survive.
 ------------------------------------------------------------
 
+-- The shared stub's reset() knows nothing about the journal, so these are
+-- re-applied by wrapping it: a test that sets three tiers and then resets
+-- would otherwise hand the next section a client that still has them.
+local sharedReset = WoW.reset
+function WoW.reset()
+    sharedReset()
+    WoW.ejNumTiers     = 0          -- what this client actually reports
+    WoW.ejSelectThrows = false
+    WoW.ejDungeons     = {}         -- { { id =, name = }, ... }
+    WoW.ejRaids        = {}
+end
+WoW.reset()
+
 function EJ_GetNumTiers() return WoW.ejNumTiers or 0 end
 function EJ_SelectTier(tier)
     if WoW.ejSelectThrows then error("EJ_SelectTier is not available", 2) end
@@ -60,6 +73,18 @@ end
 -- typo or an API that quietly went away. These are Priestly's own.
 ------------------------------------------------------------
 
+-- Recorded as well as allowed, so tests/test_bridge.lua can check this list
+-- against the guards in the source. Every `if Priestly_X then` in the addon
+-- is there because the config file can fail to load; a name missing from here
+-- turns that guard into a stub error, and the branch it guards can never be
+-- tested.
+WoW.hostGlobals = {}
+local sharedAllow = WoW.allowGlobal
+function WoW.allowGlobal(...)
+    for i = 1, select("#", ...) do WoW.hostGlobals[(select(i, ...))] = true end
+    return sharedAllow(...)
+end
+
 WoW.allowGlobal(
     -- The addon and its saved tables. PriestlyAccountDB is the settings store;
     -- PriestlyDB is the per-character one, absent for anyone who never ran the
@@ -67,6 +92,16 @@ WoW.allowGlobal(
     -- PriestlySVCheck is read once so the account scope inherits its
     -- load-check latch.
     "Priestly", "PriestlyAccountDB", "PriestlyDB", "PriestlySVCheck",
+    -- The hooks PriestlyConfig.lua defines and Priestly.lua reads GUARDED
+    -- (`if Priestly_OpenConfig then`), because the config file can fail to
+    -- load on its own. A test that exercises that branch must be able to read
+    -- them as nil, which is the whole point of the guard.
+    "Priestly_ScheduleRefresh", "Priestly_ForceRebuild", "Priestly_ApplyAlpha",
+    "Priestly_OnSoloToggle", "Priestly_LearnDuration", "Priestly_GetLearnedDuration",
+    "Priestly_EnsureDefaults", "Priestly_ShowSolo", "Priestly_TrackPets",
+    "Priestly_IsBuffEnabled", "Priestly_ShouldShowShadow", "Priestly_GetFrameAlpha",
+    "Priestly_OpenConfig", "Priestly_SetConfig", "Priestly_FrameLocked",
+    "Priestly_PopoverSide",
     -- The probe's saved variables and frames, which start nil like any others.
     "PriestlyProbeDB", "PriestlyProbePersist", "PriestlyProbeChar",
     "PriestlyProbeCopyFrame", "PriestlyProbeBench",

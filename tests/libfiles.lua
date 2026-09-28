@@ -46,8 +46,11 @@ end
 -- Returns load (Lua files, in order) and ship (every required file), both as
 -- paths relative to root. Raises an error naming any missing file.
 -- Named here rather than globbed, so a texture that stops being drawn stops
--- being shipped, and one that is added has to be added deliberately. They are
--- the files Glass.lua names; its own tests check the two lists agree.
+-- being shipped, and one that is added has to be added deliberately. This is
+-- a third copy of a list the library also keeps, so `resolve` below reads the
+-- library's own source and checks the two agree BOTH ways: a texture a newer
+-- revision starts drawing is one this list does not have, and a dev deploy
+-- would quietly leave it out and draw the window with a hole in it.
 L.MEDIA = {
     "Media/body_mask.tga", "Media/body_mask_small.tga",
     "Media/rim5.tga", "Media/rim5_small.tga",
@@ -59,7 +62,7 @@ L.MEDIA = {
 
 function L.resolve(root, entry)
     entry = entry or L.ENTRY
-    local load, ship, seen = {}, {}, {}
+    local load, ship, seen, sources = {}, {}, {}, {}
 
     local function visit(xmlRel)
         if seen[xmlRel] then return end
@@ -74,9 +77,11 @@ function L.resolve(root, entry)
             if tag == "Include" then
                 visit(rel)
             elseif tag == "Script" then
-                if not read(root .. "/" .. rel) then
+                local src = read(root .. "/" .. rel)
+                if not src then
                     error("LibGroupBuffs: " .. xmlRel .. " lists " .. rel .. ", which is not in " .. root, 0)
                 end
+                sources[rel] = src
                 load[#load + 1] = rel
                 ship[#ship + 1] = rel
             end
@@ -89,12 +94,33 @@ function L.resolve(root, entry)
     -- glass material draws. They still have to be in the addon folder, so a
     -- dev deploy copies them like everything else - and a missing one is a
     -- window drawn with holes in it, which no Lua error announces.
+    local listed = {}
     for _, rel in ipairs(L.MEDIA) do
         if not read(root .. "/" .. rel) then
             error("LibGroupBuffs: " .. rel .. " is missing from " .. root
                 .. " - the glass material draws it", 0)
         end
+        listed[rel] = true
         ship[#ship + 1] = rel
+    end
+
+    -- The other direction, which is the one that goes wrong quietly. Nothing
+    -- above notices a texture the library ADDED: every file this list names
+    -- exists, so it passes, while the new one is never copied. So read what
+    -- the library's own source draws and require this list to cover it. Both
+    -- spellings the material uses: `MEDIA .. "name"` at the draw, and the
+    -- `= "name", <thing>Margin` entries in Glass.SIZES.
+    local drawn = {}
+    for _, rel in ipairs(load) do
+        local src = sources[rel] or ""
+        for name in src:gmatch('MEDIA %.%. "([%w_]+)"') do drawn["Media/" .. name .. ".tga"] = rel end
+        for name in src:gmatch('= "([%w_]+)", [%w]*[Mm]argin') do drawn["Media/" .. name .. ".tga"] = rel end
+    end
+    for rel, by in pairs(drawn) do
+        if not listed[rel] then
+            error("LibGroupBuffs: " .. by .. " draws " .. rel
+                .. ", which tests/libfiles.lua does not ship - add it to L.MEDIA", 0)
+        end
     end
 
     return load, ship

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+- **A new look.** The window is drawn in glass now: a translucent, softly lit panel with rounded
+  corners instead of the flat Blizzard dialog box, and every buff bar filled the same way. Nothing
+  moved and nothing changed how it works — same rows, same clicks, same colours telling you who is
+  missing what.
+
 ### Added
 - **`/priestly help` now shows the spell names Priestly is matching on**, with your client's
   language and version numbers. If the addon ever reports everybody as unbuffed when they are not,

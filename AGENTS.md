@@ -374,7 +374,7 @@ Changing patch compatibility:
   silences the only reminder that the notes are stale, so a dump comparison is not enough on its
   own: identical declarations say nothing about runtime behaviour like aura secrecy or secure
   click casting.
-  `WoW.build`'s default in `tests/wow_stubs.lua` tracks the **client**, not this constant - it is
+  `WoW.build`'s default in the shared stub (`../LibGroupBuffs/tests/wow_stubs.lua`) tracks the **client**, not this constant - it is
   the default every other test runs under, and it should show them what a player sees, notice
   included. The three builds are pinned as literals in `tests/test_config_seam.lua`; they are
   equal in the ordinary case and diverge while a re-probe is outstanding.
@@ -455,7 +455,16 @@ The first line of output names the library checkout and revision the tests ran a
 the tag a release would ship. They differ while working on both, which is fine; they should match
 before a release.
 
-`tests/wow_stubs.lua` fails the run on the read of **any global it does not stub**. That is
+**The stub is shared.** The client surface lives in `../LibGroupBuffs/tests/wow_stubs.lua`, one
+copy for Priestly, Wildly and Magely (LibGroupBuffs#21); `tests/wow_stubs.lua` is a thin layer
+holding only what is Priestly's — the priest default, this addon's globals, the Encounter Journal
+its probe calls, and those journal defaults re-applied by wrapping `WoW.reset`. A new *API* stub
+goes in the library, where all three get it; a new *global* goes in the local layer. Anything the
+source reads guarded (`if Priestly_OpenConfig then`) must be allowed as nil, or the guard throws
+inside the stub instead of exercising the branch it protects — `tests/test_bridge.lua` checks the
+guards against the list.
+
+The stub fails the run on the read of **any global it does not stub**. That is
 deliberate: the stub is the list of APIs verified present on this client, so it has to model the
 client's *absences* too. Defining something there that Forever does not actually have is how a call
 to `MouseIsOver` — removed on this client — survived into a build and surfaced only as a Lua error

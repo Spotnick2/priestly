@@ -81,6 +81,20 @@ WoW.ejSelectThrows = false
 -- `here` accumulates rather than overwriting
 ------------------------------------------------------------
 
+------------------------------------------------------------
+-- reset() puts the journal back the way this client has it
+--
+-- The sections above set three tiers and a throwing EJ_SelectTier. If a reset
+-- does not clear them, every later section runs against a client that reports
+-- a journal this one does not have, and the probe's whole reason for existing
+-- - surviving a journal that is half there - is never exercised again.
+------------------------------------------------------------
+
+WoW.reset()
+H.eq(EJ_GetNumTiers(), 0, "a reset client reports no tiers, the way this one does")
+H.check(not WoW.ejSelectThrows, "and EJ_SelectTier is back to working")
+H.eq(next(WoW.ejDungeons), nil, "with no instances left over from the section before")
+
 WoW.reset()
 WoW.instanceName = "The Hall of Thanes"
 WoW.instanceType = "party"
