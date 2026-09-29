@@ -577,12 +577,14 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- where it did not. Latched, so this can only ever speak once.
         WarnAboutSpells()
         ui:ApplyAppearance()      -- the spec icon
-        -- Full rebuild: available buffs and reagents may change on a respec.
-        -- In combat only the counts can move; the rebuild follows the fight.
-        if ui:IsVisible() and not InCombatLockdown() then
-            ui:Open(0.3)
-        elseif ui:IsVisible() then
+        -- A rebuild: what a respec or a new spell changes is which rows
+        -- exist, and the library decides whether a closed window should come
+        -- back for them. In combat an open window can only move its counts,
+        -- and the rebuild follows the fight.
+        if ui:IsVisible() and InCombatLockdown() then
             ui:RefreshFooter()
+        else
+            vis:ContentChanged()
         end
 
     elseif event == "PLAYER_REGEN_ENABLED" then
