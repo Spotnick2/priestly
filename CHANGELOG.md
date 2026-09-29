@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- **A Frame Size slider**, in Settings beside Frame Opacity: 70% to 200%. Priestly's window was
+  sized for TBC Anniversary, and this client draws its interface differently, so the rows can look
+  small — this scales the window on its own rather than making you rescale the whole game UI. The
+  new size lands on the next redraw, so if you move it mid-fight it applies when the fight ends.
+
 ### Fixed
 - **Learning a spell brings the window back when it has something to show.** If the window had
   closed itself because there was nothing to display — every buff untracked, or none of them known
@@ -10,7 +16,14 @@
 ### Under the hood
 - **Priestly now shares one copy of the rules for when the window opens** with Wildly and Magely,
   instead of each addon carrying its own. Nothing should look different; the fixes in v2.0.9 were
-  all cases where those copies had drifted apart. Needs LibGroupBuffs r24, included in the download.
+  all cases where those copies had drifted apart.
+- **Much less work per refresh in a raid.** Checking whether somebody is missing a buff means
+  reading their auras, and Priestly was doing that once per buff per person — three times over for
+  a priest tracking three. It now reads each person once and answers every buff from that, and the
+  "show Shadow Protection when somebody has it" setting shares the same read instead of scanning
+  the raid all over again. On a 40-man raid one refresh drops from about 2,600 aura reads to about
+  900. Nothing looks different; there is simply less of it happening forty times a minute.
+- Needs LibGroupBuffs r25, included in the download.
 
 ## v2.0.9 - 2026-09-28
 
