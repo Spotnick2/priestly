@@ -733,13 +733,19 @@ function Priestly_ShouldShowShadow(groups, ord)
         -- (#6).
         --
         -- The fallback tests for the METHOD, not for the engine. An absent
-        -- engine cannot happen here - RefreshSpellData publishes it before
-        -- `names`, and no names means this returns false above - but an engine
-        -- whose library is too old to have ReadAura can: LibStub hands the
-        -- newest embedded copy to everybody, so another addon shipping an
-        -- older one decides what this object answers to. Asking `eng and` for
-        -- that case calls a nil method; asking `eng.ReadAura and` degrades to
-        -- a second walk of the roster, which is slow and right.
+        -- engine cannot happen here: RefreshSpellData publishes it before
+        -- `names`, and no names returns false above.
+        --
+        -- A library too old to HAVE ReadAura can, but only while Priestly's
+        -- own embedded copy is the old one. LibStub never downgrades - it
+        -- upgrades an older copy another addon loaded first - so no other
+        -- addon can take this method away, and PriestlyCompat.lua says the
+        -- same thing where it explains the "too-old" message.
+        --
+        -- Which makes this guard temporary: once NEEDS_MINOR is the release
+        -- that added ReadAura, the start-up gate refuses to run at all below
+        -- it and the method is guaranteed. Remove this and its test in the
+        -- commit that bumps the pin.
         local eng = Priestly.engine
         local function Read(unit)
             if eng and eng.ReadAura then return eng:ReadAura(unit, names) end
