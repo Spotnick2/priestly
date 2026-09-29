@@ -277,4 +277,134 @@ SlashCmdList["PRIESTLY"]("")
 settle()
 H.check(shown(), "and back open")
 
+------------------------------------------------------------
+-- A settings change does not reopen a window the player closed
+--
+-- Priestly_ForceRebuild runs on EVERY settings change - the shadow mode, an
+-- instance checkbox, adopting another character's settings - and it used to
+-- call ui:Open unconditionally. So closing the window and then touching any
+-- setting brought it straight back.
+--
+-- Wildly's review found this and fixed it there and in Magely. Priestly had
+-- the same code and kept it, which is the second defect this duplication has
+-- produced (LibGroupBuffs#22).
+------------------------------------------------------------
+
+setup(2)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(shown(), "the window is open to begin with")
+
+T.CloseUI(true)                    -- the player closes it
+settle()
+H.check(not shown(), "and closed when the player says so")
+Priestly_ForceRebuild()
+settle()
+H.check(not shown(), "a settings change does not bring it back")
+H.eq(Priestly_WindowVisible(), false, "and the preference is untouched")
+
+-- A window that closed ITSELF - no rows to show - is not a close the player
+-- asked for, so a setting that could give it rows again may reopen it.
+--
+-- The window is really OPENED and then driven to zero rows, rather than a
+-- CloseUI(false) call standing in for it. The first version of this called
+-- CloseUI on a window that had never been shown, so "an empty window closes
+-- itself" was true before the section began and the reopen was from a
+-- never-opened state - neither of which is the case being described.
+setup(2)
+Priestly_SetConfig("showSolo", true)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(shown(), "the window is open, with a group to show")
+
+-- Every buff switched off: UI:Update finds no rows and closes it ITSELF,
+-- without recording a close the player asked for.
+Priestly_SetConfig("trackFort", false)
+Priestly_SetConfig("trackSpirit", false)
+Priestly_ForceRebuild()
+settle()
+H.check(not shown(), "a window with nothing to show closes itself")
+H.eq(Priestly_WindowVisible(), true, "and does not call that the player's doing")
+
+-- ...and a setting that gives it rows again brings it back, which is the whole
+-- point of telling the two kinds of close apart.
+Priestly_SetConfig("trackFort", true)
+Priestly_ForceRebuild()
+settle()
+H.check(shown(), "and a setting that gives it rows again reopens it")
+
+-- ...and not for somebody the addon is not for. Nothing would appear anyway -
+-- a non-priest has no rows, so Update closes the window straight back - but
+-- /priestly config has no class gate, so without this every config click on a
+-- warrior in a group scheduled a full rebuild to produce nothing.
+setup(2)
+WoW.SetUnit("player", { name = "Tanky Person", guid = "P0", class = "WARRIOR" })
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+Priestly_SetWindowVisible(true)
+local rebuilds = #WoW.timers
+Priestly_ForceRebuild()
+H.eq(#WoW.timers, rebuilds, "a settings change on a non-priest schedules nothing")
+
+------------------------------------------------------------
+-- Zoning into an instance can give the window a row, so it rebuilds
+--
+-- With Shadow Protection set to "by instance", a window that closed ITSELF
+-- outdoors for want of rows has one again the moment you step into a checked
+-- instance. The zone handler only scheduled a REFRESH, which the library
+-- documents as never opening a closed window - so it stayed shut until some
+-- unrelated event happened to fire. Magely already rebuilt here.
+------------------------------------------------------------
+
+setup(2)
+-- Shadow Protection has to be learnable for there to be a row to gain; setup
+-- teaches only Fortitude.
+H.TeachSpells({ "FORT_SINGLE", "SHADOW_SINGLE" })
+T.RefreshSpellData()
+Priestly_SetConfig("trackFort", false)
+Priestly_SetConfig("trackSpirit", false)
+Priestly_SetConfig("shadowMode", "instance")
+PriestlyAccountDB.shadowInstances["Scholomance"] = true
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "outdoors with nothing to show, the window closes itself")
+H.eq(Priestly_WindowVisible(), true, "and that was not the player's doing")
+
+WoW.instanceName = "Scholomance"
+WoW.instanceType = "party"
+WoW.dispatch("ZONE_CHANGED_NEW_AREA")
+settle()
+H.check(shown(), "zoning into a checked instance gives it a row and reopens it")
+WoW.instanceType = nil
+
+------------------------------------------------------------
+-- The solo toggle is honoured in combat, not dropped
+--
+-- ui:Open and ui:Close both remember what was asked and carry it out when the
+-- fight ends, so there is nothing to protect against here - and returning
+-- early meant ticking the box mid-fight did nothing at all, silently. Wildly
+-- and Magely already worked this way.
+------------------------------------------------------------
+
+setup(0)
+Priestly_SetWindowVisible(false)
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+WoW.inCombat = true
+-- Through the setting, the way the checkbox does it: the handler is what the
+-- config calls AFTER writing showSolo, and a test that only calls the handler
+-- leaves the window with no reason to have rows. The first version of this
+-- passed only because an earlier section had replaced Priestly_ShowSolo with a
+-- stub and never put it back - so the assertion was resting on a leak, and
+-- would have broken silently if the sections were ever reordered.
+Priestly_SetConfig("showSolo", true)
+Priestly_OnSoloToggle(true)
+settle()
+H.eq(Priestly_WindowVisible(), true,
+    "ticking solo mode in combat is recorded, not dropped")
+WoW.inCombat = false
+WoW.dispatch("PLAYER_REGEN_ENABLED")
+settle()
+H.check(shown(), "and the window it asked for arrives when the fight ends")
+
 H.done("test_visibility")

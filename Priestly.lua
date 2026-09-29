@@ -458,9 +458,18 @@ local ui = Priestly.UI.New({
     setPos     = function(pos) SetConfig("pos", pos) end,
     setVisible = function(visible) Priestly_SetWindowVisible(visible) end,
     -- The window parents secure buttons, so in combat the client refuses to
-    -- hide it (docs/FOREVER-PROBE.md section 13). Every way of closing - the X
-    -- button, /priestly hide, the toggle - lands here, so none of them looks
+    -- hide it (docs/FOREVER-PROBE.md section 13). Every close the PLAYER asked
+    -- for - the X button, /priestly hide - lands here, so neither looks
     -- ignored.
+    --
+    -- Not the solo checkbox. Unticking it while alone closes the window
+    -- because there is nothing left to show, which is an automatic close: it
+    -- deliberately does not write "the player does not want this window", and
+    -- Close only explains a close it recorded as the player's. So in combat
+    -- the frame stays up until the fight ends with nothing said. Worth fixing
+    -- one day - by letting Close explain an automatic close too, in the
+    -- library, for all three addons - and not by marking the toggle manual,
+    -- which would conflate "not while solo" with "not at all".
     onCloseDeferred = function()
         DEFAULT_CHAT_FRAME:AddMessage(
             "|cff99ddff[Priestly]|r The window closes when you leave combat.")
@@ -473,15 +482,52 @@ function Priestly_ScheduleRefresh()
     ui:ScheduleRefresh()
 end
 
--- Force a full UI rebuild (used when config changes affect layout)
+-- Would the window open by itself right now? In a group, or solo mode - and
+-- never over a deliberate close. Same shape as Wildly's and Magely's.
+local function WantsOpen()
+    -- Nothing appears without this either - ActiveDefs is empty for a
+    -- non-priest, so Update closes the window again immediately - but
+    -- /priestly config has no class gate and PLAYER_LOGIN writes
+    -- visible = true for anybody, so every config click on a warrior in a
+    -- group scheduled a full rebuild to produce nothing.
+    --
+    -- Magely guards this way; Wildly does not guard at all, so it still does
+    -- the wasted rebuild. Not worth a third copy of the fix: the shared
+    -- Visibility object (LibGroupBuffs r24) asks the host whether the window
+    -- is for this character at all, and adopting it settles all three at once.
+    if not g_IsPriest then return false end
+    if Priestly_WindowVisible() == false then return false end
+    return GetNumGroupMembers() > 0 or Priestly_ShowSolo()
+end
+
+-- Force a full UI rebuild (used when config changes affect layout).
+--
+-- This is called on EVERY settings change, and it used to open the window
+-- unconditionally - so changing any setting reopened a window the player had
+-- deliberately closed. That is the bug Wildly's review found and fixed there
+-- and in Magely; Priestly had the same code and kept it (LibGroupBuffs#22).
+--
+-- A window that closed ITSELF because a setting left it no rows is not a close
+-- the player asked for, so the next setting that could give it rows reopens
+-- it - which is what WantsOpen answers.
+--
+-- In combat: an open window is left to the library, which rebuilds it at
+-- combat end. A closed one that would open has nothing recorded for combat end
+-- to act on, so it asks ui:Open, which remembers a show made under lockdown.
 function Priestly_ForceRebuild()
-    if InCombatLockdown() then return end
-    ui:Open(0.1)
+    if ui:IsVisible() then
+        if not InCombatLockdown() then ui:Open(0.1) end
+    elseif WantsOpen() then
+        ui:Open(0.1)
+    end
 end
 
 -- Called when the solo checkbox is toggled in config
+-- Not refused in combat: ui:Open and ui:Close both remember what was asked and
+-- carry it out when the fight ends, so ticking the box mid-fight is honoured
+-- rather than lost. Wildly and Magely already worked this way; Priestly
+-- returned early and dropped it (LibGroupBuffs#22).
 function Priestly_OnSoloToggle(enabled)
-    if InCombatLockdown() then return end
     if enabled then
         if not ui:IsVisible() and g_IsPriest then
             Priestly_SetWindowVisible(true)
@@ -511,8 +557,11 @@ Priestly.RegisterEvents(evtFrame,
     "RAID_ROSTER_UPDATE",
     "GROUP_ROSTER_UPDATE",
     -- The client saying you JOINED, rather than us inferring it from the
-    -- roster changing. Declared on 70009 (Event.PartyInfo.GroupJoined) - and
-    -- declared is not working, so the roster heuristic stays as a fallback.
+    -- roster changing. It fires: Blizzard's own UI for this build registers
+    -- and acts on it (Blizzard_DamageMeter/DamageMeter.lua:78,
+    -- Blizzard_QuickJoin/QuickJoin.lua:19, in C:/Projects/wow-ui-source).
+    -- The roster heuristic stays as the fallback anyway - it costs nothing
+    -- and covers every join we can see for ourselves.
     "GROUP_JOINED",
     "PLAYER_TALENT_UPDATE",
     "ACTIVE_TALENT_GROUP_CHANGED",

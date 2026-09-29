@@ -815,7 +815,13 @@ detectFrame:SetScript("OnEvent", function(self, event, isInitialLogin, isReloadi
             Priestly_HandleEnteringWorld(isInitialLogin, isReloadingUi)
         end
         CheckCurrentInstance()
-        if Priestly_ScheduleRefresh then Priestly_ScheduleRefresh() end
+        -- A rebuild, not a refresh. A refresh never opens a closed window, and
+        -- zoning is exactly when a row can APPEAR: with Shadow Protection set
+        -- to "by instance", a window that closed itself outdoors for want of
+        -- rows has one again the moment you step into a checked instance.
+        -- ScheduleRefresh left it shut until some unrelated event happened to
+        -- fire. Magely already rebuilds here, for this reason.
+        if Priestly_ForceRebuild then Priestly_ForceRebuild() end
     end
 end)
 
