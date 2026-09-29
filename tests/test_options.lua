@@ -250,4 +250,50 @@ WoW.flushTimers()
 H.check(pcall(Priestly_OpenConfig), "Priestly_OpenConfig runs")
 H.eq(WoW.settingsOpenedTo, 42, "and opens the registered category")
 
+------------------------------------------------------------
+-- The Frame Size slider
+--
+-- The window renders small against this client's UI: the layout constants
+-- were chosen for TBC Anniversary, and Forever runs the Retail codebase where
+-- the default interface scale differs (#14). The slider is here rather than
+-- asking a player to rescale the whole game UI.
+------------------------------------------------------------
+
+local scaleSlider = _G.PriestlyScaleSlider
+H.check(scaleSlider ~= nil, "the panel builds a Frame Size slider")
+H.eq(Priestly_GetFrameScale(), 1.00, "which starts at the size it always was")
+
+local lo, hi = scaleSlider:GetMinMaxValues()
+H.check(lo < 1 and hi > 1, "with room either side of that: " .. tostring(lo) .. "-" .. tostring(hi))
+
+runHandler("PriestlyScaleSlider", "OnValueChanged", 1.35)
+H.near(Priestly_GetFrameScale(), 1.35, 0.001, "dragging it saves the new size")
+H.near(T.ui:Scale(), 1.35, 0.001, "and the window is asked to draw at it")
+
+-- Snapped to the step, so a drag cannot write a size no other control can
+-- produce - the value arrives from the client mid-drag, not off the steps.
+runHandler("PriestlyScaleSlider", "OnValueChanged", 1.2237)
+H.near(Priestly_GetFrameScale(), 1.20, 0.001, "and an off-step value is snapped")
+
+-- Shared with the opacity slider, which is what made a second one cheap.
+local alphaSlider = _G.PriestlyAlphaSlider
+H.check(alphaSlider ~= nil, "the opacity slider is still there")
+runHandler("PriestlyAlphaSlider", "OnValueChanged", 0.5)
+H.near(Priestly_GetFrameAlpha(), 0.5, 0.001, "and still works, built by the same helper")
+H.near(Priestly_GetFrameScale(), 1.20, 0.001, "without the two writing each other's setting")
+
+-- Saving the number is only half of it: the window reads its scale when it is
+-- rebuilt, so a drag that writes the setting and nothing else leaves the
+-- player staring at the old size. The rebuild is also what carries it out of
+-- combat, where the library refuses to rescale a frame parenting secure
+-- buttons.
+local realRebuild = Priestly_ForceRebuild
+local rebuilds = 0
+Priestly_ForceRebuild = function() rebuilds = rebuilds + 1 end
+runHandler("PriestlyScaleSlider", "OnValueChanged", 1.50)
+H.check(rebuilds > 0, "and the drag rebuilds the window, which is what draws the new size")
+Priestly_ForceRebuild = realRebuild
+
+runHandler("PriestlyScaleSlider", "OnValueChanged", 1.00)
+
 H.done("test_options")

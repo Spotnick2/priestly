@@ -20,6 +20,7 @@ local DEFAULTS = {
     showSolo        = false,
     trackPets       = true,
     frameAlpha      = 0.96,
+    frameScale      = 1.00,
     popoverSide     = "auto",     -- "auto" | "left" | "right"
     lockFrame       = false,
     showClickHints  = true,
@@ -758,6 +759,13 @@ function Priestly_GetFrameAlpha()
     return PriestlyAccountDB and PriestlyAccountDB.frameAlpha or 0.96
 end
 
+-- How large the window is drawn. 1.00 is the size Priestly has always been, so
+-- an upgrading player sees no change until they move the slider. The library
+-- clamps whatever it gets, which is what protects the window from a 0 here.
+function Priestly_GetFrameScale()
+    return PriestlyAccountDB and PriestlyAccountDB.frameScale or 1.00
+end
+
 -- True when the window must not be dragged. Checked in the drag handler
 -- rather than by unregistering the drag, which keeps this clear of the secure
 -- frame rules and safe to toggle in combat.
@@ -947,6 +955,105 @@ local function MakeDesc(parent, yRef, text, indent)
     fs:SetText("|cff999999"..text.."|r")
     yRef.v = yRef.v - (TextHeight(fs) + 6)
     return fs
+end
+
+-- A labelled slider with its own track, fill and value readout.
+--
+-- Template-free: OptionsSliderTemplate belongs to the Classic options UI and
+-- is not guaranteed here, so the track and fill are ours and the Slider frame
+-- only carries a thumb and the input handling.
+--
+-- Written as a builder the day a SECOND slider was needed, rather than copied.
+-- Two copies of sixty lines is how the window policy came to hold seven
+-- defects in three addons (LibGroupBuffs#22).
+local function MakeSlider(parent, y, opt)
+    local SLIDER_W = 220
+
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y.v)
+    label:SetText(opt.label)
+    y.v = y.v - 18
+
+    local trackBg = parent:CreateTexture(nil, "BACKGROUND")
+    trackBg:SetColorTexture(0.10, 0.10, 0.18, 0.95)
+    trackBg:SetSize(SLIDER_W, 10)
+    trackBg:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, y.v - 6)
+
+    for _, info in ipairs({
+        { "TOPLEFT", "TOPRIGHT" },
+        { "BOTTOMLEFT", "BOTTOMRIGHT" },
+    }) do
+        local t = parent:CreateTexture(nil, "BORDER")
+        t:SetColorTexture(0.35, 0.35, 0.55, 0.80)
+        t:SetHeight(1)
+        t:SetPoint(info[1], trackBg, info[1])
+        t:SetPoint(info[2], trackBg, info[2])
+    end
+    for _, side in ipairs({ "LEFT", "RIGHT" }) do
+        local t = parent:CreateTexture(nil, "BORDER")
+        t:SetColorTexture(0.35, 0.35, 0.55, 0.80)
+        t:SetWidth(1)
+        t:SetPoint("TOP" .. side, trackBg, "TOP" .. side)
+        t:SetPoint("BOTTOM" .. side, trackBg, "BOTTOM" .. side)
+    end
+
+    local trackFill = parent:CreateTexture(nil, "ARTWORK")
+    trackFill:SetColorTexture(0.40, 0.40, 0.72, 0.75)
+    trackFill:SetPoint("TOPLEFT", trackBg, "TOPLEFT", 1, -1)
+    trackFill:SetHeight(8)
+
+    local slider = CreateFrame("Slider", opt.name, parent)
+    slider:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, y.v)
+    slider:SetSize(SLIDER_W + 8, 18)
+    slider:SetOrientation("HORIZONTAL")
+    slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    local thumb = slider:GetThumbTexture()
+    if thumb then thumb:SetSize(16, 18) end
+    slider:SetMinMaxValues(opt.min, opt.max)
+    slider:SetValueStep(opt.step)
+    if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+
+    local function saved()
+        local v = PriestlyAccountDB and PriestlyAccountDB[opt.key]
+        return type(v) == "number" and v or opt.default
+    end
+    slider:SetValue(saved())
+
+    local lowTxt = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    lowTxt:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 2, 2)
+    lowTxt:SetText(opt.lowText)
+    local highTxt = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    highTxt:SetPoint("TOPRIGHT", slider, "BOTTOMRIGHT", -2, 2)
+    highTxt:SetText(opt.highText)
+
+    local valTxt = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    valTxt:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    valTxt:SetText(opt.format(saved()))
+
+    local function UpdateFill()
+        local lo, hi = slider:GetMinMaxValues()
+        local pct = (slider:GetValue() - lo) / (hi - lo)
+        trackFill:SetWidth(math.max(1, pct * (SLIDER_W - 2)))
+    end
+
+    -- Snapped to the step here as well as on the slider: SetValueStep does not
+    -- bind on every path, and a value between steps writes a setting no other
+    -- control can produce.
+    local snap = 1 / opt.step
+    slider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value * snap + 0.5) / snap
+        Priestly_SetConfig(opt.key, value)
+        valTxt:SetText(opt.format(value))
+        UpdateFill()
+        if opt.onChange then opt.onChange(value) end
+    end)
+
+    slider:HookScript("OnShow", function() C_Timer.After(0.02, UpdateFill) end)
+    C_Timer.After(0.1, UpdateFill)
+
+    y.v = y.v - 40
+    if opt.desc then MakeDesc(parent, y, opt.desc, 4) end
+    return slider
 end
 
 local function MakeRadioGroup(parent, yRef, options, currentKey, onSelect)
@@ -1291,91 +1398,32 @@ local function BuildPanel(panel)
     MakeHeader(settingsChild, y, "Appearance", PANEL_W)
 
     y.v = y.v - 4
-    local alphaLabel = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    alphaLabel:SetPoint("TOPLEFT", settingsChild, "TOPLEFT", 0, y.v)
-    alphaLabel:SetText("Frame Opacity")
-    y.v = y.v - 18
+    MakeSlider(settingsChild, y, {
+        name    = "PriestlyAlphaSlider",
+        label   = "Frame Opacity",
+        key     = "frameAlpha",
+        min     = 0.20, max = 1.00, step = 0.05, default = 0.96,
+        format  = function(v) return string.format("%d%%", v * 100) end,
+        lowText = "20%", highText = "100%",
+        desc    = "Controls the background opacity of the main Priestly frame and popover.",
+        onChange = function() if Priestly_ApplyAlpha then Priestly_ApplyAlpha() end end,
+    })
 
-    local SLIDER_W = 220
-
-    -- Track background
-    local trackBg = settingsChild:CreateTexture(nil, "BACKGROUND")
-    trackBg:SetColorTexture(0.10, 0.10, 0.18, 0.95)
-    trackBg:SetSize(SLIDER_W, 10)
-    trackBg:SetPoint("TOPLEFT", settingsChild, "TOPLEFT", 8, y.v - 6)
-
-    -- Track borders
-    for _, info in ipairs({
-        {"TOPLEFT","TOPRIGHT",     nil, 1},    -- top
-        {"BOTTOMLEFT","BOTTOMRIGHT", nil, 1},  -- bottom
-    }) do
-        local t = settingsChild:CreateTexture(nil, "BORDER")
-        t:SetColorTexture(0.35, 0.35, 0.55, 0.80)
-        t:SetHeight(info[4])
-        t:SetPoint(info[1], trackBg, info[1])
-        t:SetPoint(info[2], trackBg, info[2])
-    end
-    for _, side in ipairs({"LEFT", "RIGHT"}) do
-        local t = settingsChild:CreateTexture(nil, "BORDER")
-        t:SetColorTexture(0.35, 0.35, 0.55, 0.80)
-        t:SetWidth(1)
-        t:SetPoint("TOP"..side, trackBg, "TOP"..side)
-        t:SetPoint("BOTTOM"..side, trackBg, "BOTTOM"..side)
-    end
-
-    -- Fill bar
-    local trackFill = settingsChild:CreateTexture(nil, "ARTWORK")
-    trackFill:SetColorTexture(0.40, 0.40, 0.72, 0.75)
-    trackFill:SetPoint("TOPLEFT", trackBg, "TOPLEFT", 1, -1)
-    trackFill:SetHeight(8)
-
-    -- Template-free slider. OptionsSliderTemplate belongs to the Classic
-    -- options UI and is not guaranteed here; the track and fill above are
-    -- already ours, so all this needs is a thumb and the input handling.
-    local alphaSlider = CreateFrame("Slider", "PriestlyAlphaSlider", settingsChild)
-    alphaSlider:SetPoint("TOPLEFT", settingsChild, "TOPLEFT", 4, y.v)
-    alphaSlider:SetSize(SLIDER_W + 8, 18)
-    alphaSlider:SetOrientation("HORIZONTAL")
-    alphaSlider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-    local thumb = alphaSlider:GetThumbTexture()
-    if thumb then thumb:SetSize(16, 18) end
-    alphaSlider:SetMinMaxValues(0.20, 1.00)
-    alphaSlider:SetValueStep(0.05)
-    if alphaSlider.SetObeyStepOnDrag then alphaSlider:SetObeyStepOnDrag(true) end
-    alphaSlider:SetValue(PriestlyAccountDB.frameAlpha or 0.96)
-
-    local lowTxt = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    lowTxt:SetPoint("TOPLEFT", alphaSlider, "BOTTOMLEFT", 2, 2)
-    lowTxt:SetText("20%")
-    local highTxt = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    highTxt:SetPoint("TOPRIGHT", alphaSlider, "BOTTOMRIGHT", -2, 2)
-    highTxt:SetText("100%")
-
-    local alphaVal = settingsChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    alphaVal:SetPoint("LEFT", alphaSlider, "RIGHT", 10, 0)
-    alphaVal:SetText(string.format("%d%%", (PriestlyAccountDB.frameAlpha or 0.96) * 100))
-
-    local function UpdateFill()
-        local min, max = alphaSlider:GetMinMaxValues()
-        local val = alphaSlider:GetValue()
-        local pct = (val - min) / (max - min)
-        trackFill:SetWidth(math.max(1, pct * (SLIDER_W - 2)))
-    end
-
-    alphaSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value * 20 + 0.5) / 20
-        Priestly_SetConfig("frameAlpha", value)
-        alphaVal:SetText(string.format("%d%%", value * 100))
-        UpdateFill()
-        if Priestly_ApplyAlpha then Priestly_ApplyAlpha() end
-    end)
-
-    alphaSlider:HookScript("OnShow", function() C_Timer.After(0.02, UpdateFill) end)
-    C_Timer.After(0.1, UpdateFill)
-
-    y.v = y.v - 40
-    MakeDesc(settingsChild, y,
-        "Controls the background opacity of the main Priestly frame and popover.", 4)
+    MakeSlider(settingsChild, y, {
+        name    = "PriestlyScaleSlider",
+        label   = "Frame Size",
+        key     = "frameScale",
+        min     = 0.70, max = 2.00, step = 0.05, default = 1.00,
+        format  = function(v) return string.format("%d%%", v * 100) end,
+        lowText = "70%", highText = "200%",
+        desc    = "How large the window is drawn. Priestly's sizes were chosen for a different "
+            .. "client, and this one's interface scale can make them look small - so this is here "
+            .. "rather than asking you to change the game's whole UI scale.",
+        -- A rebuild rather than applying it here: both frames parent secure
+        -- buttons, so the library refuses to resize them mid-fight and carries
+        -- it out when the fight ends.
+        onChange = function() if Priestly_ForceRebuild then Priestly_ForceRebuild() end end,
+    })
 
     y.v = y.v - 6
     MakeCheckbox(settingsChild, y, "Lock frame position", "lockFrame")
