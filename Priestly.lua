@@ -129,7 +129,11 @@ local PET_GROUP  = Priestly.Engine.PET_GROUP
 local function RefreshSpellData()
     engine:RefreshSpells()
     -- PriestlyConfig's "show Shadow Protection when someone has it" mode needs
-    -- the localized aura names, and it loads before this file.
+    -- the localized aura names, and it loads before this file. It needs the
+    -- engine too, to read those auras through whatever aura pass is open
+    -- rather than walking the roster a second time (#6) - and it cannot take
+    -- either at load, hence both being published here.
+    Priestly.engine = engine
     for _, d in ipairs(DEFS) do
         if d.id == "shadow" then Priestly.shadowAuraNames = d.names end
     end

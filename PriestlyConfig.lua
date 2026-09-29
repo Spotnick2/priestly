@@ -728,8 +728,16 @@ function Priestly_ShouldShowShadow(groups, ord)
         local names = Priestly.shadowAuraNames
         if groups and ord and names then
             for _, gn in ipairs(ord) do
+                -- Through the engine, so these reads join the aura pass the
+                -- window opens around a rebuild. This runs from ActiveDefs,
+                -- immediately before the rows ask about the same members: on a
+                -- 40-man raid where nobody has the buff, that used to be a
+                -- second walk of every member (#6). Falling back to the plain
+                -- read keeps this working if Priestly.lua failed to load.
+                local eng = Priestly.engine
                 for _, m in ipairs(groups[gn] or {}) do
-                    local status = API.ReadBuff(m.unit, names)
+                    local status = eng and eng:ReadAura(m.unit, names)
+                        or API.ReadBuff(m.unit, names)
                     if status == "HAS" then return true end
                     -- A refused read is not evidence that nobody has it; making
                     -- the row vanish mid-fight would be worse than leaving it.
