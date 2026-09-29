@@ -151,35 +151,6 @@ end
 
 -- ─── State ───────────────────────────────────────────────────────────────────
 local g_IsPriest = false
--- How many people we have SEEN in the group, or nil for "we have not looked
--- yet". The difference is the whole point: joining is the one thing that
--- reopens a window the player deliberately closed, and a join is a 0-to-n
--- change where the 0 was actually observed.
---
--- GetNumGroupMembers() can still read 0 at PLAYER_LOGIN while already in a
--- group - the roster lands a moment later - so starting this at 0 made that
--- catch-up look exactly like joining, and logging in already grouped with the
--- window shut reopened it and overwrote the preference. Every login.
---
--- nil rather than a few seconds' grace: the grace period is a guess at the
--- wrong question. It has to be long enough for the slowest loading screen and
--- short enough not to swallow a real invite, it is defeated by a roster event
--- arriving before PLAYER_LOGIN at all, and when it is wrong it fails silently
--- and looks exactly like the bug it replaced. "Have we ever seen the roster?"
--- needs no clock and cannot be outrun.
---
--- On its own, though, it costs the thing it was protecting: log in alone, get
--- invited, and if the client never sent a zero-member roster in between, the
--- invite IS the first observation and would not count as joining. So the
--- roster is the FALLBACK and GROUP_JOINED is the answer - the client saying
--- you joined, rather than us inferring it from a number changing.
-local g_LastGroupSize = nil
-
--- Set by GROUP_JOINED, spent by the roster update that follows it. The event
--- is declared on 70009, and declared is not working on this client, so it
--- makes the answer certain where it fires and changes nothing where it does
--- not: the roster heuristic still catches every join we actually observed.
-local g_JoinedPending = false
 
 -- ─── What names are we actually matching? ────────────────────────────────────
 --
@@ -432,8 +403,8 @@ end
 --
 -- Rows, popover, clicks, dragging, the ticker and what combat defers are shared
 -- with Wildly and Magely. Priestly supplies its title, spec icon, reagents and
--- config, and decides when the window opens; the events and slash commands
--- below call the ui's methods.
+-- config. WHEN the window opens is the library's too, through the policy object
+-- built below; the events and slash commands here report what happened.
 local ui = Priestly.UI.New({
     engine  = engine,
     owner   = addonName,
@@ -476,66 +447,40 @@ local ui = Priestly.UI.New({
     end,
 })
 
+-- When the window opens itself, and when it must not. Priestly still owns its
+-- events, its slash commands and its class; this decides what each of them
+-- means for the window. It lived here, in Wildly and in Magely as three
+-- near-identical copies, and every defect they produced was the same shape:
+-- found in one addon, fixed there, and left standing in the others.
+-- LibGroupBuffs#22 lists them - one place, rather than a tally in each file
+-- that drifts out of step with the other two, which is how this file came to
+-- claim six while the branch that wrote it had found seven.
+local vis = Priestly.Visibility.New({
+    ui            = ui,
+    isMyClass     = function() return g_IsPriest end,
+    showSolo      = function() return Priestly_ShowSolo() end,
+    getPreference = function() return Priestly_WindowVisible() end,
+    setPreference = function(v) Priestly_SetWindowVisible(v) end,
+})
+
 -- ─── Global hooks for PriestlyConfig.lua ────────────────────────────────────
 
 function Priestly_ScheduleRefresh()
     ui:ScheduleRefresh()
 end
 
--- Would the window open by itself right now? In a group, or solo mode - and
--- never over a deliberate close. Same shape as Wildly's and Magely's.
-local function WantsOpen()
-    -- Nothing appears without this either - ActiveDefs is empty for a
-    -- non-priest, so Update closes the window again immediately - but
-    -- /priestly config has no class gate and PLAYER_LOGIN writes
-    -- visible = true for anybody, so every config click on a warrior in a
-    -- group scheduled a full rebuild to produce nothing.
-    --
-    -- Magely guards this way; Wildly does not guard at all, so it still does
-    -- the wasted rebuild. Not worth a third copy of the fix: the shared
-    -- Visibility object (LibGroupBuffs r24) asks the host whether the window
-    -- is for this character at all, and adopting it settles all three at once.
-    if not g_IsPriest then return false end
-    if Priestly_WindowVisible() == false then return false end
-    return GetNumGroupMembers() > 0 or Priestly_ShowSolo()
-end
-
--- Force a full UI rebuild (used when config changes affect layout).
---
--- This is called on EVERY settings change, and it used to open the window
--- unconditionally - so changing any setting reopened a window the player had
--- deliberately closed. That is the bug Wildly's review found and fixed there
--- and in Magely; Priestly had the same code and kept it (LibGroupBuffs#22).
---
--- A window that closed ITSELF because a setting left it no rows is not a close
--- the player asked for, so the next setting that could give it rows reopens
--- it - which is what WantsOpen answers.
---
--- In combat: an open window is left to the library, which rebuilds it at
--- combat end. A closed one that would open has nothing recorded for combat end
--- to act on, so it asks ui:Open, which remembers a show made under lockdown.
+-- Something may have given the window rows, or taken them away: a setting, a
+-- spell learned, zoning into an instance that is on the list. The library
+-- decides what that means for a window that is open, one the player closed,
+-- and one that closed itself for want of rows - three cases that took five
+-- separate fixes across three addons to get right once.
 function Priestly_ForceRebuild()
-    if ui:IsVisible() then
-        if not InCombatLockdown() then ui:Open(0.1) end
-    elseif WantsOpen() then
-        ui:Open(0.1)
-    end
+    vis:ContentChanged()
 end
 
 -- Called when the solo checkbox is toggled in config
--- Not refused in combat: ui:Open and ui:Close both remember what was asked and
--- carry it out when the fight ends, so ticking the box mid-fight is honoured
--- rather than lost. Wildly and Magely already worked this way; Priestly
--- returned early and dropped it (LibGroupBuffs#22).
 function Priestly_OnSoloToggle(enabled)
-    if enabled then
-        if not ui:IsVisible() and g_IsPriest then
-            Priestly_SetWindowVisible(true)
-            ui:Open(0.1)
-        end
-    elseif GetNumGroupMembers() == 0 then
-        ui:Close()
-    end
+    vis:SoloToggled(enabled)
 end
 
 -- Apply frame alpha from config
@@ -597,22 +542,9 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- Auto-open if Priest and in a group (or solo mode) - unless the
         -- window was deliberately closed, which is a preference that should
         -- survive a reload.
-        -- A new session: whatever we saw before this login is not something
-        -- we have seen in it. Said out loud rather than left to the file being
-        -- re-executed, because that is what makes the rule true rather than
-        -- incidentally true.
-        g_LastGroupSize = nil
-        g_JoinedPending = false
-        -- Read, not recorded. What the client says right now is good enough to
-        -- decide whether to open, and wrong as an observation: a 0 here may
-        -- just mean the roster has not arrived, and recording it is what made
-        -- the roster's arrival look like a join.
-        local atLogin = GetNumGroupMembers()
-        if g_IsPriest and Priestly_WindowVisible() ~= false
-            and (atLogin > 0 or Priestly_ShowSolo())
-        then
-            ui:Open(0.6)
-        end
+        -- A new session, and the auto-open decision with it: in a group or
+        -- solo mode, and never over a window the player closed.
+        vis:Login()
 
         DEFAULT_CHAT_FRAME:AddMessage(
             "|cff99ddff[Priestly]|r Loaded. " ..
@@ -622,11 +554,7 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         )
 
     elseif event == "READY_CHECK" then
-        -- A ready check is a good moment to rebuff, but not a reason to
-        -- override someone who closed the window.
-        if g_IsPriest and Priestly_WindowVisible() ~= false then
-            ui:Open(0.4)
-        end
+        vis:ReadyCheck()
 
     elseif event == "UNIT_AURA" then
         if AuraEventIsRelevant(arg1, arg2) then ui:ScheduleRefresh() end
@@ -636,36 +564,14 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         ui:ScheduleRefresh()
 
     elseif event == "GROUP_JOINED" then
-        -- The client saying it, rather than us inferring it. Latched rather
-        -- than acted on here: the roster that follows is what knows how many
-        -- people there are, and acting twice would open the window and then
-        -- decide again whether it should be open.
-        g_JoinedPending = true
+        vis:GroupJoined()
 
     elseif event == "RAID_ROSTER_UPDATE" or event == "GROUP_ROSTER_UPDATE" then
+        -- Priestly's own cache first, then the decision: the library reads the
+        -- roster to make it, so anything the host must invalidate has to be
+        -- invalidated before the call, not after.
         PruneAuraCache()
-        local n = GetNumGroupMembers()
-        -- Joining a group is the one case that reopens a window the user
-        -- closed: that is the addon's advertised behaviour. Any other roster
-        -- churn leaves a deliberate close alone.
-        -- GROUP_JOINED if the client sent one, and otherwise the roster: nil
-        -- is not 0, so the first roster we ever see tells us where we are and
-        -- not that somebody just invited us. The event is what makes logging
-        -- in alone and then being invited work, because there may be no
-        -- zero-member roster in between for the fallback to measure against.
-        local joined = g_JoinedPending or (g_LastGroupSize == 0 and n > 0)
-        g_JoinedPending = false
-        g_LastGroupSize = n
-        if joined then Priestly_SetWindowVisible(true) end
-        if n > 0 and not ui:IsVisible() and g_IsPriest
-            and (joined or Priestly_WindowVisible() ~= false)
-        then
-            ui:Open(0.5)
-        elseif n == 0 and not Priestly_ShowSolo() then
-            ui:Close()  -- auto-close, not manual (unless solo mode)
-        else
-            ui:ScheduleRefresh()  -- including staying solo: just refresh
-        end
+        vis:RosterChanged()
 
     elseif event == "PLAYER_TALENT_UPDATE" or event == "SPELLS_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
         -- Newly learned spells change which rows exist and how they cast.
@@ -674,12 +580,14 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- where it did not. Latched, so this can only ever speak once.
         WarnAboutSpells()
         ui:ApplyAppearance()      -- the spec icon
-        -- Full rebuild: available buffs and reagents may change on a respec.
-        -- In combat only the counts can move; the rebuild follows the fight.
-        if ui:IsVisible() and not InCombatLockdown() then
-            ui:Open(0.3)
-        elseif ui:IsVisible() then
+        -- A rebuild: what a respec or a new spell changes is which rows
+        -- exist, and the library decides whether a closed window should come
+        -- back for them. In combat an open window can only move its counts,
+        -- and the rebuild follows the fight.
+        if ui:IsVisible() and InCombatLockdown() then
             ui:RefreshFooter()
+        else
+            vis:ContentChanged()
         end
 
     elseif event == "PLAYER_REGEN_ENABLED" then

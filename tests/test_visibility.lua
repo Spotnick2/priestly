@@ -333,6 +333,31 @@ Priestly_ForceRebuild()
 settle()
 H.check(shown(), "and a setting that gives it rows again reopens it")
 
+------------------------------------------------------------
+-- Learning a spell brings back a window that had nothing to show
+--
+-- The one rule this addon did NOT have: Wildly and Magely both reopened a
+-- self-closed window when a spell or a respec gave it rows, and Priestly's
+-- spell branch fell through and did nothing. Found by putting the three side
+-- by side to replace them with one - which is the argument for having done so.
+------------------------------------------------------------
+
+setup(2)
+H.TeachSpells({ "FORT_SINGLE", "SHADOW_SINGLE" })
+T.RefreshSpellData()
+Priestly_SetConfig("trackFort", false)
+Priestly_SetConfig("trackSpirit", false)
+Priestly_SetConfig("shadowMode", "never")
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "a window with nothing to track closes itself")
+H.eq(Priestly_WindowVisible(), true, "which was not the player's doing")
+
+Priestly_SetConfig("trackFort", true)
+WoW.dispatch("SPELLS_CHANGED")
+settle()
+H.check(shown(), "and learning a spell that gives it a row brings it back")
+
 -- ...and not for somebody the addon is not for. Nothing would appear anyway -
 -- a non-priest has no rows, so Update closes the window straight back - but
 -- /priestly config has no class gate, so without this every config click on a

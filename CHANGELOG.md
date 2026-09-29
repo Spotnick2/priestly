@@ -1,5 +1,17 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Fixed
+- **Learning a spell brings the window back when it has something to show.** If the window had
+  closed itself because there was nothing to display — every buff untracked, or none of them known
+  yet — learning one, or respeccing, left it shut until something else woke it.
+
+### Under the hood
+- **Priestly now shares one copy of the rules for when the window opens** with Wildly and Magely,
+  instead of each addon carrying its own. Nothing should look different; the fixes in v2.0.9 were
+  all cases where those copies had drifted apart. Needs LibGroupBuffs r24, included in the download.
+
 ## v2.0.9 - 2026-09-28
 
 ### Fixed
