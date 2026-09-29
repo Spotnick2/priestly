@@ -403,8 +403,8 @@ end
 --
 -- Rows, popover, clicks, dragging, the ticker and what combat defers are shared
 -- with Wildly and Magely. Priestly supplies its title, spec icon, reagents and
--- config, and decides when the window opens; the events and slash commands
--- below call the ui's methods.
+-- config. WHEN the window opens is the library's too, through the policy object
+-- built below; the events and slash commands here report what happened.
 local ui = Priestly.UI.New({
     engine  = engine,
     owner   = addonName,
@@ -450,8 +450,11 @@ local ui = Priestly.UI.New({
 -- When the window opens itself, and when it must not. Priestly still owns its
 -- events, its slash commands and its class; this decides what each of them
 -- means for the window. It lived here, in Wildly and in Magely as three
--- near-identical copies, and the copies produced six defects - each found in
--- one addon, fixed there, and left standing in the others (LibGroupBuffs#22).
+-- near-identical copies, and every defect they produced was the same shape:
+-- found in one addon, fixed there, and left standing in the others.
+-- LibGroupBuffs#22 lists them - one place, rather than a tally in each file
+-- that drifts out of step with the other two, which is how this file came to
+-- claim six while the branch that wrote it had found seven.
 local vis = Priestly.Visibility.New({
     ui            = ui,
     isMyClass     = function() return g_IsPriest end,

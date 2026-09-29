@@ -37,7 +37,8 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 
 - `Priestly.toc` — addon manifest. Interface version, saved variables, load order.
 - `PriestlyCompat.lua` — the bridge to the shared library: exposes its compat layer as
-  `Priestly.API` and reports rejected events in chat. No API code lives here any more.
+  `Priestly.API`, the engine, window and window policy as `Priestly.Engine` / `Priestly.UI` /
+  `Priestly.Visibility`, and reports rejected events in chat. No API code lives here any more.
 - `PriestlyConfig.lua` — options panel, defaults, instance database, exported config helpers.
 - `Priestly.lua` — `DEFS`, the reagent footer items, the spec icon, event handling, slash commands
   and the test seam. Everything else is LibGroupBuffs:
@@ -50,8 +51,14 @@ There is no build system, compiler or package manager. The BigWigs packager hand
     Priestly builds one `ui` with its title, spec icon (`appearance`), `FooterItems()` and config
     accessors, and its events and slash commands call `ui:Update()`, `ui:Open(delay)`,
     `ui:Close(manual)`, `ui:ScheduleRefresh()`, `ui:OnCombatEnd()`, `ui:ResetPosition()` and so on.
-    Priestly decides WHEN the window opens (class, groups, the saved `visible`); the library decides
-    how it behaves.
+  - `Visibility.lua` decides **when** the window opens and when it must not. Priestly builds one
+    `vis` with its class, solo setting and saved `visible`, and its events report what happened —
+    `vis:Login()`, `ReadyCheck()`, `GroupJoined()`, `RosterChanged()`, `SoloToggled(on)`,
+    `ContentChanged()`. **Do not add a window-policy branch to `Priestly.lua`.** This used to live
+    here, in Wildly and in Magely as three copies, and every defect they produced was one found in
+    a single addon and left standing in the other two (LibGroupBuffs#22 lists them). `ContentChanged`
+    is one method for every source — a setting, a spell learned, zoning — because splitting it is
+    what grew the copies. What stays Priestly's is whether a notification is worth making at all.
   A change to how buffs are read, targeted or drawn belongs in the library.
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
 - `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, library included.
