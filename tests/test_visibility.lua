@@ -347,6 +347,37 @@ Priestly_ForceRebuild()
 H.eq(#WoW.timers, rebuilds, "a settings change on a non-priest schedules nothing")
 
 ------------------------------------------------------------
+-- Zoning into an instance can give the window a row, so it rebuilds
+--
+-- With Shadow Protection set to "by instance", a window that closed ITSELF
+-- outdoors for want of rows has one again the moment you step into a checked
+-- instance. The zone handler only scheduled a REFRESH, which the library
+-- documents as never opening a closed window - so it stayed shut until some
+-- unrelated event happened to fire. Magely already rebuilt here.
+------------------------------------------------------------
+
+setup(2)
+-- Shadow Protection has to be learnable for there to be a row to gain; setup
+-- teaches only Fortitude.
+H.TeachSpells({ "FORT_SINGLE", "SHADOW_SINGLE" })
+T.RefreshSpellData()
+Priestly_SetConfig("trackFort", false)
+Priestly_SetConfig("trackSpirit", false)
+Priestly_SetConfig("shadowMode", "instance")
+PriestlyAccountDB.shadowInstances["Scholomance"] = true
+WoW.dispatch("PLAYER_LOGIN")
+settle()
+H.check(not shown(), "outdoors with nothing to show, the window closes itself")
+H.eq(Priestly_WindowVisible(), true, "and that was not the player's doing")
+
+WoW.instanceName = "Scholomance"
+WoW.instanceType = "party"
+WoW.dispatch("ZONE_CHANGED_NEW_AREA")
+settle()
+H.check(shown(), "zoning into a checked instance gives it a row and reopens it")
+WoW.instanceType = nil
+
+------------------------------------------------------------
 -- The solo toggle is honoured in combat, not dropped
 --
 -- ui:Open and ui:Close both remember what was asked and carry it out when the

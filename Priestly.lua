@@ -458,9 +458,18 @@ local ui = Priestly.UI.New({
     setPos     = function(pos) SetConfig("pos", pos) end,
     setVisible = function(visible) Priestly_SetWindowVisible(visible) end,
     -- The window parents secure buttons, so in combat the client refuses to
-    -- hide it (docs/FOREVER-PROBE.md section 13). Every way of closing - the X
-    -- button, /priestly hide, the toggle - lands here, so none of them looks
+    -- hide it (docs/FOREVER-PROBE.md section 13). Every close the PLAYER asked
+    -- for - the X button, /priestly hide - lands here, so neither looks
     -- ignored.
+    --
+    -- Not the solo checkbox. Unticking it while alone closes the window
+    -- because there is nothing left to show, which is an automatic close: it
+    -- deliberately does not write "the player does not want this window", and
+    -- Close only explains a close it recorded as the player's. So in combat
+    -- the frame stays up until the fight ends with nothing said. Worth fixing
+    -- one day - by letting Close explain an automatic close too, in the
+    -- library, for all three addons - and not by marking the toggle manual,
+    -- which would conflate "not while solo" with "not at all".
     onCloseDeferred = function()
         DEFAULT_CHAT_FRAME:AddMessage(
             "|cff99ddff[Priestly]|r The window closes when you leave combat.")
@@ -476,11 +485,16 @@ end
 -- Would the window open by itself right now? In a group, or solo mode - and
 -- never over a deliberate close. Same shape as Wildly's and Magely's.
 local function WantsOpen()
-    -- The class guard the other two have. Nothing appears without it either -
-    -- ActiveDefs is empty for a non-priest, so Update closes the window again
-    -- immediately - but /priestly config has no class gate and PLAYER_LOGIN
-    -- writes visible = true for anybody, so every config click on a warrior in
-    -- a group scheduled a full rebuild to produce nothing.
+    -- Nothing appears without this either - ActiveDefs is empty for a
+    -- non-priest, so Update closes the window again immediately - but
+    -- /priestly config has no class gate and PLAYER_LOGIN writes
+    -- visible = true for anybody, so every config click on a warrior in a
+    -- group scheduled a full rebuild to produce nothing.
+    --
+    -- Magely guards this way; Wildly does not guard at all, so it still does
+    -- the wasted rebuild. Not worth a third copy of the fix: the shared
+    -- Visibility object (LibGroupBuffs r24) asks the host whether the window
+    -- is for this character at all, and adopting it settles all three at once.
     if not g_IsPriest then return false end
     if Priestly_WindowVisible() == false then return false end
     return GetNumGroupMembers() > 0 or Priestly_ShowSolo()
