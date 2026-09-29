@@ -414,6 +414,7 @@ local ui = Priestly.UI.New({
     unknownClassIcon = PRIEST_ICON,
     footerItems = FooterItems,
     alpha       = function() return Priestly_GetFrameAlpha and Priestly_GetFrameAlpha() or 0.96 end,
+    scale       = function() return Priestly_GetFrameScale and Priestly_GetFrameScale() or 1.00 end,
     -- `Priestly_FrameLocked and` is not decoration: if PriestlyConfig fails to
     -- load, calling a nil global would throw - silently, errors are off by
     -- default here - and kill the drag. Short-circuiting leaves the window
