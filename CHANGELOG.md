@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.10 - 2026-09-29
 
 ### Added
 - **A Frame Size slider**, in Settings beside Frame Opacity: 70% to 200%. Priestly's window was
