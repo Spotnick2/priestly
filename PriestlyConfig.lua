@@ -726,18 +726,29 @@ function Priestly_ShouldShowShadow(groups, ord)
         -- Names come from Priestly.lua's DEFS, which resolves them from spell
         -- IDs at runtime, so this stays correct in every locale.
         local names = Priestly.shadowAuraNames
+        -- Through the engine, so these reads join the aura pass the window
+        -- opens around a rebuild. This runs from ActiveDefs, immediately
+        -- before the rows ask about the same members: on a 40-man raid where
+        -- nobody has the buff, that used to be a second walk of every member
+        -- (#6).
+        --
+        -- The fallback tests for the METHOD, not for the engine. An absent
+        -- engine cannot happen here - RefreshSpellData publishes it before
+        -- `names`, and no names means this returns false above - but an engine
+        -- whose library is too old to have ReadAura can: LibStub hands the
+        -- newest embedded copy to everybody, so another addon shipping an
+        -- older one decides what this object answers to. Asking `eng and` for
+        -- that case calls a nil method; asking `eng.ReadAura and` degrades to
+        -- a second walk of the roster, which is slow and right.
+        local eng = Priestly.engine
+        local function Read(unit)
+            if eng and eng.ReadAura then return eng:ReadAura(unit, names) end
+            return API.ReadBuff(unit, names)
+        end
         if groups and ord and names then
             for _, gn in ipairs(ord) do
-                -- Through the engine, so these reads join the aura pass the
-                -- window opens around a rebuild. This runs from ActiveDefs,
-                -- immediately before the rows ask about the same members: on a
-                -- 40-man raid where nobody has the buff, that used to be a
-                -- second walk of every member (#6). Falling back to the plain
-                -- read keeps this working if Priestly.lua failed to load.
-                local eng = Priestly.engine
                 for _, m in ipairs(groups[gn] or {}) do
-                    local status = eng and eng:ReadAura(m.unit, names)
-                        or API.ReadBuff(m.unit, names)
+                    local status = Read(m.unit)
                     if status == "HAS" then return true end
                     -- A refused read is not evidence that nobody has it; making
                     -- the row vanish mid-fight would be worse than leaving it.
