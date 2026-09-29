@@ -21,7 +21,7 @@ Priestly = Priestly or {}
 -- than shrugging; r12 answers for itself whether a copy is usable, which is
 -- what lib.Status below is. Keep this equal to the tag .pkgmeta pins;
 -- tests/test_manifest.lua checks that.
-local NEEDS_MINOR = 22
+local NEEDS_MINOR = 24
 
 -- Is this copy usable? The library answers, from its own list of files, so
 -- the marker names and entry points are no longer Priestly's business - this
@@ -93,6 +93,10 @@ Priestly.Settings = lib.Settings
 Priestly.Engine = lib.Engine
 -- The buff window; Priestly.lua builds Priestly's from it.
 Priestly.UI = lib.UI
+-- When that window opens itself and when it must not. Priestly still owns its
+-- events and its slash commands; this decides what each of them means for the
+-- window, in one place instead of three (LibGroupBuffs#22).
+Priestly.Visibility = lib.Visibility
 
 -- Priestly's own record of the events this client rejected, for
 -- `/dump Priestly.eventFailures`. The library also keeps it, as
