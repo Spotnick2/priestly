@@ -1,8 +1,17 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.9 - 2026-09-28
 
 ### Fixed
+- **"Show Shadow Protection by instance" now works if you do not play in English.** Priestly
+  matched the instance by its NAME, which the game gives you in your own language — so on a French
+  or German client it never recognised anywhere, and the setting quietly did nothing. It matches on
+  the instance's own ID now, which is the same in every language. If Priestly still does not
+  recognise somewhere, it says so in chat and prints the ID to report.
+- **The reagent counter no longer names the wrong candle.** Which candle a Prayer burns depends on
+  its rank, and Priestly reads that from a line of text the game writes in your language. When it
+  cannot read a number out of it, it now shows no candle rather than guessing — and
+  `/priestly help` says what the game actually told it. (Only reachable from level 48.)
 - **Changing a setting no longer reopens a window you closed.** Any settings change — the Shadow
   Protection mode, an instance checkbox, anything — used to bring the window straight back. A
   window that closed *itself* because there was nothing to show still reopens when a setting gives
