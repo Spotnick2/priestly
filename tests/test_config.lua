@@ -143,6 +143,46 @@ WoW.SetAura("party1", "Shadow Protection", 600, 300)
 H.check(Priestly_ShouldShowShadow(groups, { 1 }) == true, "somebody has it")
 H.check(Priestly_ShouldShowShadow(nil, nil) == false, "'detect' with no roster is false")
 
+-- Detect mode runs from ActiveDefs, immediately before the rows ask about the
+-- same members - so on a roster where nobody has it, this used to walk
+-- everybody's auras once and the rows walked them again. It reads through the
+-- engine now, which means an open aura pass covers both (#6).
+WoW.reset()
+H.TeachSpells({ "SHADOW_SINGLE" })
+T.RefreshSpellData()
+PriestlyAccountDB.shadowMode = "detect"
+local eng = Priestly.engine
+H.check(eng ~= nil, "the engine is published for the config to read through")
+local roster, bare = {}, {}
+for i = 1, 8 do
+    WoW.SetUnit("party" .. i, { name = "Raider" .. i, guid = "P" .. i })
+    for a = 1, 12 do WoW.SetAura("party" .. i, "Filler" .. a, 600, 300) end
+    bare[#bare + 1] = { unit = "party" .. i }
+end
+roster[1] = bare
+WoW.byNameBlind = true          -- force the walk, which is the path being shared
+
+WoW.auraReads.byIndex = 0
+H.check(Priestly_ShouldShowShadow(roster, { 1 }) == false, "nobody in the raid has it")
+local alone = WoW.auraReads.byIndex
+
+eng:BeginAuraPass()
+WoW.auraReads.byIndex = 0
+H.check(Priestly_ShouldShowShadow(roster, { 1 }) == false, "same answer inside a pass")
+local first = WoW.auraReads.byIndex
+WoW.auraReads.byIndex = 0
+local shadowDef
+for _, d in ipairs(T.DEFS) do if d.id == "shadow" then shadowDef = d end end
+for _, m in ipairs(bare) do eng:BuffRem(m.unit, shadowDef) end
+local second = WoW.auraReads.byIndex
+eng:EndAuraPass()
+
+H.check(alone > 0, "the scan really does walk auras: " .. alone .. " reads")
+H.eq(first, alone, "the scan inside a pass costs the same walk, once")
+H.eq(second, 0, "and the rows that follow it read nothing at all")
+
+WoW.byNameBlind = false
+
 PriestlyAccountDB.shadowMode = "instance"
 WoW.instanceName = "Scholomance"
 PriestlyAccountDB.shadowInstances["Scholomance"] = true

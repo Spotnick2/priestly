@@ -727,10 +727,22 @@ function Priestly_ShouldShowShadow(groups, ord)
         -- Names come from Priestly.lua's DEFS, which resolves them from spell
         -- IDs at runtime, so this stays correct in every locale.
         local names = Priestly.shadowAuraNames
+        -- Through the engine, so these reads join the aura pass the window
+        -- opens around a rebuild. This runs from ActiveDefs, immediately
+        -- before the rows ask about the same members: on a 40-man raid where
+        -- nobody has the buff, that used to be a second walk of every member
+        -- (#6).
+        --
+        -- No guard on either of those. RefreshSpellData publishes
+        -- Priestly.engine BEFORE Priestly.shadowAuraNames, so `names` being
+        -- set is already proof the engine is; and ReadAura arrived in r25,
+        -- which PriestlyCompat's NEEDS_MINOR refuses to start below. Both
+        -- checks were here while the pin was r24 and both are dead now.
         if groups and ord and names then
+            local eng = Priestly.engine
             for _, gn in ipairs(ord) do
                 for _, m in ipairs(groups[gn] or {}) do
-                    local status = API.ReadBuff(m.unit, names)
+                    local status = eng:ReadAura(m.unit, names)
                     if status == "HAS" then return true end
                     -- A refused read is not evidence that nobody has it; making
                     -- the row vanish mid-fight would be worse than leaving it.
