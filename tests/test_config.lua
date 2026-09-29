@@ -181,19 +181,6 @@ H.check(alone > 0, "the scan really does walk auras: " .. alone .. " reads")
 H.eq(first, alone, "the scan inside a pass costs the same walk, once")
 H.eq(second, 0, "and the rows that follow it read nothing at all")
 
--- An engine from a library too old to have ReadAura - which, while the pin is
--- still on the release before it, is what a real install has. No other addon
--- can cause this (LibStub upgrades, never downgrades), and once NEEDS_MINOR
--- names the release that added the method the start-up gate makes it
--- impossible: this goes with the pin bump. Until then it has to keep working,
--- slowly, rather than throwing.
-local realEngine = Priestly.engine
-Priestly.engine = {}
-WoW.SetAura("party1", "Shadow Protection", 600, 300)
-local ok, detected = pcall(Priestly_ShouldShowShadow, roster, { 1 })
-H.check(ok, "an engine without ReadAura does not throw")
-H.check(detected == true, "and the mode still detects the buff")
-Priestly.engine = realEngine
 WoW.byNameBlind = false
 
 PriestlyAccountDB.shadowMode = "instance"

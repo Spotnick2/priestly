@@ -732,29 +732,16 @@ function Priestly_ShouldShowShadow(groups, ord)
         -- nobody has the buff, that used to be a second walk of every member
         -- (#6).
         --
-        -- The fallback tests for the METHOD, not for the engine. An absent
-        -- engine cannot happen here: RefreshSpellData publishes it before
-        -- `names`, and no names returns false above.
-        --
-        -- A library too old to HAVE ReadAura can, but only while Priestly's
-        -- own embedded copy is the old one. LibStub never downgrades - it
-        -- upgrades an older copy another addon loaded first - so no other
-        -- addon can take this method away, and PriestlyCompat.lua says the
-        -- same thing where it explains the "too-old" message.
-        --
-        -- Which makes this guard temporary: once NEEDS_MINOR is the release
-        -- that added ReadAura, the start-up gate refuses to run at all below
-        -- it and the method is guaranteed. Remove this and its test in the
-        -- commit that bumps the pin.
-        local eng = Priestly.engine
-        local function Read(unit)
-            if eng and eng.ReadAura then return eng:ReadAura(unit, names) end
-            return API.ReadBuff(unit, names)
-        end
+        -- No guard on either of those. RefreshSpellData publishes
+        -- Priestly.engine BEFORE Priestly.shadowAuraNames, so `names` being
+        -- set is already proof the engine is; and ReadAura arrived in r25,
+        -- which PriestlyCompat's NEEDS_MINOR refuses to start below. Both
+        -- checks were here while the pin was r24 and both are dead now.
         if groups and ord and names then
+            local eng = Priestly.engine
             for _, gn in ipairs(ord) do
                 for _, m in ipairs(groups[gn] or {}) do
-                    local status = Read(m.unit)
+                    local status = eng:ReadAura(m.unit, names)
                     if status == "HAS" then return true end
                     -- A refused read is not evidence that nobody has it; making
                     -- the row vanish mid-fight would be worse than leaving it.
