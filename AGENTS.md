@@ -427,14 +427,25 @@ and is invisible from this side.
 2. Note anything that resets or behaves differently after updating — a settings change, a default
    that moved — under its own heading. People read release notes to find out what broke.
 3. Commit the changelog, then tag: `git tag v2.0.0-beta1 && git push --tags`.
-4. The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
+4. **Expect the changelog commit's own `package-check` to fail, and do not chase it.** The
+   packager refuses to build a snapshot a tag supersedes, and says so in one line: *"Found future
+   tag "v2.0.10", not packaging."* Pushing the tag straight after the commit means the `push main`
+   run sees it and skips, so the zip step finds nothing and the job is red. That is the packager
+   being right, not a broken release - CurseForge builds from the tag via the webhook regardless.
+   It has hit two of the last three releases and looks alarming each time.
+
+   What it does cost is the one check that the release zip **embeds the library**. Confirm that on
+   the last commit that carries code, before the notes: its run is where `.pkgmeta`'s pin was
+   actually proved. Or push the tag only after the main run goes green, which keeps the check and
+   the tag on the same content.
+5. The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
    Release. **This is a distribution channel, not a stability claim.** CurseForge defaults every
    user to the Release channel, so an Alpha or Beta file is not offered for install or update
    unless they deliberately opt in - which almost nobody does. Tag `beta` only when you want the
    build held back from the people who already have the addon. The fact that the *game client* is
    in beta is not a reason: say that in the release notes, where players read it, and ship a
    Release so they can actually get it.
-5. **Check the published zip carries LibGroupBuffs, and nothing else.** CI proves the BigWigs
+6. **Check the published zip carries LibGroupBuffs, and nothing else.** CI proves the BigWigs
    packager embeds it, but releases are built by CurseForge's own packager from the tag webhook,
    which CI cannot run, and **the two do not behave the same**. Download the published file and
    check `Priestly/Libs/LibGroupBuffs-1.0/` with
