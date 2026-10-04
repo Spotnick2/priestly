@@ -37,6 +37,24 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 | `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | §9's duration learning guesses at refresh behaviour; this may answer it outright |
 | `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | §4's surname handling is hand-rolled string work |
 
+### 70205 against 70009: declarations only (2026-10-04)
+
+`forever-api-1.60.1.70205.md` (dumped 2026-10-02) against 70009, matched against every name
+Priestly, Wildly, Magely, LibGroupBuffs and this probe call (shipping code, comments stripped):
+**nothing they call was removed or changed signature.** Documented functions 6596 → 6598, events
+1805 → 1806, global functions 6057 → 6137, tables, widget methods and namespace functions unchanged
+in count.
+
+| change | touches us? |
+|---|---|
+| `C_PlayerInfo.GetName` return lost `optional`: `-> name:string` | only the probe's §4 row, which wraps it in `try` |
+| removed: six `PlayerChoice*` globals, `GameEvent.HandleShardTransferImminentEvent` | no |
+| added: `C_Spell.GetItemCooldown(itemID)`, `UnitUsesAmmo(unit)`, event `PLAYER_PVP_FLAG_CHANGED`, 86 new `_G` functions | no |
+
+So the dump gives no reason to expect a break, and no evidence that behaviour held either.
+`MEASURED_ON_BUILD` stays at 70009 until `/pprobe` (in a fight) and the full-exit
+SavedVariables check are repeated on 70205. 70124 and 70170 were dumped too and skipped over.
+
 ### Re-probed on 70009 (2026-09-25 01:13)
 
 `/pprobe` was run on the current client. `GetBuildInfo` reads `1.60.1`, `70009`, **`Sep 23 2026`**,
