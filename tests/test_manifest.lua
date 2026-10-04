@@ -195,6 +195,26 @@ H.check(libIgnored, "and Libs/ is git-ignored, so no vendored copy can creep bac
 
 H.eq(directive("Version"), "@project-version@",
     "the packager substitutes the version; deploy.ps1 rewrites it only in the deployed copy")
+
+-- ...and it substitutes keywords in EVERY file it ships, Lua included, not
+-- only the TOC. A Lua comparison against the whole "@project-version@" became
+-- `version == "v2.0.12"` in the released file, and every player's copy took
+-- itself for a development copy (#83) - which no offline test could see,
+-- because they load the source, where the token is still raw. So no shipped
+-- Lua file may hold a packager keyword whole; code that needs one builds it
+-- from pieces. Matched by shape, because the packager has a family of them
+-- (@project-revision@, @file-date-iso@, @debug@, ...).
+for _, file in ipairs(H.tocFiles()) do
+    local src = H.readFile(file) or ""
+    local n, keyword = 0, nil
+    for line in (src .. "\n"):gmatch("([^\n]*)\n") do
+        n = n + 1
+        keyword = line:match("(@[%w%-]+@)")
+        if keyword then break end
+    end
+    H.check(keyword == nil, file .. " holds no packager keyword the release would rewrite: "
+        .. tostring(keyword) .. " at line " .. n)
+end
 H.check(directive("X-Curse-Project-ID") ~= nil, "the CurseForge project is declared")
 H.check(hasLine("Priestly"), "the title mentions the addon")
 
