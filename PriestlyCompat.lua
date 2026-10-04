@@ -46,14 +46,22 @@ local GB
 -- say arrives here: the settings checks, and with kind "events" the names
 -- the client rejected, whether it threw or returned false.
 local function Report(text, kind)
+    if kind == "events" then
+        text = tostring(text)
+        -- Recorded whether or not anything can be printed: the record is what
+        -- `/dump Priestly.eventFailures` reads when the line was never seen.
+        local mine = GB and GB.EventFailures() or {}
+        for ev, why in pairs(mine) do Priestly.eventFailures[ev] = why or true end
+        -- The label in red, the names plain - whatever the library calls it.
+        -- Its wording is the library's to change, so this matches the shape
+        -- ("label: names"), not the words, and a line without a colon is red
+        -- throughout rather than plain.
+        local label, names = text:match("^([^:]*:)(.*)$")
+        text = label and ("|cffff6666" .. label .. "|r" .. names) or ("|cffff6666" .. text .. "|r")
+    end
     -- Before any filter: a filter may record that it spoke (newBuild does),
     -- and with no chat frame nothing was said.
     if not DEFAULT_CHAT_FRAME then return end
-    if kind == "events" then
-        local mine = GB and GB.EventFailures() or {}
-        for ev, why in pairs(mine) do Priestly.eventFailures[ev] = why or true end
-        text = (tostring(text):gsub("^(unsupported events skipped:)", "|cffff6666%1|r"))
-    end
     local filter = Priestly.reportFilters[kind]
     if filter then text = filter(text, kind) end
     if text then DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r " .. text) end
@@ -62,7 +70,50 @@ end
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
 
-local problem
+-- What a player can do about a copy that did not finish loading. The copy
+-- LibStub runs is the newest any addon shipped, so it may well not be
+-- Priestly's - and errors are hidden by default, so say how to see them.
+local SEE_WHICH = " - one addon's copy of it failed. With /console scriptErrors 1 and /reload,"
+    .. " the first error names that addon; updating or disabling it should fix this"
+
+-- Why lib:New refused, in the words a player needs. New checks, in order:
+-- the active copy finished loading (lib.ready, the library's marker), LibGlass
+-- is there and finished loading (its own `ready` marker), and the active copy
+-- is at least the floor. The same three facts are read here, in the same
+-- order, from the libraries' documented markers - never from the error's
+-- words, which are the library's to change. Anything else New throws is not
+-- one of its refusals (a bug, or a host mistake such as a second New for the
+-- same owner) and reads as a failed load; its text goes to developers only.
+-- LibGroupBuffs#54 asks for New to raise this as a structured reason.
+local function WhyRefused()
+    local _, active = LibStub:GetLibrary("LibGroupBuffs-1.0", true)
+    if lib.ready ~= active then
+        return "the LibGroupBuffs-1.0 library (r" .. tostring(active) .. ") did not finish loading"
+            .. SEE_WHICH
+    end
+    local glass, glassMinor = LibStub:GetLibrary("LibGlass-1.0", true)
+    if type(glass) ~= "table" then
+        -- Not registered at all: no addon's copy loaded, and Priestly ships
+        -- one in its own Libs folder, so it is Priestly's install.
+        return "the LibGlass-1.0 library is missing from Priestly's Libs folder."
+            .. " Reinstalling Priestly should fix it"
+    end
+    if glass.ready ~= glassMinor then
+        -- Registered but never ready: the newest copy threw partway. Priestly's
+        -- own copy loaded, or the name would not be registered at all, so
+        -- reinstalling Priestly would change nothing.
+        return "the LibGlass-1.0 library (r" .. tostring(glassMinor) .. ") did not finish loading"
+            .. SEE_WHICH
+    end
+    if type(active) == "number" and active < NEEDS_MINOR then
+        return "this version of Priestly needs the LibGroupBuffs-1.0 library r" .. NEEDS_MINOR
+            .. " or newer, and the newest copy loaded is r" .. tostring(active)
+            .. ". Reinstalling Priestly should fix it"
+    end
+    return "the LibGroupBuffs-1.0 library failed to load completely. Reinstalling Priestly should fix it"
+end
+
+local problem, detail
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder."
         .. " Reinstalling Priestly should fix it"
@@ -85,9 +136,18 @@ else
     -- Under pcall: New is library code on a shared table, and its refusals are
     -- errors. A throw escaping here would skip the chat message below and
     -- leave Priestly silently dead, since this client hides Lua errors by
-    -- default. Its refusals are already written for players.
+    -- default.
     local ok, made = pcall(lib.New, lib, { owner = "Priestly", report = Report, needs = NEEDS_MINOR })
-    if ok then GB = made else problem = tostring(made) end
+    if ok then
+        GB = made
+    else
+        detail = tostring(made)
+        -- Under pcall too: it reads shared tables another copy may have left
+        -- half-built, and a throw here must still end in the chat line.
+        local asked, why = pcall(WhyRefused)
+        problem = asked and why
+            or "the LibGroupBuffs-1.0 library failed to load completely. Reinstalling Priestly should fix it"
+    end
 end
 
 if problem then
@@ -99,8 +159,10 @@ if problem then
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Priestly cannot start:|r "
             .. problem .. ".")
     end
-    error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0, Libs\\LibGlass-1.0). Developers: "
-        .. "check out LibGroupBuffs and LibGlass next to the repository and run Tools/deploy.ps1.")
+    error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0, Libs\\LibGlass-1.0"
+        .. (detail and detail ~= problem and ("; lib:New said: " .. detail) or "")
+        .. "). Developers: check out LibGroupBuffs and LibGlass next to the repository and run "
+        .. "Tools/deploy.ps1.")
 end
 
 Priestly.GB = GB

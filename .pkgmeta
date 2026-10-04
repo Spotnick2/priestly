@@ -11,16 +11,16 @@ enable-nolib-creation: no
 # it against the TOC; no comment may sit on a value line, because the
 # packager's YAML reader keeps it as part of the ref.
 #
-# LibGroupBuffs is pinned by commit while Priestly pilots r26 (#79): the tag is
-# cut on this commit only after the in-game check, and this line then becomes
-# `tag: r26` before Priestly releases.
+# A pin may be `commit: <full sha>` while Priestly pilots a library release
+# before it is tagged (r26 was, #79); it goes back to a tag before Priestly
+# releases.
 externals:
   Libs/LibGlass-1.0:
     url: https://github.com/Spotnick2/LibGlass
     tag: r1
   Libs/LibGroupBuffs-1.0:
     url: https://github.com/Spotnick2/LibGroupBuffs
-    commit: 3de943edf46de8903b0d5f3ff410d35349c82324
+    tag: r26
 
 manual-changelog:
   filename: CHANGELOG.md

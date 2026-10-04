@@ -173,8 +173,19 @@ local g_IsPriest = false
 -- already running, so a version read at load would name the copy that lost.
 -- That is the same rule AGENTS.md states for functions, and the line exists
 -- to tell a bug report which code actually ran.
+-- LibStub's number, not the instance's GB.MINOR: a newer copy registers with
+-- LibStub before any of its code runs, and its code upgrades this one section
+-- by section, while GB.MINOR is written only near its end. A copy that threw
+-- partway is still the code that is (partly) running, so the report names it
+-- - and says it is incomplete, next to the last copy that did finish
+-- (lib.ready), because a bare number would read the same as a healthy one.
 local function LiveLibraryMinor()
-    return Priestly.GB.MINOR or "?"
+    local lib, live = LibStub("LibGroupBuffs-1.0", true)
+    if not live then return "?" end
+    if lib.ready ~= live then
+        return tostring(live) .. " (incomplete; r" .. tostring(lib.ready) .. " complete)"
+    end
+    return live
 end
 
 local FROM_NOTE = {
@@ -408,8 +419,7 @@ end
 -- config. WHEN the window opens is the library's too, through the policy object
 -- built below; the events and slash commands here report what happened.
 local ui = Priestly.GB.UI({
-    engine  = engine,
-    owner   = addonName,
+    engine  = engine,                   -- owner is the instance's: GB.UI fills it in
     title   = "|cff99ddffPriestly|r",
     version = VERSION,
     appearance = function() return { icon = GetSpecIcon() } end,

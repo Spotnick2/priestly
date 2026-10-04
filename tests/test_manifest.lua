@@ -148,9 +148,9 @@ H.eq(glass.kind, "tag", "LibGlass is pinned by tag: " .. tostring(glass.ref))
 -- the floor exists to prevent. (The opposite, a floor ahead of the pin,
 -- refuses to start at all.)
 --
--- A tag names its MINOR. A commit does not, so for a commit pin the floor is
--- compared with the MINOR of the checkout the suite runs against - which run.ps1
--- warns about, and CI proves, being that commit.
+-- A tag names its MINOR. A commit does not, so for a commit pin the MINOR is
+-- read from that commit in the library checkout's history (`git show`) - not
+-- from its working tree, which may be any branch.
 local needs = tonumber((H.readFile("PriestlyCompat.lua") or "")
     :match("local NEEDS_MINOR = (%d+)"))
 H.check(needs ~= nil, "PriestlyCompat declares the oldest library it works against")
@@ -158,8 +158,19 @@ local pinnedMinor
 if gb.kind == "tag" then
     pinnedMinor = tonumber(tostring(gb.ref):match("^r(%d+)$"))
 else
-    pinnedMinor = tonumber((H.readFile(H.libraryRoot() .. "/LibGroupBuffs.lua") or "")
-        :match('local MAJOR, MINOR = "LibGroupBuffs%-1%.0", (%d+)'))
+    -- Only a full hex SHA reaches the shell (the pin check above requires one),
+    -- so nothing in .pkgmeta can become part of a command.
+    local sha = tostring(gb.ref):match("^%x+$")
+    local cmd = 'git -C "' .. H.libraryRoot() .. '" show ' .. tostring(sha) .. ":LibGroupBuffs.lua"
+    local src = ""
+    if sha and #sha == 40 then
+        local pipe = io.popen(cmd .. " 2>&1")
+        src = pipe and pipe:read("*a") or ""
+        if pipe then pipe:close() end
+    end
+    pinnedMinor = tonumber(src:match('local MAJOR, MINOR = "LibGroupBuffs%-1%.0", (%d+)'))
+    H.check(pinnedMinor ~= nil, "the pinned commit's MINOR could be read with `" .. cmd
+        .. "` - the library checkout must have that commit: " .. src:sub(1, 200))
 end
 H.eq(needs, pinnedMinor,
     "and it is the MINOR .pkgmeta pins: " .. tostring(gb.kind) .. " " .. tostring(gb.ref)

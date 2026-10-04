@@ -147,6 +147,37 @@ ok, failed = Priestly.RegisterEvents(f, "REFUSED_EVENT")
 H.eq(ok, false, "a false return is a rejection too")
 said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("REFUSED_EVENT", 1, true), "and it is printed: " .. said)
+-- The label in red, the names plain - matched by the line's shape, not by the
+-- library's words, which are the library's to change.
+H.check(said:find("|cffff6666[^|]*:|r", 1) and not said:find("|cffff6666[^|]*REFUSED_EVENT"),
+    "the label in red, the names plain: " .. said)
+do
+    -- A later library that words it differently keeps the same shape.
+    local n = #WoW.messages
+    Priestly.GB.report("rejected events: SOME_EVENT", "events")
+    local reworded = table.concat(WoW.messages, " ", n + 1, #WoW.messages)
+    H.check(reworded:find("|cffff6666rejected events:|r SOME_EVENT", 1, true),
+        "however the library words it: " .. reworded)
+end
+
+-- With no chat frame nothing can be printed, but the record is what
+-- `/dump Priestly.eventFailures` reads afterwards, and it must still be made.
+do
+    local chat = DEFAULT_CHAT_FRAME
+    -- false, not nil: the strict stub refuses a read of a global it holds no
+    -- value for, and the bridge only tests it for truth.
+    DEFAULT_CHAT_FRAME = false
+    WoW.badEvents.UNHEARD_EVENT = true
+    local registered, why = pcall(Priestly.RegisterEvents, f, "UNHEARD_EVENT")
+    DEFAULT_CHAT_FRAME = chat
+    H.check(registered, "a rejection with no chat frame does not throw: " .. tostring(why))
+    H.check(Priestly.eventFailures.UNHEARD_EVENT ~= nil,
+        "and it is recorded in Priestly's table all the same")
+    -- Left as found, so nothing below depends on this section having run.
+    WoW.badEvents.UNHEARD_EVENT = nil
+    Priestly.eventFailures.UNHEARD_EVENT = nil
+    API.eventFailuresByOwner.Priestly.UNHEARD_EVENT = nil
+end
 
 ------------------------------------------------------------
 -- One reporter for everything the library says
@@ -167,6 +198,8 @@ H.check(said:find("[Priestly]", 1, true) and said:find("|cff55ff55Settings are s
 said = reported("something new to say", "aKindFromALaterLibrary")
 H.check(said:find("something new to say", 1, true),
     "and a kind this build has no filter for is still said, not dropped: " .. said)
+said = reported(nil, "aKindFromALaterLibrary")
+H.eq(said, "", "and a report with no text says nothing, rather than 'nil'")
 
 ------------------------------------------------------------
 -- A missing library stops loading, with a message that says why
@@ -256,36 +289,90 @@ do
     H.eq(made and made.owner, "Priestly", "under Priestly's own name")
 end
 
--- Another addon's newer copy threw partway: registered, never ready.
+-- Whatever New said goes to developers, after Priestly's own sentence. Checked
+-- by shape - not by the library's words, which are its to change.
+local function handsOverReason(why, label)
+    local said = why:match("; lib:New said: (.-)%)%. Developers:")
+    H.check(said ~= nil and said ~= "", label .. ": developers get New's own reason: " .. why)
+end
+
+-- A copy that threw partway: registered, never ready. LibStub runs the newest
+-- copy any addon shipped, so it need not be Priestly's - the player is told
+-- how to find out whose, not sent to reinstall Priestly.
 do
     local ready = lib.ready
     lib.ready = -1
     local ok, why, said = reload()
     lib.ready = ready
     H.check(not ok, "a library that did not finish loading is refused")
-    H.check(said:find("cannot start", 1, true) and said:find("did not finish loading", 1, true),
-        "and the player is told so, in the library's words: " .. said)
-    H.check(why:find("did not finish loading", 1, true),
-        "with the same reason in the error for developers: " .. why)
+    H.check(said:find("cannot start", 1, true) and said:find("did not finish loading", 1, true)
+            and said:find(GB_MAJOR, 1, true),
+        "and the player is told so: " .. said)
+    H.check(said:find("scriptErrors", 1, true) and not said:find("Reinstalling", 1, true),
+        "with how to see which addon's copy failed, not a reinstall that would change nothing: " .. said)
+    handsOverReason(why, "an unfinished library")
 end
 
--- LibGlass missing outright, then present but half-loaded. Either way the
--- window cannot draw, so Priestly must not start.
+-- LibGlass missing outright: no addon's copy registered, and Priestly ships
+-- one, so it is Priestly's install.
 do
     local glass, glassMinor = LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR]
     LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR] = nil, nil
-    local ok, _, said = reload()
+    local ok, why, said = reload()
     LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR] = glass, glassMinor
     H.check(not ok, "a missing LibGlass is refused")
     H.check(said:find("cannot start", 1, true) and said:find(GLASS_MAJOR, 1, true),
         "naming LibGlass to the player: " .. said)
+    H.check(said:find("Reinstalling Priestly", 1, true),
+        "pointing them at reinstalling Priestly: " .. said)
+    handsOverReason(why, "a missing LibGlass")
 
+    -- Registered but never ready: the newest LibGlass threw partway. Priestly's
+    -- own copy loaded (or the name would not be registered), so it is some
+    -- other addon's copy, and reinstalling Priestly would change nothing.
     local ready = glass.ready
     glass.ready = nil
-    ok, _, said = reload()
+    ok, why, said = reload()
     glass.ready = ready
     H.check(not ok, "a LibGlass that did not finish loading is refused too")
-    H.check(said:find(GLASS_MAJOR, 1, true), "and named: " .. said)
+    H.check(said:find(GLASS_MAJOR, 1, true) and said:find("did not finish loading", 1, true)
+            and said:find("scriptErrors", 1, true) and not said:find("Reinstalling", 1, true),
+        "as another addon's copy failing, not as Priestly's install: " .. said)
+    handsOverReason(why, "a half-loaded LibGlass")
+end
+
+-- Both at once: the library's own copy unfinished is what New refuses first,
+-- so it is what the player hears about first.
+do
+    local ready, glass = lib.ready, LibStub.libs[GLASS_MAJOR]
+    local glassReady = glass.ready
+    lib.ready, glass.ready = -1, nil
+    local _, _, said = reload()
+    lib.ready, glass.ready = ready, glassReady
+    H.check(said:find(GB_MAJOR .. " library", 1, true) and not said:find(GLASS_MAJOR, 1, true),
+        "with both unfinished, the library's own copy is named, as New checks it first: " .. said)
+end
+
+-- Anything else New throws is not one of its refusals, and reads as a failed
+-- load: a Lua error, whose file and line mean nothing to a player, and a host
+-- mistake such as a second New for the same owner, which pcall leaves with no
+-- position at all - so a position cannot be what tells them apart.
+do
+    local realNew = lib.New
+    for _, case in ipairs({
+        { label = "a New that crashes", thrown = "attempt to index field 'instances' (a nil value)", level = 1 },
+        { label = "a host mistake", thrown = "LibGroupBuffs-1.0: Priestly already has an instance", level = 0 },
+    }) do
+        lib.New = function() error(case.thrown, case.level) end
+        local ok, why, said = reload()
+        lib.New = realNew
+        H.check(not ok, case.label .. " is refused")
+        H.check(said:find("failed to load completely", 1, true) and said:find("Reinstalling", 1, true),
+            case.label .. " reads as a failed load: " .. said)
+        H.check(not said:find(case.thrown, 1, true) and not said:find(":%d+:"),
+            case.label .. ": its text and position stay out of chat: " .. said)
+        H.check(why:find(case.thrown, 1, true), case.label .. " goes to developers instead: " .. why)
+    end
 end
 
 -- A complete copy that is simply behind the floor.

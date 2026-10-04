@@ -58,8 +58,15 @@ function Get-LibraryFiles {
     }
     $files = & $Lua (Join-Path $RepoRoot "tests\libfiles.lua") $Root ship $GlassRoot 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw ("$files. Clone https://github.com/Spotnick2/LibGroupBuffs next to this repository, " +
-            "or pass -Library.")
+        # Only a MISSING checkout gets the "clone it" advice, as in the test
+        # harness. The reader also fails when LibGroupBuffs names a texture
+        # the LibGlass checkout lacks, and sending someone with a good clone
+        # off to re-clone it hides the one line that says what is wrong.
+        $why = "$files"
+        if ($why -match 'not found in') {
+            $why += ". Clone https://github.com/Spotnick2/LibGroupBuffs next to this repository, or pass -Library."
+        }
+        throw $why
     }
     return @($files)
 }
@@ -77,28 +84,19 @@ function Copy-AddonFile {
     }
 }
 
-# Warn when a checkout is not at the ref .pkgmeta pins for it, read by path
-# (tests/pkgmeta.lua): with two externals, the first `tag:` in the file is
-# LibGlass's.
+# Warn when a checkout is not at the ref .pkgmeta pins for it. The comparison
+# is tests/pins.ps1, shared with tests/run.ps1.
+. (Join-Path $RepoRoot "tests\pins.ps1")
 function Test-Pin {
     param([string]$Name, [string]$Path, [string]$Root)
-    Push-Location $RepoRoot
-    try { $pin = & $Lua (Join-Path $RepoRoot "tests\pkgmeta.lua") $Path ref 2>$null } finally { Pop-Location }
-    if ($LASTEXITCODE -ne 0 -or -not $pin) {
-        $global:LASTEXITCODE = 0
+    $s = Get-PinState -Lua $Lua -RepoRoot $RepoRoot -Path $Path -Root $Root
+    if (-not $s.Pin) {
         Write-Host "  (no $Name pin found in .pkgmeta)" -ForegroundColor Yellow
-        return
+    } elseif (-not $s.AtPin) {
+        Write-Host ("  WARNING: the $Name checkout at $Root ($($s.Revision)) is not at the .pkgmeta pin ($($s.Pin))" +
+            "$(if ($s.Dirty) { ', or has uncommitted changes' }); a release ships the pin") -ForegroundColor Yellow
     }
-    try {
-        $want = git -C $Root rev-parse --verify --quiet "$pin^{commit}" 2>$null
-        $head = git -C $Root rev-parse HEAD 2>$null
-        $dirty = git -C $Root status --porcelain 2>$null
-        if (-not $want -or $want -ne $head -or $dirty) {
-            Write-Host ("  WARNING: the $Name checkout at $Root is not at the .pkgmeta pin ($pin)" +
-                "$(if ($dirty) { ', or has uncommitted changes' }); a release ships the pin") -ForegroundColor Yellow
-        }
-    } catch { }
-    $global:LASTEXITCODE = 0
+    return $s
 }
 
 function Deploy-Priestly {
@@ -118,19 +116,14 @@ function Deploy-Priestly {
     if (-not $libRoot) { $libRoot = Join-Path (Split-Path -Parent $RepoRoot) "LibGroupBuffs" }
     $libFiles = Get-LibraryFiles -Root $libRoot -GlassRoot $glassRoot
     $libRoot = (Resolve-Path $libRoot).Path
-    Test-Pin -Name "LibGlass" -Path "Libs/LibGlass-1.0" -Root $glassRoot
-    Test-Pin -Name "LibGroupBuffs" -Path "Libs/LibGroupBuffs-1.0" -Root $libRoot
+    $null = Test-Pin -Name "LibGlass" -Path "Libs/LibGlass-1.0" -Root $glassRoot
+    # Its revision is printed with the copy below; pins.ps1 already asked git.
+    $revision = (Test-Pin -Name "LibGroupBuffs" -Path "Libs/LibGroupBuffs-1.0" -Root $libRoot).Revision
 
     # LibGlass first, by its own deploy: a refusal there must leave the
     # deployed Priestly untouched.
     & pwsh -NoProfile -File (Join-Path $glassRoot "Tools\deploy.ps1") -Addon Priestly -AddOnsPath $AddOnsPath -Lua $Lua
     if ($LASTEXITCODE -ne 0) { throw "LibGlass deploy refused; Priestly was not touched" }
-    # Informational: no git, or a library that is not a checkout, must not
-    # stop a deploy.
-    $revision = try {
-        $r = git -C $libRoot describe --tags --always --dirty 2>$null
-        if ($LASTEXITCODE -eq 0 -and $r) { $r } else { "not a git checkout" }
-    } catch { "git not available" }
 
     Write-Host "Deploying Priestly -> $dest" -ForegroundColor Cyan
     if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
