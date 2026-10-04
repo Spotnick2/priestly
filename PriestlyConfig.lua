@@ -65,8 +65,8 @@ local DEFAULTS = {
 -- Which build Priestly's notes on this beta were measured on, and the build
 -- where SavedVariables are measured broken. In the SOURCE, because it is the
 -- one thing that survives a restart here. Bump MEASURED_ON_BUILD after
--- re-measuring (AGENTS.md); the library warns at every real login until then,
--- in a development copy only - a release keeps quiet (IsDevelopmentCopy).
+-- re-measuring (AGENTS.md); until then a development copy says so once per new
+-- client build, and a release keeps quiet (see the report callback).
 --
 -- These two are INDEPENDENT, and right now they differ. The installed client
 -- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
@@ -83,8 +83,8 @@ local DEFAULTS = {
 -- secrecy in combat or secure click-casting still behave the same way. Those
 -- were measured in game, which is the only thing that settles them.
 --
--- When the client next patches, the notice starts again in dev and stays until
--- someone repeats all of it. Silencing it by bumping this constant without
+-- When the client next patches, a development copy says so once, and the
+-- notes stay stale until someone repeats all of it. Silencing it by bumping this constant without
 -- re-measuring is the one thing not to do: it is the only reminder that the
 -- notes describe a client nobody is running.
 --
@@ -187,6 +187,18 @@ local function CopyValue(value, seen)
     return out
 end
 
+-- The client build a development copy last announced, account-wide, so the
+-- notice speaks once per new build rather than at every login on every
+-- character. See the report callback below.
+local function AnnouncedBuild()
+    return PriestlyAccountDB and PriestlyAccountDB.seenBuild
+end
+
+local function RememberAnnouncedBuild(build)
+    AccountStore()
+    PriestlyAccountDB.seenBuild = build
+end
+
 -- config-owner: end
 
 function Priestly_OnConfigChanged(key)
@@ -216,7 +228,16 @@ local settings = Priestly.Settings.New({
     measuredOnBuild = MEASURED_ON_BUILD,
     report = function(text, kind)
         if not DEFAULT_CHAT_FRAME then return end
-        if kind == "newBuild" and not IsDevelopmentCopy() then return end
+        if kind == "newBuild" then
+            -- Once per new client build, in a development copy only: time to
+            -- re-measure, then bump MEASURED_ON_BUILD (which silences it for good).
+            if not IsDevelopmentCopy() then return end
+            local build = API.ClientBuild()
+            if build == AnnouncedBuild() then return end
+            RememberAnnouncedBuild(build)
+            text = "new client build " .. tostring(build) .. " (measured on "
+                .. MEASURED_ON_BUILD .. "): re-measure, then bump MEASURED_ON_BUILD."
+        end
         if kind == "settingsLoaded" then text = "|cff55ff55" .. text .. "|r" end
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r " .. text)
     end,
@@ -819,8 +840,8 @@ end
 -- `svLoadCheck` marker in each scope - written every session, never in
 -- DEFAULTS - and says so once when one comes back carrying a build OTHER than
 -- the one running, which only a patched client can produce. The build check
--- warns at every real login on a build other than MEASURED_ON_BUILD,
--- deliberately unlatched - in a development copy only (IsDevelopmentCopy).
+-- speaks at a real login on a build other than MEASURED_ON_BUILD,
+-- in a development copy only, once per new build (the report callback).
 
 function Priestly_CheckClientBuild()
     settings:CheckBuild()

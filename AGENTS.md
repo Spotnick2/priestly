@@ -373,12 +373,13 @@ Changing patch compatibility:
 
 - Update only `## Interface:` in `Priestly.toc` unless Lua API changes are required.
 - On a new client build, a **development copy** (version `dev` from `Tools/deploy.ps1`, or the raw
-  `@project-version@` of an unpackaged checkout) shows a one-line note at every real login (never on
-  `/reload`) until `MEASURED_ON_BUILD` is bumped. **A release never shows it**: telling players a
-  working release was tested on an older build gains nothing, and what flags an addon out of date
-  is the TOC's `## Interface:`, not this. The filter is Priestly's `report` callback dropping the
-  library's `newBuild` kind. It is deliberately not latched: a notice seen once and missed would
-  leave the addon on stale findings with nothing left to say so. The procedure lives here.
+  `@project-version@` of an unpackaged checkout) says so at a real login (never on `/reload`) -
+  **once per new client build**, recorded account-wide in `PriestlyAccountDB.seenBuild`, so it does
+  not repeat at every login; the next build speaks again, and bumping `MEASURED_ON_BUILD` silences
+  it for good. **A release never shows it** and records nothing: telling players a working release
+  was tested on an older build gains nothing, and what flags an addon out of date is the TOC's
+  `## Interface:`, not this. Both rules live in Priestly's `report` callback for the library's
+  `newBuild` kind, which also rewords it for the developer. The procedure lives here.
   When the build changes, re-measure - `/apidump`, `/pprobe`, and a **full-exit** check of saved
   settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
   silences the only reminder that the notes are stale, so a dump comparison is not enough on its
