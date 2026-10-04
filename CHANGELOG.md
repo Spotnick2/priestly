@@ -1,5 +1,13 @@
 # Priestly Changelog
 
+## v2.0.13 - 2026-10-04
+
+### Fixed
+- **The "new client build … re-measure" message no longer appears for players.** v2.0.11 meant to
+  show it only in development copies, but the way a release is packaged made every copy count as
+  one, so v2.0.11 and v2.0.12 could still show it once after a game update. It is a note for the
+  addon's developer and never meant anything for your game; nothing else is affected.
+
 ## v2.0.12 - 2026-10-04
 
 ### Changed
