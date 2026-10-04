@@ -1,11 +1,15 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.12 - 2026-10-04
 
 ### Changed
 - **The buff window's glass now comes from LibGlass**, a small library shared by the Glass addons
   and included in the download - nothing extra to install. The window's rim is a little softer;
   nothing else changes on screen.
+- **Clearer messages if Priestly can't start.** When a shared library is missing or another
+  addon's copy of it failed to load, the chat message now says which, and what to do about it -
+  reinstall Priestly, or turn on `/console scriptErrors 1` to see which addon's copy broke -
+  instead of a developer's error text.
 - Needs LibGroupBuffs r26 and LibGlass r1, both included in the download.
 
 ## v2.0.11 - 2026-10-04
