@@ -8,6 +8,7 @@
 ## SavedVariablesPerCharacter: PriestlyDB
 ## X-Curse-Project-ID: 1489106
 
+Libs\LibGlass-1.0\LibGlass-1.0.xml
 Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml
 PriestlyCompat.lua
 PriestlyConfig.lua

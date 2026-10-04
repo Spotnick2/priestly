@@ -31,9 +31,13 @@ end
 local lib = LibStub("LibGroupBuffs-1.0")
 H.check(lib ~= nil, "LibGroupBuffs-1.0 is loaded")
 H.check(API == lib.API, "Priestly.API is the library's API table itself")
-H.check(Priestly.Settings == lib.Settings, "and Priestly.Settings its Settings")
-H.check(Priestly.Engine == lib.Engine, "and Priestly.Engine its Engine")
-H.check(Priestly.UI == lib.UI, "and Priestly.UI its UI")
+H.check(Priestly.GB ~= nil and Priestly.GB == lib.instances.Priestly,
+    "and Priestly.GB the instance lib:New made for Priestly")
+-- The r25 bridge copied each piece onto Priestly; the instance replaces them,
+-- and a copy left behind would be a second way in that skips it.
+for _, name in ipairs({ "Settings", "Engine", "UI", "Visibility" }) do
+    H.eq(Priestly[name], nil, "Priestly." .. name .. " is gone: constructors go through Priestly.GB")
+end
 
 ------------------------------------------------------------
 -- Every API function Priestly calls exists in the library
@@ -100,6 +104,7 @@ for file, lines in pairs(SOURCES) do
     for n, code in ipairs(lines) do
         -- PriestlyCompat.lua is the wrapper itself, the one allowed caller.
         if file ~= "PriestlyCompat.lua" and (code:find("%f[%w_]API%.RegisterEvents%w*%s*%(")
+                                             or code:find("%f[%w_]GB%.RegisterEvents%s*%(")
                                              or code:find(":RegisterEvent%s*%(")) then
             direct[#direct + 1] = file .. ":" .. n .. "  " .. code
         end
@@ -144,6 +149,26 @@ said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("REFUSED_EVENT", 1, true), "and it is printed: " .. said)
 
 ------------------------------------------------------------
+-- One reporter for everything the library says
+--
+-- The instance carries Priestly's reporter, and the settings object built from
+-- it inherits the same one. Each kind's rewording lives with the file that
+-- owns it (Priestly.reportFilters); a kind nobody rewords is printed as is.
+------------------------------------------------------------
+
+local function reported(text, kind)
+    local n = #WoW.messages
+    Priestly.GB.report(text, kind)
+    return table.concat(WoW.messages, " ", n + 1, #WoW.messages)
+end
+said = reported("Settings are saved again.", "settingsLoaded")
+H.check(said:find("[Priestly]", 1, true) and said:find("|cff55ff55Settings are saved again.|r", 1, true),
+    "a settingsLoaded message is printed in green, with Priestly's prefix: " .. said)
+said = reported("something new to say", "aKindFromALaterLibrary")
+H.check(said:find("something new to say", 1, true),
+    "and a kind this build has no filter for is still said, not dropped: " .. said)
+
+------------------------------------------------------------
 -- A missing library stops loading, with a message that says why
 --
 -- No fallback copy: running on a stale duplicate is the drift this removes.
@@ -169,152 +194,162 @@ H.check(err:find("Libs\\LibGroupBuffs-1.0", 1, true),
 H.check(chat:find("cannot start", 1, true) and chat:find("missing", 1, true),
     "and a player is told in chat, where they will see it: " .. chat)
 
--- What the bridge does with each answer.
---
--- Which copies are usable is the library's question now: lib.Status walks its
--- own list of files and says "ok", "incomplete" or "too-old". Priestly's job
--- is to react - refuse, and say the right thing to the player - and that is
--- all this file tests. The twelve "complete except one piece" cases moved to
--- the library, where a new runtime file gets covered without editing any
--- consumer (LibGroupBuffs#20).
 local FLOOR = tonumber((H.readFile("PriestlyCompat.lua") or ""):match("NEEDS_MINOR = (%d+)"))
 H.check(FLOOR ~= nil, "the bridge declares the oldest library it works against")
 
--- The fake answers the way the real library does, floor included: pass it a
--- needsMinor above its version and it says "too-old". A fake that ignored the
--- argument let the bridge call lib.Status() with nothing and stay green,
--- which is the floor silently not being applied at all.
-local askedFor
-local function answering(status, minor)
-    local l = { API = { RegisterEventsReported = function() return true end,
-                        ClickEdges = function() end },
-                Settings = { New = function() end }, Engine = { New = function() end },
-                UI = { New = function() end } }
-    if status then
-        l.Status = function(needsMinor)
-            askedFor = needsMinor
-            if type(needsMinor) == "number" and minor < needsMinor then
-                return "too-old", minor
-            end
-            return status, minor
-        end
-    end
+-- A copy with no New at all. The TOC loads Priestly's own copy first, so this
+-- is Priestly's copy not having registered (below the floor) or having
+-- thrown before New was installed (at or above it). Either way the player is
+-- pointed at Priestly, not at other addons.
+local function withoutNew(minor)
+    local l = { API = {} }
     return setmetatable({}, { __call = function() return l, minor end })
 end
 
-askedFor = nil
-loaded = loadWithout(answering("ok", FLOOR))
-H.check(loaded, "a library that says it is ok is accepted")
-H.eq(askedFor, FLOOR, "and the floor is what the bridge asked about")
-
--- A complete copy that is simply behind: the library says so because it was
--- told the floor. Nothing here would catch the bridge asking with no floor at
--- all, except this.
-loaded, err, chat = loadWithout(answering("ok", FLOOR - 1))
-H.check(not loaded, "a complete copy below the floor is refused")
-H.check(chat:find("r" .. (FLOOR - 1), 1, true), "as too old: " .. chat)
-
--- Status is library code on a shared table, and a copy that left it half
--- built makes it throw - lib.fileMinors nil under a newer UI.lua, say. The
--- throw must not escape: it would skip the chat message and leave Priestly
--- silently dead, because this client hides Lua errors by default.
-do
-    local thrower = answering("ok", FLOOR)
-    local real = select(1, thrower())
-    real.Status = function() error("attempt to index field 'fileMinors' (a nil value)", 0) end
-    loaded, err, chat = loadWithout(thrower)
-    H.check(not loaded, "a Status that throws is refused")
-    H.check(chat:find("completely", 1, true),
-        "with the player told in chat, not left with a dead addon: " .. chat)
-    H.check(err:find("lib.Status threw", 1, true) and err:find("fileMinors", 1, true),
-        "and what it threw handed to developers: " .. err)
-end
-
--- A status this build has never heard of - a future library with a fourth
--- answer - is refused rather than treated as usable.
-loaded, err, chat = loadWithout(answering("something-new", FLOOR))
-H.check(not loaded, "an unrecognised status is refused")
-H.check(chat:find("completely", 1, true), "rather than assumed to be fine: " .. chat)
-
-loaded, err, chat = loadWithout(answering("incomplete", FLOOR))
-H.check(not loaded, "one that says it is incomplete is refused")
-H.check(chat:find("completely", 1, true), "as a failed load: " .. chat)
-
-loaded, err, chat = loadWithout(answering("too-old", FLOOR - 1))
-H.check(not loaded, "and one that says it is too old")
+loaded, err, chat = loadWithout(withoutNew(FLOOR - 1))
+H.check(not loaded, "a copy without New, below the floor, is refused")
 H.check(chat:find("r" .. (FLOOR - 1), 1, true) and chat:find("r" .. FLOOR, 1, true),
-    "naming the version in use and the one needed: " .. chat)
+    "as too old, naming the version in use and the one needed: " .. chat)
 H.check(not chat:find("completely", 1, true), "without claiming a failed load: " .. chat)
 H.check(chat:find("Reinstalling", 1, true),
-    "and pointing at Priestly's own copy, which is the only thing that can be behind: " .. chat)
+    "and pointing at Priestly's own copy, the only thing that can be behind: " .. chat)
 
--- A copy too old to have Status at all. Its absence is the answer, and which
--- answer depends on the version: behind the floor is too-old, at or above it
--- means the file that installs Status threw.
-loaded, err, chat = loadWithout(answering(nil, FLOOR - 1))
-H.check(not loaded, "a copy without Status, below the floor, is refused")
-H.check(chat:find("r" .. (FLOOR - 1), 1, true) and not chat:find("completely", 1, true),
-    "as too old rather than broken: " .. chat)
+loaded, err, chat = loadWithout(withoutNew(FLOOR))
+H.check(not loaded, "a copy without New at the floor is refused too")
+H.check(chat:find("completely", 1, true), "as a failed load: " .. chat)
 
-loaded, err, chat = loadWithout(answering(nil, FLOOR))
-H.check(not loaded, "a copy without Status at the floor is refused too")
-H.check(chat:find("completely", 1, true),
-    "as a failed load, because the file that installs Status is the last one: " .. chat)
+------------------------------------------------------------
+-- What the bridge does with each answer from lib:New
+--
+-- Which copies are usable is the library's question: lib:New refuses a copy
+-- that did not finish loading, a missing or half-loaded LibGlass, and one
+-- older than the floor, and its own tests cover how it decides
+-- (LibGroupBuffs tests/test_new.lua). Priestly's job is to ask with its
+-- floor, refuse to start, and tell the player - so these run against the real
+-- library, put into each state, rather than a fake that could agree with a
+-- bridge asking the wrong question.
+------------------------------------------------------------
+
+LibStub, Priestly = savedLibStub, savedPriestly
+local GB_MAJOR, GLASS_MAJOR = "LibGroupBuffs-1.0", "LibGlass-1.0"
+
+-- Load the bridge again on the real library. New is once per owner, so the
+-- instance the first load made is set aside for the duration and put back.
+local function reload()
+    local held = lib.instances.Priestly
+    lib.instances.Priestly = nil
+    Priestly = nil
+    local before = #WoW.messages
+    local ok, why = pcall(dofile, "PriestlyCompat.lua")
+    local said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
+    local made = Priestly and Priestly.GB
+    lib.instances.Priestly = held
+    Priestly = savedPriestly
+    return ok, tostring(why), said, made
+end
+
+do
+    local ok, why, said, made = reload()
+    H.check(ok, "the real library, as loaded, is accepted: " .. why)
+    H.eq(said, "", "and nothing is said to the player")
+    H.eq(made and made.needs, FLOOR, "and the floor is what the bridge asked New for")
+    H.eq(made and made.owner, "Priestly", "under Priestly's own name")
+end
+
+-- Another addon's newer copy threw partway: registered, never ready.
+do
+    local ready = lib.ready
+    lib.ready = -1
+    local ok, why, said = reload()
+    lib.ready = ready
+    H.check(not ok, "a library that did not finish loading is refused")
+    H.check(said:find("cannot start", 1, true) and said:find("did not finish loading", 1, true),
+        "and the player is told so, in the library's words: " .. said)
+    H.check(why:find("did not finish loading", 1, true),
+        "with the same reason in the error for developers: " .. why)
+end
+
+-- LibGlass missing outright, then present but half-loaded. Either way the
+-- window cannot draw, so Priestly must not start.
+do
+    local glass, glassMinor = LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR]
+    LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR] = nil, nil
+    local ok, _, said = reload()
+    LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR] = glass, glassMinor
+    H.check(not ok, "a missing LibGlass is refused")
+    H.check(said:find("cannot start", 1, true) and said:find(GLASS_MAJOR, 1, true),
+        "naming LibGlass to the player: " .. said)
+
+    local ready = glass.ready
+    glass.ready = nil
+    ok, _, said = reload()
+    glass.ready = ready
+    H.check(not ok, "a LibGlass that did not finish loading is refused too")
+    H.check(said:find(GLASS_MAJOR, 1, true), "and named: " .. said)
+end
+
+-- A complete copy that is simply behind the floor.
+do
+    local minor, ready = LibStub.minors[GB_MAJOR], lib.ready
+    LibStub.minors[GB_MAJOR], lib.ready = FLOOR - 1, FLOOR - 1
+    local ok, _, said = reload()
+    LibStub.minors[GB_MAJOR], lib.ready = minor, ready
+    H.check(not ok, "a complete library below the floor is refused")
+    H.check(said:find("r" .. (FLOOR - 1), 1, true) and said:find("r" .. FLOOR, 1, true),
+        "naming the version in use and the one needed: " .. said)
+    H.check(not said:find("did not finish", 1, true), "without claiming a failed load: " .. said)
+end
+
+-- After all of that, the real instance is the one Priestly is running on.
+H.check(lib.instances.Priestly == Priestly.GB, "the refusals left Priestly's own instance alone")
 
 ------------------------------------------------------------
 -- The real load order: an older copy loaded first is UPGRADED, not refused
 --
--- The fakes above call the bridge directly, which is not how the game gets
+-- The reloads above call the bridge directly, which is not how the game gets
 -- here. Priestly's TOC loads its own copy of the library BEFORE this file, so
 -- another addon's older copy has already been upgraded by LibStub when the
--- bridge runs - which is why a version below the floor means Priestly's own
--- copy never registered, not that somebody else's is in the way.
+-- bridge runs. r25 is the copy every other consumer ships until it moves on,
+-- so that is the one loaded first.
 ------------------------------------------------------------
 
 do
     local root = H.libraryRoot()
-    local fixtures = root .. "/tests/fixtures/"
     local older = {}
-    for _, name in ipairs({ "Compat", "Settings", "Engine", "UI" }) do
-        older[#older + 1] = fixtures .. name .. "-r9.lua"
+    for _, name in ipairs({ "Compat", "Glass", "Settings", "Engine", "UI", "Visibility" }) do
+        older[#older + 1] = root .. "/tests/fixtures/" .. name .. "-r25.lua"
     end
     local haveFixtures = true
     for _, path in ipairs(older) do
         local f = io.open(path, "r")
         if f then f:close() else haveFixtures = false end
     end
-    H.check(haveFixtures, "the library checkout carries its r9 fixtures to load first")
+    H.check(haveFixtures, "the library checkout carries its r25 fixtures to load first")
 
     if haveFixtures then
-        LibStub = savedLibStub
         Priestly = nil
         -- A LibStub with nothing registered, the way a session starts.
         local stub = loadfile(root .. "/LibStub/LibStub.lua")
         LibStub = nil
         stub()
 
-        for _, path in ipairs(older) do loadfile(path)() end
-        local _, before = LibStub:GetLibrary("LibGroupBuffs-1.0")
-        H.eq(before, 9, "another addon's r9 copy registered first")
+        for _, path in ipairs(older) do loadfile(path)("SomeOtherAddon", {}) end
+        local _, before = LibStub:GetLibrary(GB_MAJOR)
+        H.eq(before, 25, "another addon's r25 copy registered first")
 
-        -- Now Priestly's own, as its TOC does.
-        local L = dofile("tests/libfiles.lua")
-        -- Not `ipairs(select(2, pcall(...)))`: on failure that is a STRING,
-        -- and ipairs then throws "table expected, got string" over the real
-        -- message, which is the only one that says what went wrong.
-        local resolved, files = pcall(L.resolve, root)
-        H.check(resolved, "the library resolves: " .. tostring(files))
-        for _, file in ipairs(resolved and files or {}) do
-            loadfile(root .. "/" .. file)()
-        end
-        local _, after = LibStub:GetLibrary("LibGroupBuffs-1.0")
+        -- Now Priestly's own, as its TOC does: LibGlass, then LibGroupBuffs.
+        local resolved, files = pcall(H.libraryScripts)
+        H.check(resolved, "the libraries resolve: " .. tostring(files))
+        for _, path in ipairs(resolved and files or {}) do loadfile(path)("Priestly", {}) end
+        local _, after = LibStub:GetLibrary(GB_MAJOR)
         H.check(after > before, "and Priestly's copy upgrades it to r" .. tostring(after))
 
         local before2 = #WoW.messages
-        local ok = pcall(dofile, "PriestlyCompat.lua")
-        H.check(ok, "so the bridge accepts it, despite the older copy having loaded first")
+        local ok, why = pcall(dofile, "PriestlyCompat.lua")
+        H.check(ok, "so the bridge accepts it, despite the older copy having loaded first: "
+            .. tostring(why))
         H.eq(#WoW.messages, before2, "and says nothing to the player")
-        H.check(Priestly.API ~= nil, "with the upgraded library in place")
+        H.check(Priestly.API ~= nil and Priestly.GB ~= nil, "with the upgraded library in place")
     end
 
     LibStub, Priestly = savedLibStub, savedPriestly

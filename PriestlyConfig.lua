@@ -66,7 +66,7 @@ local DEFAULTS = {
 -- where SavedVariables are measured broken. In the SOURCE, because it is the
 -- one thing that survives a restart here. Bump MEASURED_ON_BUILD after
 -- re-measuring (AGENTS.md); until then a development copy says so once per new
--- client build, and a release keeps quiet (see the report callback).
+-- client build, and a release keeps quiet (see Priestly.reportFilters.newBuild).
 --
 -- These two are INDEPENDENT, and right now they differ. The installed client
 -- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
@@ -171,7 +171,7 @@ local function RememberPlayerChose()
 end
 
 local function LoadCheckKey()
-    return (Priestly.Settings and Priestly.Settings.LOAD_CHECK_KEY) or "svLoadCheck"
+    return (Priestly.GB and Priestly.GB.LOAD_CHECK_KEY) or "svLoadCheck"
 end
 
 -- Cycle-safe: a saved file is text on disk and can be hand-edited or written
@@ -189,7 +189,7 @@ end
 
 -- The client build a development copy last announced, account-wide, so the
 -- notice speaks once per new build rather than at every login on every
--- character. See the report callback below.
+-- character. See Priestly.reportFilters.newBuild below.
 local function AnnouncedBuild()
     return PriestlyAccountDB and PriestlyAccountDB.seenBuild
 end
@@ -216,8 +216,27 @@ local function IsDevelopmentCopy()
 end
 
 
-local settings = Priestly.Settings.New({
-    owner = ADDON_NAME,
+-- What the settings checks say goes through Priestly's one reporter
+-- (PriestlyCompat.lua); the two kinds this file owns are reworded here. Read
+-- by the reporter when a message arrives.
+--
+-- newBuild: once per new client build, in a development copy only - time to
+-- re-measure, then bump MEASURED_ON_BUILD (which silences it for good).
+Priestly.reportFilters.newBuild = function()
+    if not IsDevelopmentCopy() then return nil end
+    local build = API.ClientBuild()
+    if build == AnnouncedBuild() then return nil end
+    RememberAnnouncedBuild(build)
+    return "new client build " .. tostring(build) .. " (measured on "
+        .. MEASURED_ON_BUILD .. "): re-measure, then bump MEASURED_ON_BUILD."
+end
+
+Priestly.reportFilters.settingsLoaded = function(text)
+    return "|cff55ff55" .. text .. "|r"
+end
+
+-- owner and report are the instance's: GB.Settings fills them in.
+local settings = Priestly.GB.Settings({
     scopes = {
         -- The settings store first: the library keeps its load-check marker
         -- in every scope, and watching both mechanisms is how a client that
@@ -226,21 +245,6 @@ local settings = Priestly.Settings.New({
         { label = "per-character", get = LegacyStore },
     },
     measuredOnBuild = MEASURED_ON_BUILD,
-    report = function(text, kind)
-        if not DEFAULT_CHAT_FRAME then return end
-        if kind == "newBuild" then
-            -- Once per new client build, in a development copy only: time to
-            -- re-measure, then bump MEASURED_ON_BUILD (which silences it for good).
-            if not IsDevelopmentCopy() then return end
-            local build = API.ClientBuild()
-            if build == AnnouncedBuild() then return end
-            RememberAnnouncedBuild(build)
-            text = "new client build " .. tostring(build) .. " (measured on "
-                .. MEASURED_ON_BUILD .. "): re-measure, then bump MEASURED_ON_BUILD."
-        end
-        if kind == "settingsLoaded" then text = "|cff55ff55" .. text .. "|r" end
-        DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r " .. text)
-    end,
     -- Looked up at call time, not captured: the hook is Priestly's extension
     -- point, and whatever replaces it later (or a test) must be the one called.
     onChanged = function(key) Priestly_OnConfigChanged(key) end,
@@ -841,7 +845,7 @@ end
 -- DEFAULTS - and says so once when one comes back carrying a build OTHER than
 -- the one running, which only a patched client can produce. The build check
 -- speaks at a real login on a build other than MEASURED_ON_BUILD,
--- in a development copy only, once per new build (the report callback).
+-- in a development copy only, once per new build (Priestly.reportFilters.newBuild).
 
 function Priestly_CheckClientBuild()
     settings:CheckBuild()

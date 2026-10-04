@@ -1,5 +1,13 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Changed
+- **The buff window's glass now comes from LibGlass**, a small library shared by the Glass addons
+  and included in the download - nothing extra to install. The window's rim is a little softer;
+  nothing else changes on screen.
+- Needs LibGroupBuffs r26 and LibGlass r1, both included in the download.
+
 ## v2.0.11 - 2026-10-04
 
 ### Fixed
