@@ -65,7 +65,8 @@ local DEFAULTS = {
 -- Which build Priestly's notes on this beta were measured on, and the build
 -- where SavedVariables are measured broken. In the SOURCE, because it is the
 -- one thing that survives a restart here. Bump MEASURED_ON_BUILD after
--- re-measuring (AGENTS.md); the library warns at every real login until then.
+-- re-measuring (AGENTS.md); the library warns at every real login until then,
+-- in a development copy only - a release keeps quiet (IsDevelopmentCopy).
 --
 -- These two are INDEPENDENT, and right now they differ. The installed client
 -- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
@@ -82,7 +83,7 @@ local DEFAULTS = {
 -- secrecy in combat or secure click-casting still behave the same way. Those
 -- were measured in game, which is the only thing that settles them.
 --
--- When the client next patches, the notice starts again and stays until
+-- When the client next patches, the notice starts again in dev and stays until
 -- someone repeats all of it. Silencing it by bumping this constant without
 -- re-measuring is the one thing not to do: it is the only reminder that the
 -- notes describe a client nobody is running.
@@ -191,6 +192,17 @@ end
 function Priestly_OnConfigChanged(key)
 end
 
+-- The build notice is for whoever has to re-measure, not for players: a
+-- release that still runs on a newer client gains nothing from being told it
+-- was tested on an older one, and what flags an addon out of date is the TOC's
+-- Interface number, not this. So it speaks only in a development copy -
+-- `dev` from Tools/deploy.ps1, or the raw packager token in an unpackaged
+-- checkout. Read at call time, so a test can change the version.
+local function IsDevelopmentCopy()
+    local version = API.AddonVersion(ADDON_NAME)
+    return version == "dev" or version == "@project-version@"
+end
+
 
 local settings = Priestly.Settings.New({
     owner = ADDON_NAME,
@@ -204,6 +216,7 @@ local settings = Priestly.Settings.New({
     measuredOnBuild = MEASURED_ON_BUILD,
     report = function(text, kind)
         if not DEFAULT_CHAT_FRAME then return end
+        if kind == "newBuild" and not IsDevelopmentCopy() then return end
         if kind == "settingsLoaded" then text = "|cff55ff55" .. text .. "|r" end
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r " .. text)
     end,
@@ -807,7 +820,7 @@ end
 -- DEFAULTS - and says so once when one comes back carrying a build OTHER than
 -- the one running, which only a patched client can produce. The build check
 -- warns at every real login on a build other than MEASURED_ON_BUILD,
--- deliberately unlatched.
+-- deliberately unlatched - in a development copy only (IsDevelopmentCopy).
 
 function Priestly_CheckClientBuild()
     settings:CheckBuild()
