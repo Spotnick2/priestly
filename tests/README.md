@@ -63,7 +63,9 @@ exactly that.
   `run.ps1`, `deploy.ps1` and CI use it), and the check that every texture
   LibGroupBuffs draws is in LibGlass's `Media/`.
 - **`pkgmeta.lua`** — the one reader of `.pkgmeta`'s externals, by path.
-  **`fetch_external.sh`** clones one at its pin and proves the checkout is it.
+  **`fetch_external.sh`** clones one at its pin and proves the checkout is it;
+  **`pins.ps1`** (dot-sourced by `run.ps1` and `Tools/deploy.ps1`) says whether
+  a local checkout is at its pin.
 - Internals that are file-local are reached through a **test seam**:
   `Priestly._test` at the end of `Priestly.lua` and `Priestly._testConfig` at
   the end of `PriestlyConfig.lua`. Both are harmless in game.

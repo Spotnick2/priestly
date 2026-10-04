@@ -46,14 +46,22 @@ local GB
 -- say arrives here: the settings checks, and with kind "events" the names
 -- the client rejected, whether it threw or returned false.
 local function Report(text, kind)
+    text = tostring(text)
+    if kind == "events" then
+        -- Recorded whether or not anything can be printed: the record is what
+        -- `/dump Priestly.eventFailures` reads when the line was never seen.
+        local mine = GB and GB.EventFailures() or {}
+        for ev, why in pairs(mine) do Priestly.eventFailures[ev] = why or true end
+        -- The label in red, the names plain - whatever the library calls it.
+        -- Its wording is the library's to change, so this matches the shape
+        -- ("label: names"), not the words, and a line without a colon is red
+        -- throughout rather than plain.
+        local label, names = text:match("^([^:]*:)(.*)$")
+        text = label and ("|cffff6666" .. label .. "|r" .. names) or ("|cffff6666" .. text .. "|r")
+    end
     -- Before any filter: a filter may record that it spoke (newBuild does),
     -- and with no chat frame nothing was said.
     if not DEFAULT_CHAT_FRAME then return end
-    if kind == "events" then
-        local mine = GB and GB.EventFailures() or {}
-        for ev, why in pairs(mine) do Priestly.eventFailures[ev] = why or true end
-        text = (tostring(text):gsub("^(unsupported events skipped:)", "|cffff6666%1|r"))
-    end
     local filter = Priestly.reportFilters[kind]
     if filter then text = filter(text, kind) end
     if text then DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r " .. text) end
@@ -62,7 +70,15 @@ end
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
 
-local problem
+-- Is LibGlass-1.0 there and complete? LibGlass marks itself ready on its last
+-- line, so a copy that threw partway is registered with the older marker.
+local function GlassLoaded()
+    if not LibStub then return false end
+    local glass, glassMinor = LibStub("LibGlass-1.0", true)
+    return type(glass) == "table" and glassMinor ~= nil and glass.ready == glassMinor
+end
+
+local problem, detail
 if not lib then
     problem = "the LibGroupBuffs-1.0 library is missing from Priestly's Libs folder."
         .. " Reinstalling Priestly should fix it"
@@ -85,9 +101,31 @@ else
     -- Under pcall: New is library code on a shared table, and its refusals are
     -- errors. A throw escaping here would skip the chat message below and
     -- leave Priestly silently dead, since this client hides Lua errors by
-    -- default. Its refusals are already written for players.
+    -- default.
     local ok, made = pcall(lib.New, lib, { owner = "Priestly", report = Report, needs = NEEDS_MINOR })
-    if ok then GB = made else problem = tostring(made) end
+    if ok then
+        GB = made
+    else
+        detail = tostring(made)
+        if not GlassLoaded() then
+            -- Priestly ships LibGlass in its own Libs folder, so this is
+            -- Priestly's install - and the library's own wording for it
+            -- ("embed it at ... and load its XML") is for developers.
+            problem = "the LibGlass-1.0 library is missing from Priestly's Libs folder, or did not"
+                .. " finish loading. Reinstalling Priestly should fix it"
+        elseif detail:match("^[^\n]-:%d+: ") then
+            -- A position means a Lua error, not a refusal: New raises its
+            -- refusals without one, because they are written for players. A
+            -- crash's file and line are for developers only.
+            problem = "the LibGroupBuffs-1.0 library failed to load completely."
+                .. " Reinstalling Priestly should fix it"
+        else
+            -- The library's refusal, already written for players: another
+            -- addon's copy failed, or the newest copy is older than this build
+            -- needs.
+            problem = detail
+        end
+    end
 end
 
 if problem then
@@ -99,8 +137,10 @@ if problem then
         DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r |cffff6666Priestly cannot start:|r "
             .. problem .. ".")
     end
-    error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0, Libs\\LibGlass-1.0). Developers: "
-        .. "check out LibGroupBuffs and LibGlass next to the repository and run Tools/deploy.ps1.")
+    error("Priestly: " .. problem .. " (Libs\\LibGroupBuffs-1.0, Libs\\LibGlass-1.0"
+        .. (detail and detail ~= problem and ("; lib:New said: " .. detail) or "")
+        .. "). Developers: check out LibGroupBuffs and LibGlass next to the repository and run "
+        .. "Tools/deploy.ps1.")
 end
 
 Priestly.GB = GB

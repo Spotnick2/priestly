@@ -57,36 +57,17 @@ $env:LIBGLASS = $LibGlass
 # Say which checkout the tests actually ran against, and whether it is the one
 # a release would ship. A mismatch is normal while working on a library, so it
 # is a warning, never a failure: tests/test_manifest.lua is what checks the
-# pins themselves, and CI tests exactly the pinned commits. Each pin is read
-# BY PATH (tests/pkgmeta.lua) - with two externals, the first `tag:` in the
-# file is LibGlass's. No git, or a checkout that is not one (a downloaded
-# zip), must not stop a run for a line that only prints.
+# pins themselves, and CI tests exactly the pinned commits. The comparison is
+# tests/pins.ps1, shared with Tools/deploy.ps1.
+. (Join-Path $PSScriptRoot "pins.ps1")
 function Show-Pin {
     param([string]$Name, [string]$Path, [string]$Root)
-    Push-Location $RepoRoot
-    try { $pin = & $Lua (Join-Path $PSScriptRoot "pkgmeta.lua") $Path 2>$null } finally { Pop-Location }
-    $pinOk = ($LASTEXITCODE -eq 0 -and $pin)
-    $global:LASTEXITCODE = 0
-    $ref = if ($pinOk) { ($pin -split ' ', 2)[1] } else { $null }
-    $revision, $atPin = "not a git checkout", $false
-    try {
-        $r = git -C $Root describe --tags --always --dirty 2>$null
-        if ($LASTEXITCODE -eq 0 -and $r) {
-            $revision = $r
-            if ($ref) {
-                $want = git -C $Root rev-parse --verify --quiet "$ref^{commit}" 2>$null
-                $head = git -C $Root rev-parse HEAD 2>$null
-                $dirty = git -C $Root status --porcelain 2>$null
-                $atPin = ($want -and $want -eq $head -and -not $dirty)
-            }
-        }
-    } catch { $revision = "git not available" }
-    $global:LASTEXITCODE = 0
-    $pinText = if ($pinOk) { $pin } else { "NOTHING" }
-    if ($atPin) {
-        Write-Host "${Name}: $Root @ $revision (the .pkgmeta pin, $pinText)" -ForegroundColor DarkGray
+    $s = Get-PinState -Lua $Lua -RepoRoot $RepoRoot -Path $Path -Root $Root
+    $pinText = if ($s.Pin) { $s.Pin } else { "NOTHING" }
+    if ($s.AtPin) {
+        Write-Host "${Name}: $Root @ $($s.Revision) (the .pkgmeta pin, $pinText)" -ForegroundColor DarkGray
     } else {
-        Write-Host ("WARNING: ${Name} at $Root @ $revision is not the .pkgmeta pin ($pinText)" +
+        Write-Host ("WARNING: ${Name} at $Root @ $($s.Revision) is not the .pkgmeta pin ($pinText)" +
             ", or has uncommitted changes; CI tests the pin") -ForegroundColor Yellow
     }
 }

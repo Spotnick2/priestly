@@ -147,6 +147,33 @@ ok, failed = Priestly.RegisterEvents(f, "REFUSED_EVENT")
 H.eq(ok, false, "a false return is a rejection too")
 said = table.concat(WoW.messages, " ", before + 1, #WoW.messages)
 H.check(said:find("REFUSED_EVENT", 1, true), "and it is printed: " .. said)
+-- The label in red, the names plain - matched by the line's shape, not by the
+-- library's words, which are the library's to change.
+H.check(said:find("|cffff6666[^|]*:|r", 1) and not said:find("|cffff6666[^|]*REFUSED_EVENT"),
+    "the label in red, the names plain: " .. said)
+do
+    -- A later library that words it differently keeps the same shape.
+    local n = #WoW.messages
+    Priestly.GB.report("rejected events: SOME_EVENT", "events")
+    local reworded = table.concat(WoW.messages, " ", n + 1, #WoW.messages)
+    H.check(reworded:find("|cffff6666rejected events:|r SOME_EVENT", 1, true),
+        "however the library words it: " .. reworded)
+end
+
+-- With no chat frame nothing can be printed, but the record is what
+-- `/dump Priestly.eventFailures` reads afterwards, and it must still be made.
+do
+    local chat = DEFAULT_CHAT_FRAME
+    -- false, not nil: the strict stub refuses a read of a global it holds no
+    -- value for, and the bridge only tests it for truth.
+    DEFAULT_CHAT_FRAME = false
+    WoW.badEvents.UNHEARD_EVENT = true
+    local registered, why = pcall(Priestly.RegisterEvents, f, "UNHEARD_EVENT")
+    DEFAULT_CHAT_FRAME = chat
+    H.check(registered, "a rejection with no chat frame does not throw: " .. tostring(why))
+    H.check(Priestly.eventFailures.UNHEARD_EVENT ~= nil,
+        "and it is recorded in Priestly's table all the same")
+end
 
 ------------------------------------------------------------
 -- One reporter for everything the library says
@@ -274,18 +301,43 @@ end
 do
     local glass, glassMinor = LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR]
     LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR] = nil, nil
-    local ok, _, said = reload()
+    local ok, why, said = reload()
     LibStub.libs[GLASS_MAJOR], LibStub.minors[GLASS_MAJOR] = glass, glassMinor
     H.check(not ok, "a missing LibGlass is refused")
     H.check(said:find("cannot start", 1, true) and said:find(GLASS_MAJOR, 1, true),
         "naming LibGlass to the player: " .. said)
+    -- Priestly ships LibGlass itself, so this is its own install, and the
+    -- library's wording for it is an instruction to developers.
+    H.check(said:find("Reinstalling Priestly", 1, true),
+        "pointing them at reinstalling Priestly: " .. said)
+    H.check(not said:find("load its XML", 1, true) and not said:find("embed it", 1, true),
+        "not at editing load order: " .. said)
+    H.check(why:find("lib:New said:", 1, true) and why:find("embed it", 1, true),
+        "while developers still get the library's own reason: " .. why)
 
     local ready = glass.ready
     glass.ready = nil
     ok, _, said = reload()
     glass.ready = ready
     H.check(not ok, "a LibGlass that did not finish loading is refused too")
-    H.check(said:find(GLASS_MAJOR, 1, true), "and named: " .. said)
+    H.check(said:find(GLASS_MAJOR, 1, true) and said:find("Reinstalling Priestly", 1, true),
+        "the same way: " .. said)
+end
+
+-- A Lua error inside New - another copy left a table half-built, or a bug -
+-- is not a refusal. Its file and line mean nothing to a player, and must not
+-- reach chat; developers get them in the error.
+do
+    local realNew = lib.New
+    lib.New = function() error("attempt to index field 'instances' (a nil value)") end
+    local ok, why, said = reload()
+    lib.New = realNew
+    H.check(not ok, "a New that crashes is refused")
+    H.check(said:find("failed to load completely", 1, true) and said:find("Reinstalling", 1, true),
+        "as a failed load: " .. said)
+    H.check(not said:find("attempt to index", 1, true) and not said:find(":%d+:"),
+        "without the Lua error or its position in chat: " .. said)
+    H.check(why:find("attempt to index", 1, true), "which goes to developers instead: " .. why)
 end
 
 -- A complete copy that is simply behind the floor.

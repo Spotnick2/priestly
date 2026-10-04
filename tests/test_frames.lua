@@ -608,13 +608,15 @@ local _, liveMinor = LibStub("LibGroupBuffs-1.0", true)
 H.check(said:find("library r" .. tostring(liveMinor), 1, true),
     "and which copy of the library is live, by number: " .. said)
 do
-    -- Read through the instance, whose MINOR a newer copy rewrites in the
-    -- library's shared table: asked at print time, so the rewrite shows.
-    local shared = LibStub("LibGroupBuffs-1.0").shared
-    local real = shared.MINOR
-    shared.MINOR = 999
+    -- A newer copy that registered with LibStub and then threw partway: its
+    -- number is in LibStub, but it never reached the end of its file, where
+    -- the instance's shared MINOR is written. It is still (partly) the code
+    -- running, so the report must name it - read from LibStub, at print time.
+    local major = "LibGroupBuffs-1.0"
+    local real = LibStub.minors[major]
+    LibStub.minors[major] = 999
     local upgraded = saidBy(Priestly_PrintSpellReport)
-    shared.MINOR = real
+    LibStub.minors[major] = real
     H.check(upgraded:find("library r999", 1, true),
         "read when the report prints, so a newer copy's number is the one named: " .. upgraded)
 end
