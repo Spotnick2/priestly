@@ -103,7 +103,7 @@ local DEFS = {
 -- Protection mode and where learned durations are stored. The UI below calls
 -- the engine through these thin locals, which look the method up at call time
 -- so a newer embedded copy of the library is the one that runs.
-local engine = Priestly.Engine.New({
+local engine = Priestly.GB.Engine({
     defs       = DEFS,
     bucketSize = MAX_MEMBERS,           -- pets are split into popover-sized buckets
     showSolo      = function() return Priestly_ShowSolo() end,
@@ -117,10 +117,10 @@ local engine = Priestly.Engine.New({
     learnedDuration = function(spell) return Priestly_GetLearnedDuration(spell) end,
 })
 
-local ST_HAS     = Priestly.Engine.STATES.HAS
-local ST_MISSING = Priestly.Engine.STATES.MISSING
-local ST_UNKNOWN = Priestly.Engine.STATES.UNKNOWN
-local PET_GROUP  = Priestly.Engine.PET_GROUP
+local ST_HAS     = Priestly.GB.STATES.HAS
+local ST_MISSING = Priestly.GB.STATES.MISSING
+local ST_UNKNOWN = Priestly.GB.STATES.UNKNOWN
+local PET_GROUP  = Priestly.GB.PET_GROUP
 
 -- Resolve localized names and what this priest knows. Rerun on SPELLS_CHANGED
 -- and talent changes: what a priest knows changes as they level, and at the
@@ -174,9 +174,7 @@ local g_IsPriest = false
 -- That is the same rule AGENTS.md states for functions, and the line exists
 -- to tell a bug report which code actually ran.
 local function LiveLibraryMinor()
-    if not LibStub then return "?" end
-    local _, live = LibStub("LibGroupBuffs-1.0", true)
-    return live or "?"
+    return Priestly.GB.MINOR or "?"
 end
 
 local FROM_NOTE = {
@@ -409,7 +407,7 @@ end
 -- with Wildly and Magely. Priestly supplies its title, spec icon, reagents and
 -- config. WHEN the window opens is the library's too, through the policy object
 -- built below; the events and slash commands here report what happened.
-local ui = Priestly.UI.New({
+local ui = Priestly.GB.UI({
     engine  = engine,
     owner   = addonName,
     title   = "|cff99ddffPriestly|r",
@@ -460,7 +458,7 @@ local ui = Priestly.UI.New({
 -- LibGroupBuffs#22 lists them - one place, rather than a tally in each file
 -- that drifts out of step with the other two, which is how this file came to
 -- claim six while the branch that wrote it had found seven.
-local vis = Priestly.Visibility.New({
+local vis = Priestly.GB.Visibility({
     ui            = ui,
     isMyClass     = function() return g_IsPriest end,
     showSolo      = function() return Priestly_ShowSolo() end,
@@ -767,9 +765,9 @@ Priestly._test = {
     MembersFor       = MembersFor,
     states           = { HAS = ST_HAS, MISSING = ST_MISSING, UNKNOWN = ST_UNKNOWN },
     -- The library's formatting helpers, under the names the tests use.
-    TimerColor       = function(...) return Priestly.UI.TimerColor(...) end,
-    Pct              = function(...) return Priestly.UI.Pct(...) end,
-    FmtTime          = function(...) return Priestly.UI.FmtTime(...) end,
+    TimerColor       = function(...) return Priestly.GB.TimerColor(...) end,
+    Pct              = function(...) return Priestly.GB.Pct(...) end,
+    FmtTime          = function(...) return Priestly.GB.FmtTime(...) end,
     -- Whole-UI seam: tests drive a rebuild and then read the secure
     -- attributes off the rows to see what a click would actually cast.
     UpdateUI         = function() return ui:Update() end,

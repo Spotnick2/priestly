@@ -607,6 +607,17 @@ H.check(said:find("game build", 1, true), "the game build")
 local _, liveMinor = LibStub("LibGroupBuffs-1.0", true)
 H.check(said:find("library r" .. tostring(liveMinor), 1, true),
     "and which copy of the library is live, by number: " .. said)
+do
+    -- Read through the instance, whose MINOR a newer copy rewrites in the
+    -- library's shared table: asked at print time, so the rewrite shows.
+    local shared = LibStub("LibGroupBuffs-1.0").shared
+    local real = shared.MINOR
+    shared.MINOR = 999
+    local upgraded = saidBy(Priestly_PrintSpellReport)
+    shared.MINOR = real
+    H.check(upgraded:find("library r999", 1, true),
+        "read when the report prints, so a newer copy's number is the one named: " .. upgraded)
+end
 H.check(said:find(H.NAME.FORT_SINGLE, 1, true), "with the name each spell resolved to")
 H.check(said:find("not learned", 1, true),
     "marking a spell the player has not learned, which is ordinary")

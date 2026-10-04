@@ -22,12 +22,19 @@ resolve):
 > `run.ps1` defaults to `C:\Program Files (x86)\Lua\5.1\lua.exe`; override with
 > `-Lua <path>`. It also runs `luac -p` over the shipping files first.
 
-**The tests need LibGroupBuffs-1.0 checked out next to this repository**
-(`../LibGroupBuffs`), because Priestly loads it before its own files. `run.ps1`
-takes `-Library <path>` instead, and prints which checkout and revision it used
-next to the tag a release pins. A single test run by hand reads the
-`LIBGROUPBUFFS` environment variable, or the sibling checkout. There is no
-vendored copy to fall back to, on purpose.
+**The tests need LibGroupBuffs-1.0 and LibGlass-1.0 checked out next to this
+repository** (`../LibGroupBuffs`, `../LibGlass`), because Priestly loads both
+before its own files: LibGlass first, then LibGroupBuffs, which draws with it.
+`run.ps1` takes `-Library <path>` and `-LibGlass <path>` instead, and prints
+which checkout and revision it used, warning when one is not at its `.pkgmeta`
+pin. A single test run by hand reads the `LIBGROUPBUFFS` and `LIBGLASS`
+environment variables, or the sibling checkouts. There is no vendored copy to
+fall back to, on purpose; a missing checkout fails loudly.
+
+To test exactly what a release ships, clone each library at its pin:
+`bash tests/fetch_external.sh Libs/LibGlass-1.0 <dir>` (and
+`Libs/LibGroupBuffs-1.0`), then point the variables at those clones. CI does
+exactly that.
 
 ## How it works
 
@@ -47,10 +54,16 @@ vendored copy to fall back to, on purpose.
   surname. Drive it through the exported `WoW` table:
   `WoW.reset()`, `WoW.SetUnit`, `WoW.SetAura`, `WoW.Know`, `WoW.DefineSpell`,
   `WoW.fire`. `dofile("tests/wow_stubs.lua")` **first** in every test.
-- **`harness.lua`** — `check`/`eq`/`near`, `loadAddon()` (loads the library
-  through its own XML, then Priestly's files in TOC order, failing on anything
+- **`harness.lua`** — `check`/`eq`/`near`, `loadAddon()` (loads LibGlass and
+  then LibGroupBuffs, each through its own XML, then Priestly's files in TOC
+  order, passing each `("Priestly", ns)` as the client does, failing on anything
   missing, and hands back the test seams) and `TeachSpells{...}` for the common
   "this priest knows X" setup.
+- **`libfiles.lua`** — the one reader of the libraries' XML (the harness,
+  `run.ps1`, `deploy.ps1` and CI use it), and the check that every texture
+  LibGroupBuffs draws is in LibGlass's `Media/`.
+- **`pkgmeta.lua`** — the one reader of `.pkgmeta`'s externals, by path.
+  **`fetch_external.sh`** clones one at its pin and proves the checkout is it.
 - Internals that are file-local are reached through a **test seam**:
   `Priestly._test` at the end of `Priestly.lua` and `Priestly._testConfig` at
   the end of `PriestlyConfig.lua`. Both are harmless in game.
@@ -60,7 +73,8 @@ vendored copy to fall back to, on purpose.
 
 | File | What it pins down |
 |---|---|
-| `test_bridge.lua` | Priestly on top of LibGroupBuffs-1.0: `Priestly.API` is the library's own table, every `API.*` function Priestly calls exists there, rejected events are printed in chat, and a missing library stops loading with a message naming it. The compat adapters' own tests moved to `LibGroupBuffs/tests/test_compat.lua`. |
+| `test_bridge.lua` | Priestly on top of LibGroupBuffs-1.0: `Priestly.GB` is the instance `lib:New` made, `Priestly.API` the library's own table, every `API.*` function Priestly calls exists there, rejected events and the settings checks reach the player through the one reporter, and Priestly refuses to start - saying why in chat - when the library is missing, did not finish loading, is below the floor, or LibGlass is missing or half-loaded. Run against the real library put into each state, not a fake. The compat adapters' own tests are in LibGroupBuffs' suite. |
+| `test_manifest.lua` | The TOC and `.pkgmeta`: load order (LibGlass, LibGroupBuffs, then Priestly's three files), both externals read by path and pinned, `NEEDS_MINOR` equal to the pinned MINOR, saved variables, and each library's dev files ignored from here. |
 | `test_availability.lua` | Which buffs get a row and what each click casts, per spell the priest actually knows — including the level-20 case where no group Prayer exists, and the Divine-Spirit-without-Prayer-of-Spirit case that used to show nothing. |
 | `test_buffs.lua` | `GroupStat` counts, offline handling, the GUID-keyed aura cache surviving a roster reshuffle, combat secrecy (count down from cache, `UNKNOWN` rather than a confident `MISS`), duration learning in both directions with a build reset, `PickTarget`, and `UNIT_AURA` filtering. |
 | `test_clicks.lua` | The secure attributes after a rebuild: what `spell1`/`unit1` are actually set to, that they clear rather than cast on a corpse, that `PreClick` re-aims out of combat and leaves things alone in it, and the popover rows. |

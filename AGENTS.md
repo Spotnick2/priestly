@@ -36,22 +36,24 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 ## Repository Layout
 
 - `Priestly.toc` — addon manifest. Interface version, saved variables, load order.
-- `PriestlyCompat.lua` — the bridge to the shared library: exposes its compat layer as
-  `Priestly.API`, the engine, window and window policy as `Priestly.Engine` / `Priestly.UI` /
-  `Priestly.Visibility`, and reports rejected events in chat. No API code lives here any more.
+- `PriestlyCompat.lua` — the bridge to the shared library: asks it for Priestly's instance
+  (`lib:New`, exposed as `Priestly.GB`) and its compat layer as `Priestly.API`, and holds Priestly's
+  one reporter, which prints everything the library has to say — the settings checks and rejected
+  events. No API code lives here any more.
 - `PriestlyConfig.lua` — options panel, defaults, instance database, exported config helpers.
 - `Priestly.lua` — `DEFS`, the reagent footer items, the spec icon, event handling, slash commands
-  and the test seam. Everything else is LibGroupBuffs:
-  - `Engine.lua` is the buff logic (aura cache, roster, stats, targeting, click mapping,
+  and the test seam. Everything else is LibGroupBuffs (one file, `LibGroupBuffs.lua`, since r26;
+  the names below are its sections, and each is built through `Priestly.GB`):
+  - `Engine` is the buff logic (aura cache, roster, stats, targeting, click mapping,
     `UNIT_AURA` filtering). Priestly builds one engine with `DEFS`, `MAX_MEMBERS` as the pet
     bucket size, its config accessors, the Shadow Protection mode as `isVisible` and its duration
     store, and calls it through thin locals (`BuffRem`, `GroupStat`, `PickTarget`, ...).
-  - `UI.lua` is the window (rows, popover, secure buttons, dragging, ticker, and what combat
-    defers).
+  - `UI` is the window (rows, popover, secure buttons, dragging, ticker, and what combat
+    defers), drawn in LibGlass-1.0's material.
     Priestly builds one `ui` with its title, spec icon (`appearance`), `FooterItems()` and config
     accessors, and its events and slash commands call `ui:Update()`, `ui:Open(delay)`,
     `ui:Close(manual)`, `ui:ScheduleRefresh()`, `ui:OnCombatEnd()`, `ui:ResetPosition()` and so on.
-  - `Visibility.lua` decides **when** the window opens and when it must not. Priestly builds one
+  - `Visibility` decides **when** the window opens and when it must not. Priestly builds one
     `vis` with its class, solo setting and saved `visible`, and its events report what happened —
     `vis:Login()`, `ReadyCheck()`, `GroupJoined()`, `RosterChanged()`, `SoloToggled(on)`,
     `ContentChanged()`. **Do not add a window-policy branch to `Priestly.lua`.** This used to live
@@ -61,41 +63,72 @@ There is no build system, compiler or package manager. The BigWigs packager hand
     what grew the copies. What stays Priestly's is whether a notification is worth making at all.
   A change to how buffs are read, targeted or drawn belongs in the library.
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
-- `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, library included.
+- `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, both libraries included.
 - `Tools/PriestlyProbe/` — throwaway in-game API probe. Delete once `docs/FOREVER-PROBE.md` is
   settled.
-- `.github/workflows/` — package-check: tests against the pinned library, dry-run package, and a
-  check that the zip embeds the library.
+- `.github/workflows/` — package-check: tests against the pinned libraries, dry-run package, and a
+  check that the zip is exactly the addon plus both libraries at their pins.
 - `.pkgmeta`, `README.md`, `CHANGELOG.md`, `LICENSE` — packaging and user-facing material.
 
-**One dependency: [LibGroupBuffs-1.0](https://github.com/Spotnick2/LibGroupBuffs)**, the shared
-library behind Priestly, Wildly and Magely (issue #3). It is never committed here — `Libs/` is
-git-ignored:
+**Two dependencies, embedded side by side:**
 
-- **Release:** `.pkgmeta` `externals` embeds it at `Libs/LibGroupBuffs-1.0`, **pinned to a tag**
-  (`r<MINOR>`), so a release cannot change underneath its own source.
-- **Development:** check it out **next to this repository**, as `../LibGroupBuffs`. `tests/run.ps1`
-  and `Tools/deploy.ps1` both read it from there (or from `-Library`), print the revision they used,
-  and fail loudly if it is missing. There is no vendored fallback: a stale copy would pass the
-  suite against code that no longer ships.
-- **CI** checks out the pinned tag, not the library's `main`.
+- **[LibGroupBuffs-1.0](https://github.com/Spotnick2/LibGroupBuffs)**, the shared library behind
+  Priestly, Wildly and Magely (issue #3): compat layer, engine, window, window policy, settings.
+- **[LibGlass-1.0](https://github.com/Spotnick2/LibGlass)**, the glass material LibGroupBuffs'
+  window draws with. LibGroupBuffs does not embed it itself (the packager does not fetch an
+  external's own externals), so Priestly declares both. See "The glass material" below.
+
+Neither is ever committed here — `Libs/` is git-ignored:
+
+- **Release:** `.pkgmeta` `externals` embeds them at `Libs/LibGroupBuffs-1.0` and
+  `Libs/LibGlass-1.0`, each **pinned** — to a tag (`r<MINOR>`), or to a full commit while Priestly
+  pilots a library release before it is tagged — so a release cannot change underneath its own
+  source. Never `tag: latest`, and **no comment on a value line**: the packager's YAML reader keeps
+  it as part of the ref.
+- **Development:** check both out **next to this repository**, as `../LibGroupBuffs` and
+  `../LibGlass`. `tests/run.ps1` and `Tools/deploy.ps1` read them from there (or from `-Library` /
+  `-LibGlass`, and `$env:LIBGLASS`), print the revision they used, warn when a checkout is not at
+  its pin, and fail loudly if one is missing. There is no vendored fallback: a stale copy would
+  pass the suite against code that no longer ships.
+- **CI** fetches each pinned ref (`tests/fetch_external.sh`), not the libraries' `main`.
+
+`.pkgmeta`'s externals are read **by path**, through `tests/pkgmeta.lua` — run.ps1, deploy.ps1, CI
+and the manifest test all use it. With two externals, "the first `tag:` in the file" is LibGlass's.
 
 To change something in the compat layer: change it in the library (with its tests), merge and tag
-it `r<MINOR>`, then bump the tag in `.pkgmeta`. `tests/test_manifest.lua` checks the TOC path, the
-`.pkgmeta` externals key, the pinned tag and the ignore rule all agree.
+it `r<MINOR>`, then move the pin in `.pkgmeta` — in a release made anyway: players get library
+fixes earlier through whichever addon ships the newest copy, since LibStub runs that one.
+`tests/test_manifest.lua` checks the TOC paths, the `.pkgmeta` externals, the pins, `NEEDS_MINOR`
+and the ignore rules all agree.
 
 ## Architecture
 
 Load order from `Priestly.toc`:
 
-1. `Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml` — LibStub, then the library's compat layer.
-2. `PriestlyCompat.lua` — sets `Priestly.API` to the library's API table. Nothing else may touch a
+1. `Libs\LibGlass-1.0\LibGlass-1.0.xml` — LibStub, then the glass material.
+2. `Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml` — LibStub, then the library.
+3. `PriestlyCompat.lua` — `Priestly.GB = lib:New({ owner, report, needs = NEEDS_MINOR })` under
+   pcall, and `Priestly.API = GB.API`. `New` refuses a copy that did not finish loading, a missing
+   or half-loaded LibGlass, and one older than the floor; the bridge prints its refusal in chat
+   and stops, and the two files below stop when `Priestly.API` is nil. Nothing else may touch a
    moved API directly.
-3. `PriestlyConfig.lua` — `PriestlyAccountDB` defaults, instance database, `Priestly_*` helpers.
-4. `Priestly.lua` — UI and event logic; calls the config helpers.
+4. `PriestlyConfig.lua` — `PriestlyAccountDB` defaults, instance database, `Priestly_*` helpers.
+5. `Priestly.lua` — UI and event logic; calls the config helpers.
 
-`Priestly.API` (the only sanctioned route to a changed API; implemented in LibGroupBuffs'
-`Compat.lua`, and `tests/test_bridge.lua` checks every function Priestly calls exists there):
+Constructors are **dot calls on the instance**: `GB.Engine(host)`, `GB.UI(host)`,
+`GB.Settings(spec)`, `GB.Visibility(spec)`; shared data is `GB.STATES`, `GB.PET_GROUP`,
+`GB.LOAD_CHECK_KEY`, `GB.MINOR`. Each instance function looks the library's code up when it runs,
+so a newer copy another addon loads is the one that runs.
+
+**One reporter.** The library never prints; everything it says arrives at the `report(text, kind)`
+the bridge passed to `New`, which the settings object inherits. A kind's rewording lives with the
+file that owns it, in `Priestly.reportFilters[kind]` (PriestlyConfig.lua: `newBuild`,
+`settingsLoaded`); a filter returns the text to print, or nil to say nothing. Rejected events
+arrive as kind `"events"`.
+
+`Priestly.API` (the only sanctioned route to a changed API; implemented in the compat section of
+LibGroupBuffs' `LibGroupBuffs.lua`, and `tests/test_bridge.lua` checks every function Priestly
+calls exists there):
 
 | Contract | Replaces |
 |---|---|
@@ -138,9 +171,10 @@ cache. `tests/test_config_seam.lua` scans the source with LibGroupBuffs' `tests/
 owner regions so a new one has to be added on purpose. Owner code that writes through a local alias
 reports it with `settings:Changed(key)`: the scan cannot see an alias.
 
-The setters, the `svLoadCheck` load check and the build watch are LibGroupBuffs' `Settings.lua`
-(#3). `PriestlyConfig.lua` builds one settings object from it with Priestly's saved-table
-accessors, `MEASURED_ON_BUILD` and a chat reporter; the `Priestly_*`
+The setters, the `svLoadCheck` load check and the build watch are LibGroupBuffs' `Settings` section
+(#3). `PriestlyConfig.lua` builds one settings object with `GB.Settings`, from Priestly's
+saved-table accessors and `MEASURED_ON_BUILD`; it reports through the instance's reporter, with
+this file's `newBuild` and `settingsLoaded` filters. The `Priestly_*`
 functions above are thin wrappers so the options panel and tests keep their names. A change to how
 the checks behave or what they say belongs in the library, not here. `Priestly_OnConfigChanged` is
 empty today; it is the one place the SavedVariables fix, or a migration, will land. The library
@@ -242,12 +276,33 @@ SavedVariables fix a second time.
 `learnedDurations` is keyed by **spell name**,
 not by buff id: the single and group forms of one buff share an id and do not share a duration.
 
+## The glass material
+
+The window's look is **LibGlass-1.0** (`..\LibGlass`, github.com/Spotnick2/LibGlass, public, MIT),
+the material every glass addon embeds. LibGroupBuffs draws with one LibGlass instance per session;
+Priestly never calls LibGlass itself. Its repo owns the code, the 15 textures and the write-up
+(`docs/GLASS-MATERIAL.md`), and its `CLAUDE.md` holds the contract.
+
+- **Material changes are LibGlass PRs**, never edits here; how the window uses it is a
+  LibGroupBuffs PR. Never edit either checkout from this repository's session: a need found here
+  goes on that library's issue tracker.
+- **How it's embedded:** `.pkgmeta` externals put it in `Libs\LibGlass-1.0\` — the only supported
+  path, since `MEDIA` is derived from it; anywhere else draws blank textures with no error — and
+  the TOC loads its XML **before** LibGroupBuffs'. A dev copy comes from the LibGlass checkout's own
+  `Tools\deploy.ps1`, which `Tools\deploy.ps1` here calls first.
+- **The pin:** a tag, never `tag: latest`. Bump it only in a release made anyway.
+- **Priestly has no textures of its own**, so nothing here builds a path from `Glass.MEDIA`; it is
+  for library textures only. `tests/libfiles.lua` checks every texture LibGroupBuffs names is in
+  LibGlass's `Media/`.
+- **Colours passed to a glass bar's `SetStatusBarColor` must be plain** (the library's hook
+  compares them): never a secret value.
+
 ## WoW API And Lua Rules
 
 - Target the **Retail/Mainline** API. `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE` here.
 - Keep `## Interface: 16001` in `Priestly.toc` as the source of compatibility. The format is
   `%d%02d%02d`, so 1.60.1 → 16001. `11601` is a transposed-digit bug you will see in the wild.
-- Never call a moved API directly. Add it to LibGroupBuffs' `Compat.lua` and reach it through
+- Never call a moved API directly. Add it to LibGroupBuffs' compat section and reach it through
   `Priestly.API`, taking a file-local alias.
 - Watch the false friends: `C_Item.GetItemIconByID`, **not** `C_Item.GetItemIcon` (that takes an
   ItemLocation); reputation is `C_Reputation`, not `C_CreatureInfo.GetFactionInfo`.
@@ -270,9 +325,10 @@ not by buff id: the single and group forms of one buff share an id and do not sh
   `Tools/PriestlyProbe` rather than assuming.
 - `RegisterEvent` **throws** on an unknown event name, and is declared to return
   `registered:bool`, so `false` is a refusal too. Go through **`Priestly.RegisterEvents`**, never the
-  library's `API.RegisterEvents*` or a bare `frame:RegisterEvent`. The wrapper passes Priestly's chat
-  reporter to `API.RegisterEventsReported`, so every rejection is printed and recorded in
-  `Priestly.eventFailures`. `tests/test_bridge.lua` fails on any other registration.
+  library's `API.RegisterEvents*`, `GB.RegisterEvents` or a bare `frame:RegisterEvent`. The wrapper
+  calls `GB.RegisterEvents`, whose rejections reach Priestly's reporter as kind `"events"`, so every
+  one is printed and recorded in `Priestly.eventFailures`. `tests/test_bridge.lua` fails on any
+  other registration.
 - Never copy a library function into a local (`local F = API.F`). `API` is shared with every addon
   that embeds LibGroupBuffs and a newer copy upgrades it in place; a copy keeps the old version.
   Call through `API`, or wrap: `local function F(...) return API.F(...) end`. Also enforced by
@@ -378,8 +434,9 @@ Changing patch compatibility:
   not repeat at every login; the next build speaks again, and bumping `MEASURED_ON_BUILD` silences
   it for good. **A release never shows it** and records nothing: telling players a working release
   was tested on an older build gains nothing, and what flags an addon out of date is the TOC's
-  `## Interface:`, not this. Both rules live in Priestly's `report` callback for the library's
-  `newBuild` kind, which also rewords it for the developer. The procedure lives here.
+  `## Interface:`, not this. Both rules live in `Priestly.reportFilters.newBuild`
+  (`PriestlyConfig.lua`), the filter for the library's `newBuild` kind, which also rewords it for
+  the developer. The procedure lives here.
   When the build changes, re-measure - `/apidump`, `/pprobe`, and a **full-exit** check of saved
   settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
   silences the only reminder that the notes are stale, so a dump comparison is not enough on its
@@ -449,33 +506,36 @@ and is invisible from this side.
    build held back from the people who already have the addon. The fact that the *game client* is
    in beta is not a reason: say that in the release notes, where players read it, and ship a
    Release so they can actually get it.
-6. **Check the published zip carries LibGroupBuffs, and nothing else.** CI proves the BigWigs
-   packager embeds it, but releases are built by CurseForge's own packager from the tag webhook,
-   which CI cannot run, and **the two do not behave the same**. Download the published file and
-   check `Priestly/Libs/LibGroupBuffs-1.0/` with
-   `lua tests/libfiles.lua <unzipped>/Priestly/Libs/LibGroupBuffs-1.0 ship`, then count the files
-   in it: seven - the six that command lists, which are the XML itself and the five files it
-   loads, plus `LICENSE`. A zip without them is an addon that does not
-   start for everyone who updates.
+6. **Check the published zip carries both libraries, and nothing else.** CI proves the BigWigs
+   packager embeds them, but releases are built by CurseForge's own packager from the tag webhook,
+   which CI cannot run, and **the two do not behave the same**. Download the published file and,
+   with `<p>` = `<unzipped>/Priestly/Libs`, check each folder:
+   - `lua tests/libfiles.lua <p>/LibGroupBuffs-1.0 ship <p>/LibGlass-1.0` - the XML and the two
+     files it loads - then count the files in `LibGroupBuffs-1.0/`: **four**, those three plus
+     `LICENSE`. There is no `Media/` any more.
+   - `lua tests/libfiles.lua --glass <p>/LibGlass-1.0 ship` - the XML, the two files it loads,
+     `LICENSE` and the 15 textures - then count the files in `LibGlass-1.0/`: **nineteen**.
+   A zip without either is an addon that does not start for everyone who updates.
 
    **CurseForge does not apply an external's own `.pkgmeta`.** Measured on the v2.0.6 download: the
    library's `tests/`, `AGENTS.md`, `CLAUDE.md` and `README.md` all shipped, 46 files instead of 7,
    though the library's own ignore list excludes them and the BigWigs packager honours it. Nothing
    there loads, so it is noise rather than breakage - but the library's list is not the guarantee.
-   The entries under `Libs/LibGroupBuffs-1.0/` in *this* addon's `.pkgmeta` are, and
-   `tests/test_manifest.lua` pins them.
+   The entries under `Libs/LibGroupBuffs-1.0/` and `Libs/LibGlass-1.0/` in *this* addon's `.pkgmeta`
+   are, and `tests/test_manifest.lua` mirrors them from each library's own list.
 
 ## Validation
 
 Offline, on every change:
 
 ```powershell
-pwsh tests\run.ps1        # luac -p + all unit tests; needs ../LibGroupBuffs checked out
+pwsh tests\run.ps1        # luac -p + all unit tests; needs ../LibGroupBuffs and ../LibGlass
+bash tests/fetch_external.sh Libs/LibGlass-1.0 <dir>   # clone a library at its .pkgmeta pin (what CI does)
 ```
 
-The first line of output names the library checkout and revision the tests ran against, next to
-the tag a release would ship. They differ while working on both, which is fine; they should match
-before a release.
+The first lines of output name each library checkout and revision the tests ran against, and
+warn when one is not at its `.pkgmeta` pin. They differ while working on a library, which is fine;
+they must match before a release.
 
 **The stub is shared.** The client surface lives in `../LibGroupBuffs/tests/wow_stubs.lua`, one
 copy for Priestly, Wildly and Magely (LibGroupBuffs#21); `tests/wow_stubs.lua` is a thin layer

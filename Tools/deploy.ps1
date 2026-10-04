@@ -7,18 +7,25 @@
     string, so the deployed copy gets `## Version: dev` instead. The repo copy is
     never modified.
 
-    Priestly embeds LibGroupBuffs-1.0. A release gets it from .pkgmeta
-    externals; a deploy copies it from the checkout next to this repository
-    (../LibGroupBuffs, or -Library) into Priestly\Libs\LibGroupBuffs-1.0,
-    exactly the files its XML lists. Nothing is written until every one of
-    them has been found.
+    Priestly embeds two libraries side by side, which a release gets from
+    .pkgmeta externals:
+      - LibGlass-1.0, the glass material. Deployed by the LibGlass checkout's
+        own Tools\deploy.ps1 ($env:LIBGLASS or -LibGlass, else ..\LibGlass),
+        which checks the checkout is complete and prints its commit. It runs
+        FIRST: a refusal there leaves the deployed Priestly untouched.
+      - LibGroupBuffs-1.0, copied from the checkout next to this repository
+        (../LibGroupBuffs, or -Library) into Priestly\Libs\LibGroupBuffs-1.0,
+        exactly the files its XML lists. Nothing is written until every one
+        of them has been found, and every texture it draws is in LibGlass.
+    A checkout that is not at its .pkgmeta pin is a warning, not a refusal:
+    trying a library change in game before the pin moves is legitimate.
 
     Usage:
         pwsh Tools/deploy.ps1                # addon only
         pwsh Tools/deploy.ps1 -Probe         # addon + PriestlyProbe
         pwsh Tools/deploy.ps1 -ProbeOnly     # just PriestlyProbe
         pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_classic_beta_\Interface\AddOns"
-        pwsh Tools/deploy.ps1 -Library "D:\src\LibGroupBuffs"
+        pwsh Tools/deploy.ps1 -Library "D:\src\LibGroupBuffs" -LibGlass "D:\src\LibGlass"
 #>
 
 param(
@@ -26,6 +33,7 @@ param(
     [switch]$Probe,
     [switch]$ProbeOnly,
     [string]$Library = "",
+    [string]$LibGlass = "",
     [string]$Lua = "C:\Program Files (x86)\Lua\5.1\lua.exe"
 )
 
@@ -44,11 +52,11 @@ if (-not (Test-Path $AddOnsPath)) {
 # run.ps1 and CI also use. It fails, naming the file, if anything listed is
 # missing, so nothing is copied until the whole library has been found.
 function Get-LibraryFiles {
-    param([string]$Root)
+    param([string]$Root, [string]$GlassRoot)
     if (-not (Test-Path $Lua)) {
         throw "Lua 5.1 not found at $Lua (pass -Lua <path>); deploy reads the library's file list with it."
     }
-    $files = & $Lua (Join-Path $RepoRoot "tests\libfiles.lua") $Root ship 2>&1
+    $files = & $Lua (Join-Path $RepoRoot "tests\libfiles.lua") $Root ship $GlassRoot 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw ("$files. Clone https://github.com/Spotnick2/LibGroupBuffs next to this repository, " +
             "or pass -Library.")
@@ -69,15 +77,54 @@ function Copy-AddonFile {
     }
 }
 
+# Warn when a checkout is not at the ref .pkgmeta pins for it, read by path
+# (tests/pkgmeta.lua): with two externals, the first `tag:` in the file is
+# LibGlass's.
+function Test-Pin {
+    param([string]$Name, [string]$Path, [string]$Root)
+    Push-Location $RepoRoot
+    try { $pin = & $Lua (Join-Path $RepoRoot "tests\pkgmeta.lua") $Path ref 2>$null } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0 -or -not $pin) {
+        $global:LASTEXITCODE = 0
+        Write-Host "  (no $Name pin found in .pkgmeta)" -ForegroundColor Yellow
+        return
+    }
+    try {
+        $want = git -C $Root rev-parse --verify --quiet "$pin^{commit}" 2>$null
+        $head = git -C $Root rev-parse HEAD 2>$null
+        $dirty = git -C $Root status --porcelain 2>$null
+        if (-not $want -or $want -ne $head -or $dirty) {
+            Write-Host ("  WARNING: the $Name checkout at $Root is not at the .pkgmeta pin ($pin)" +
+                "$(if ($dirty) { ', or has uncommitted changes' }); a release ships the pin") -ForegroundColor Yellow
+        }
+    } catch { }
+    $global:LASTEXITCODE = 0
+}
+
 function Deploy-Priestly {
     $dest = Join-Path $AddOnsPath "Priestly"
 
     # Preflight: find the whole library before touching the AddOns folder, so a
     # missing checkout cannot leave half a deploy behind.
+    $glassRoot = $LibGlass
+    if (-not $glassRoot) { $glassRoot = $env:LIBGLASS }
+    if (-not $glassRoot) { $glassRoot = Join-Path (Split-Path -Parent $RepoRoot) "LibGlass" }
+    if (-not (Test-Path -LiteralPath (Join-Path $glassRoot "Tools\deploy.ps1"))) {
+        throw ("LibGlass checkout not found at $glassRoot. Clone https://github.com/Spotnick2/LibGlass " +
+            "next to this repository, or set `$env:LIBGLASS / pass -LibGlass.")
+    }
+    $glassRoot = (Resolve-Path $glassRoot).Path
     $libRoot = $Library
     if (-not $libRoot) { $libRoot = Join-Path (Split-Path -Parent $RepoRoot) "LibGroupBuffs" }
-    $libFiles = Get-LibraryFiles -Root $libRoot
+    $libFiles = Get-LibraryFiles -Root $libRoot -GlassRoot $glassRoot
     $libRoot = (Resolve-Path $libRoot).Path
+    Test-Pin -Name "LibGlass" -Path "Libs/LibGlass-1.0" -Root $glassRoot
+    Test-Pin -Name "LibGroupBuffs" -Path "Libs/LibGroupBuffs-1.0" -Root $libRoot
+
+    # LibGlass first, by its own deploy: a refusal there must leave the
+    # deployed Priestly untouched.
+    & pwsh -NoProfile -File (Join-Path $glassRoot "Tools\deploy.ps1") -Addon Priestly -AddOnsPath $AddOnsPath -Lua $Lua
+    if ($LASTEXITCODE -ne 0) { throw "LibGlass deploy refused; Priestly was not touched" }
     # Informational: no git, or a library that is not a checkout, must not
     # stop a deploy.
     $revision = try {

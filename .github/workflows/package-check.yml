@@ -18,34 +18,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The tests load LibGroupBuffs-1.0 from a checkout next to this one, the
-      # same layout as local development. CI uses the tag .pkgmeta pins - the
-      # library a release would actually ship - not whatever main holds today.
-      - name: Check out LibGroupBuffs at the pinned tag
-        run: |
-          tag=$(awk '$1 == "tag:" { print $2; exit }' .pkgmeta)
-          test -n "$tag" || { echo ".pkgmeta pins no LibGroupBuffs tag"; exit 1; }
-          git clone --quiet --depth 1 --branch "$tag" \
-            https://github.com/Spotnick2/LibGroupBuffs ../LibGroupBuffs
-          echo "LibGroupBuffs @ $tag ($(git -C ../LibGroupBuffs rev-parse --short HEAD))"
-
-      - name: Syntax-check the Lua
+      - name: Install Lua 5.1
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq lua5.1
-          # tests/libfiles.lua is the one reader of the library's XML; the
+
+      # Both embedded libraries at the refs .pkgmeta pins - read from there BY
+      # PATH, never written twice - each checked to BE that commit. CI tests
+      # the libraries a release would actually ship, not whatever their main
+      # holds today. A `commit:` pin works as well as a tag.
+      - name: Fetch the libraries at their pinned refs
+        run: |
+          bash tests/fetch_external.sh Libs/LibGroupBuffs-1.0 "$RUNNER_TEMP/LibGroupBuffs"
+          bash tests/fetch_external.sh Libs/LibGlass-1.0 "$RUNNER_TEMP/LibGlass"
+          echo "LIBGROUPBUFFS=$RUNNER_TEMP/LibGroupBuffs" >> "$GITHUB_ENV"
+          echo "LIBGLASS=$RUNNER_TEMP/LibGlass" >> "$GITHUB_ENV"
+
+      # Priestly's files and LibGroupBuffs'. LibGlass is checked in its own
+      # repository, and every test loads it first.
+      - name: Syntax-check the Lua
+        run: |
+          # tests/libfiles.lua is the one reader of the libraries' XML; the
           # harness, run.ps1 and deploy.ps1 use it too.
-          lib=../LibGroupBuffs
-          files=$(lua5.1 tests/libfiles.lua "$lib" load) || exit 1
+          files=$(lua5.1 tests/libfiles.lua "$LIBGROUPBUFFS" load "$LIBGLASS") || exit 1
           # The TOC is the list, so a new file cannot go unchecked here.
           toc=$(grep -E '^[^#].*[.]lua$' Priestly.toc | tr -d '\r')
           test -n "$toc" || { echo "Priestly.toc lists no Lua files"; exit 1; }
           luac5.1 -p $toc \
-            $(printf '%s\n' $files | sed "s|^|$lib/|")
+            $(printf '%s\n' $files | sed "s|^|$LIBGROUPBUFFS/|")
 
       - name: Unit tests
-        env:
-          LIBGROUPBUFFS: ../LibGroupBuffs
         run: |
           for f in tests/test_*.lua; do
             echo "-- $f"
@@ -57,35 +59,64 @@ jobs:
         with:
           args: -d
 
-      # Local tests read the library from a sibling checkout, so they cannot
-      # prove a package carries it. Unpack the zip and resolve the library from
-      # inside it with the same reader: it fails, naming the file, if anything
-      # the packaged XML lists is absent at the path the TOC loads.
+      # Local tests read the libraries from sibling checkouts, so they cannot
+      # prove a package carries them. Assert the zip's SHAPE instead: an exact
+      # allowlist, not a denylist. Priestly's TOC and every Lua file it loads;
+      # under Libs/LibGroupBuffs-1.0 its XML, every file the XML loads and
+      # LICENSE; under Libs/LibGlass-1.0 the same plus its textures - NOTHING
+      # else (a library's tests or notes, or a new file, fail here instead of
+      # shipping). The library lists come from tests/libfiles.lua, read from
+      # the pinned checkouts.
       #
       # This is the BigWigs packager's zip. Releases are built by CurseForge's
       # own packager from the tag webhook, which CI cannot run - so the
       # published file is checked by hand after each release (AGENTS.md,
       # Releasing).
-      - name: The package embeds the library
+      - name: The package is exactly the addon and its two libraries
         run: |
           zip=$(ls .release/*.zip | head -1)
           rm -rf unpacked && mkdir unpacked && unzip -q "$zip" -d unpacked
-          lua5.1 tests/libfiles.lua unpacked/Priestly/Libs/LibGroupBuffs-1.0 ship \
-            | sed 's|^|packaged Priestly/Libs/LibGroupBuffs-1.0/|'
-          test "${PIPESTATUS[0]}" -eq 0
-
-      # ...and nothing else. The library's own .pkgmeta leaves out its tests
-      # and notes; if that list ever misses something, players would get it.
-      # Expected: exactly what the XML ships, plus LICENSE (MIT needs it).
-      - name: The package embeds only the library's runtime files
-        run: |
-          lib=unpacked/Priestly/Libs/LibGroupBuffs-1.0
-          { lua5.1 tests/libfiles.lua "$lib" ship; echo LICENSE; } | sort > expected.txt
-          (cd "$lib" && find . -type f | sed 's|^\./||' | sort) > actual.txt
+          gb=Priestly/Libs/LibGroupBuffs-1.0
+          glass=Priestly/Libs/LibGlass-1.0
+          set -o pipefail
+          {
+            echo Priestly/Priestly.toc
+            tr -d '\r' < Priestly.toc | grep -v '^#' | grep '\.lua$' | sed 's|^|Priestly/|'
+            lua5.1 tests/libfiles.lua "$LIBGROUPBUFFS" ship "$LIBGLASS" | sed "s|^|$gb/|"
+            echo "$gb/LICENSE"
+            lua5.1 tests/libfiles.lua --glass "$LIBGLASS" ship | sed "s|^|$glass/|"
+          } | sort > expected.txt
+          (cd unpacked && find . -type f | sed 's|^\./||' | sort) > actual.txt
+          echo "LibGroupBuffs files expected: $(grep -c "^$gb/" expected.txt)"
+          echo "LibGlass files expected: $(grep -c "^$glass/" expected.txt) ($(grep -c "^$glass/Media/" expected.txt) textures)"
           if ! diff -u expected.txt actual.txt; then
-            echo "Libs/LibGroupBuffs-1.0 in the package differs from what the library ships (- missing, + extra)"
+            echo "the package differs from the addon + its libraries (- missing, + extra)"
             exit 1
           fi
+          # And the packaged LibGroupBuffs finds every texture it draws in the
+          # packaged LibGlass, at the paths the client will load.
+          lua5.1 tests/libfiles.lua "unpacked/$gb" load "unpacked/$glass" > /dev/null
+
+      # The packager fetched its own copies of the libraries; prove it embedded
+      # the pinned commits' content (the same files the tests just ran
+      # against). Its text filter rewrites .lua/.xml with CRLF (release.sh:
+      # line_ending defaults to "dos"), so those compare with CRs stripped;
+      # everything else (textures, LICENSE) must match byte for byte.
+      - name: The packaged libraries are the pinned commits
+        run: |
+          bad=0
+          check() {
+            local packaged=$1 pinned=$2
+            while read -r f; do
+              case "$f" in
+                *.lua|*.xml) cmp -s <(tr -d '\r' < "$packaged/$f") <(tr -d '\r' < "$pinned/$f") ;;
+                *) cmp -s "$packaged/$f" "$pinned/$f" ;;
+              esac || { echo "differs from the pinned checkout: $packaged/$f"; bad=1; }
+            done < <(cd "$packaged" && find . -type f | sed 's|^\./||')
+          }
+          check unpacked/Priestly/Libs/LibGroupBuffs-1.0 "$LIBGROUPBUFFS"
+          check unpacked/Priestly/Libs/LibGlass-1.0 "$LIBGLASS"
+          test "$bad" -eq 0
 
       # .release is a hidden directory, and upload-artifact@v4 skips hidden
       # content by default - without include-hidden-files the upload finds

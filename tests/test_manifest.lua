@@ -83,9 +83,11 @@ H.check(not tostring(directive("SavedVariables")):find("PriestlyDB", 1, true),
 ------------------------------------------------------------
 -- Load order
 --
--- LibGroupBuffs-1.0 provides the compat layer, and PriestlyCompat exposes it
--- as Priestly.API; both other files take file-local aliases from it at load
--- time. Anything out of order and they get nil.
+-- LibGlass-1.0 first: LibGroupBuffs' lib:New refuses to make an instance
+-- while LibGlass is missing or half-loaded. Then LibGroupBuffs-1.0, then
+-- PriestlyCompat, which asks it for Priestly's instance; both other files take
+-- file-local aliases from that at load time. Anything out of order and they
+-- get nil.
 ------------------------------------------------------------
 
 local entries = {}
@@ -93,49 +95,82 @@ for _, line in ipairs(toc) do
     if line:match("%.[lx][um][al]$") and not line:match("^##") then entries[#entries + 1] = line end
 end
 
+local GLASS_XML = "Libs\\LibGlass-1.0\\LibGlass-1.0.xml"
 local LIB_XML = "Libs\\LibGroupBuffs-1.0\\LibGroupBuffs-1.0.xml"
-H.eq(entries[1], LIB_XML, "the shared library loads first, through its own XML")
-H.eq(entries[2], "PriestlyCompat.lua", "then the bridge that exposes it as Priestly.API")
-H.eq(entries[3], "PriestlyConfig.lua", "then the config, which reads Priestly.API at file scope")
-H.eq(entries[4], "Priestly.lua", "then the addon proper")
-H.eq(#entries, 4, "and nothing else loads")
+H.eq(entries[1], GLASS_XML, "the glass material loads first, through its own XML")
+H.eq(entries[2], LIB_XML, "then the shared library that draws with it")
+H.eq(entries[3], "PriestlyCompat.lua", "then the bridge that asks it for Priestly's instance")
+H.eq(entries[4], "PriestlyConfig.lua", "then the config, which reads Priestly.API at file scope")
+H.eq(entries[5], "Priestly.lua", "then the addon proper")
+H.eq(#entries, 5, "and nothing else loads")
 
 ------------------------------------------------------------
--- The library is embedded, pinned, and never committed
+-- Both libraries are embedded, pinned, and never committed
 --
--- The TOC path, the .pkgmeta externals key and .gitignore have to agree, or
--- the release zip is missing the library while every local check passes.
+-- The TOC paths, the .pkgmeta externals keys and .gitignore have to agree, or
+-- the release zip is missing a library while every local check passes. Each
+-- external is read BY PATH (tests/pkgmeta.lua): with two of them, "the first
+-- tag: in the file" is LibGlass's.
 ------------------------------------------------------------
 
-local pkgmeta = H.readFile(".pkgmeta") or ""
-local external = pkgmeta:match("externals:%s*\n%s+([^\n:]+):")
-H.eq(external, "Libs/LibGroupBuffs-1.0", ".pkgmeta embeds the library at Libs/LibGroupBuffs-1.0")
-H.eq(external and (external:gsub("/", "\\") .. "\\LibGroupBuffs-1.0.xml"), LIB_XML,
-    "which is exactly where the TOC loads it from")
-H.check(pkgmeta:find("url: https://github.com/Spotnick2/LibGroupBuffs", 1, true) ~= nil,
-    "from the LibGroupBuffs repository")
-local tag = pkgmeta:match("\n%s+tag:%s*(%S+)")
-H.check(tag ~= nil and tag:match("^r%d+$") ~= nil,
-    "pinned to a library tag, so a release cannot change under its own source: " .. tostring(tag))
+local P = dofile("tests/pkgmeta.lua")
+local externals = P.externals() or {}
+local function embeds(path, xml, url)
+    local ext = externals[path]
+    H.check(ext ~= nil, ".pkgmeta embeds " .. path)
+    ext = ext or {}
+    H.eq(path:gsub("/", "\\") .. "\\" .. xml, entries[path:find("LibGlass", 1, true) and 1 or 2],
+        "which is exactly where the TOC loads " .. xml .. " from")
+    H.eq(ext.url, url, "from its repository")
+    -- A tag, or a full commit SHA while a pin is being piloted. Read as the
+    -- packager reads it, the whole rest of the line, so an inline comment -
+    -- which the packager keeps in the ref - fails here.
+    local pinned = (ext.kind == "tag" and tostring(ext.ref):match("^r%d+$"))
+        or (ext.kind == "commit" and tostring(ext.ref):match("^%x+$") and #ext.ref == 40)
+    H.check(pinned, path .. " is pinned to an r<N> tag or a full commit, so a release cannot "
+        .. "change under its own source: " .. tostring(ext.kind) .. " " .. tostring(ext.ref))
+    return ext
+end
+local glass = embeds("Libs/LibGlass-1.0", "LibGlass-1.0.xml", "https://github.com/Spotnick2/LibGlass")
+local gb = embeds("Libs/LibGroupBuffs-1.0", "LibGroupBuffs-1.0.xml",
+    "https://github.com/Spotnick2/LibGroupBuffs")
+local external = "Libs/LibGroupBuffs-1.0"
+local n = 0
+for _ in pairs(externals) do n = n + 1 end
+H.eq(n, 2, "and nothing else is embedded")
+-- LibGlass by tag, never `latest` (newest by creation date, else branch HEAD).
+H.eq(glass.kind, "tag", "LibGlass is pinned by tag: " .. tostring(glass.ref))
 
 -- The bridge refuses a library older than the behaviour this build needs, and
--- that floor has to be the tag actually shipped: pinning a newer tag while the
--- floor stays behind means a player with the older library installed gets an
--- addon that starts and quietly misbehaves, which is what the floor exists to
--- prevent. (The opposite, a floor ahead of the pin, refuses to start at all.)
+-- that floor has to be the library actually shipped: pinning a newer one
+-- while the floor stays behind means a player with the older library
+-- installed gets an addon that starts and quietly misbehaves, which is what
+-- the floor exists to prevent. (The opposite, a floor ahead of the pin,
+-- refuses to start at all.)
+--
+-- A tag names its MINOR. A commit does not, so for a commit pin the floor is
+-- compared with the MINOR of the checkout the suite runs against - which run.ps1
+-- warns about, and CI proves, being that commit.
 local needs = tonumber((H.readFile("PriestlyCompat.lua") or "")
     :match("local NEEDS_MINOR = (%d+)"))
 H.check(needs ~= nil, "PriestlyCompat declares the oldest library it works against")
-H.eq(needs, tonumber(tostring(tag):match("^r(%d+)$")),
-    "and it is the tag .pkgmeta pins: " .. tostring(tag) .. " vs NEEDS_MINOR " .. tostring(needs))
+local pinnedMinor
+if gb.kind == "tag" then
+    pinnedMinor = tonumber(tostring(gb.ref):match("^r(%d+)$"))
+else
+    pinnedMinor = tonumber((H.readFile(H.libraryRoot() .. "/LibGroupBuffs.lua") or "")
+        :match('local MAJOR, MINOR = "LibGroupBuffs%-1%.0", (%d+)'))
+end
+H.eq(needs, pinnedMinor,
+    "and it is the MINOR .pkgmeta pins: " .. tostring(gb.kind) .. " " .. tostring(gb.ref)
+    .. " vs NEEDS_MINOR " .. tostring(needs))
 
--- lib.Status arrived in r12, and the bridge reads its ABSENCE as "the last
--- file threw" for anything at or above the floor. Below r12 that reading is
--- wrong: a healthy older library has no Status, would be called incomplete,
--- and Priestly would refuse to start for everyone. Rolling the pin back is
--- the way that happens, and this is what stops it landing quietly.
-H.check(needs ~= nil and needs >= 12,
-    "the floor is r12 or newer, which is where lib.Status came from: " .. tostring(needs))
+-- lib:New arrived in r26, and the bridge has no other way in: below r26 it
+-- would read every healthy library as "failed to load completely" and
+-- Priestly would refuse to start for everyone. Rolling the pin back is the
+-- way that happens, and this is what stops it landing quietly.
+H.check(needs ~= nil and needs >= 26,
+    "the floor is r26 or newer, which is where lib:New came from: " .. tostring(needs))
 
 local libIgnored = false
 for line in ((H.readFile(".gitignore") or "") .. "\n"):gmatch("([^\n]*)\n") do
@@ -190,28 +225,29 @@ end
 -- packager, fails HERE instead of shipping in the next CurseForge release.
 -- Dot-paths are skipped - both packagers prune those, which the published zip
 -- confirms: its 46 files were exactly the non-dot files at that tag.
-local libPkgmeta = H.readFile(H.libraryRoot() .. "/.pkgmeta")
-H.check(libPkgmeta ~= nil, "the library checkout has a .pkgmeta to mirror")
-
-local mirrored, inIgnore = 0, false
-for line in (libPkgmeta or ""):gmatch("[^\r\n]+") do
-    if line:match("^ignore:%s*$") then
-        inIgnore = true
-    -- A top-level comment does not end a YAML list; a later ignore entry can
-    -- still follow it and must be mirrored here.
-    elseif line:match("^%S") and not line:match("^#") then
-        inIgnore = false
-    elseif inIgnore then
-        local entry = line:match("^%s+%-%s+(%S+)")
-        -- `external` is the embed path this .pkgmeta declares, so a move to a
-        -- 2.0 library leaves these assertions pointing at the right place.
-        if entry and entry:sub(1, 1) ~= "." then
-            mirrored = mirrored + 1
-            H.check(ignored(external .. "/" .. entry),
-                entry .. " is ignored from here too, not left to the library's own list")
+local function mirror(path, root)
+    local libPkgmeta = H.readFile(root .. "/.pkgmeta")
+    H.check(libPkgmeta ~= nil, path .. ": the library checkout has a .pkgmeta to mirror")
+    local mirrored, inIgnore = 0, false
+    for line in (libPkgmeta or ""):gmatch("[^\r\n]+") do
+        if line:match("^ignore:%s*$") then
+            inIgnore = true
+        -- A top-level comment does not end a YAML list; a later ignore entry
+        -- can still follow it and must be mirrored here.
+        elseif line:match("^%S") and not line:match("^#") then
+            inIgnore = false
+        elseif inIgnore then
+            local entry = line:match("^%s+%-%s+(%S+)")
+            if entry and entry:sub(1, 1) ~= "." then
+                mirrored = mirrored + 1
+                H.check(ignored(path .. "/" .. entry),
+                    path .. "/" .. entry .. " is ignored from here too, not left to the library's own list")
+            end
         end
     end
+    H.check(mirrored >= 4, path .. ": the library's ignore list was read: " .. mirrored .. " entries")
 end
-H.check(mirrored >= 4, "the library's ignore list was read: " .. mirrored .. " entries")
+mirror(external, H.libraryRoot())
+mirror("Libs/LibGlass-1.0", H.libGlassRoot())
 
 H.done("test_manifest")

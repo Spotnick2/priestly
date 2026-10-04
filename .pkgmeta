@@ -2,14 +2,25 @@ package-as: Priestly
 
 enable-nolib-creation: no
 
-# The shared compat layer (and, later, the buff engine and UI). Pinned to a
-# library tag so a Priestly release cannot change underneath its own source.
-# The tag must match what tests/run.ps1 reports; tests/test_manifest.lua checks
-# this path against the TOC.
+# The two embedded libraries, side by side: LibGroupBuffs-1.0 (the compat
+# layer, buff engine, window and settings) and LibGlass-1.0, the glass material
+# its window draws with. LibGroupBuffs does not embed LibGlass itself - the
+# packager does not fetch an external's own externals - so every consumer
+# declares both. Each is pinned so a Priestly release cannot change underneath
+# its own source. tests/test_manifest.lua reads each entry BY PATH and checks
+# it against the TOC; no comment may sit on a value line, because the
+# packager's YAML reader keeps it as part of the ref.
+#
+# LibGroupBuffs is pinned by commit while Priestly pilots r26 (#79): the tag is
+# cut on this commit only after the in-game check, and this line then becomes
+# `tag: r26` before Priestly releases.
 externals:
+  Libs/LibGlass-1.0:
+    url: https://github.com/Spotnick2/LibGlass
+    tag: r1
   Libs/LibGroupBuffs-1.0:
     url: https://github.com/Spotnick2/LibGroupBuffs
-    tag: r25
+    commit: 3de943edf46de8903b0d5f3ff410d35349c82324
 
 manual-changelog:
   filename: CHANGELOG.md
@@ -43,3 +54,10 @@ ignore:
   - Libs/LibGroupBuffs-1.0/AGENTS.md
   - Libs/LibGroupBuffs-1.0/CLAUDE.md
   - Libs/LibGroupBuffs-1.0/README.md
+  # The same for LibGlass, mirrored from its .pkgmeta by the same test.
+  - Libs/LibGlass-1.0/tests
+  - Libs/LibGlass-1.0/docs
+  - Libs/LibGlass-1.0/Tools
+  - Libs/LibGlass-1.0/AGENTS.md
+  - Libs/LibGlass-1.0/CLAUDE.md
+  - Libs/LibGlass-1.0/README.md
