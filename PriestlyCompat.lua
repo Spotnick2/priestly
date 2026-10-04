@@ -46,8 +46,8 @@ local GB
 -- say arrives here: the settings checks, and with kind "events" the names
 -- the client rejected, whether it threw or returned false.
 local function Report(text, kind)
-    text = tostring(text)
     if kind == "events" then
+        text = tostring(text)
         -- Recorded whether or not anything can be printed: the record is what
         -- `/dump Priestly.eventFailures` reads when the line was never seen.
         local mine = GB and GB.EventFailures() or {}
@@ -70,12 +70,47 @@ end
 local lib, minor
 if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
 
--- Is LibGlass-1.0 there and complete? LibGlass marks itself ready on its last
--- line, so a copy that threw partway is registered with the older marker.
-local function GlassLoaded()
-    if not LibStub then return false end
-    local glass, glassMinor = LibStub("LibGlass-1.0", true)
-    return type(glass) == "table" and glassMinor ~= nil and glass.ready == glassMinor
+-- What a player can do about a copy that did not finish loading. The copy
+-- LibStub runs is the newest any addon shipped, so it may well not be
+-- Priestly's - and errors are hidden by default, so say how to see them.
+local SEE_WHICH = " - one addon's copy of it failed. With /console scriptErrors 1 and /reload,"
+    .. " the first error names that addon; updating or disabling it should fix this"
+
+-- Why lib:New refused, in the words a player needs. New checks, in order:
+-- the active copy finished loading (lib.ready, the library's marker), LibGlass
+-- is there and finished loading (its own `ready` marker), and the active copy
+-- is at least the floor. The same three facts are read here, in the same
+-- order, from the libraries' documented markers - never from the error's
+-- words, which are the library's to change. Anything else New throws is not
+-- one of its refusals (a bug, or a host mistake such as a second New for the
+-- same owner) and reads as a failed load; its text goes to developers only.
+-- LibGroupBuffs#54 asks for New to raise this as a structured reason.
+local function WhyRefused()
+    local _, active = LibStub:GetLibrary("LibGroupBuffs-1.0", true)
+    if lib.ready ~= active then
+        return "the LibGroupBuffs-1.0 library (r" .. tostring(active) .. ") did not finish loading"
+            .. SEE_WHICH
+    end
+    local glass, glassMinor = LibStub:GetLibrary("LibGlass-1.0", true)
+    if type(glass) ~= "table" then
+        -- Not registered at all: no addon's copy loaded, and Priestly ships
+        -- one in its own Libs folder, so it is Priestly's install.
+        return "the LibGlass-1.0 library is missing from Priestly's Libs folder."
+            .. " Reinstalling Priestly should fix it"
+    end
+    if glass.ready ~= glassMinor then
+        -- Registered but never ready: the newest copy threw partway. Priestly's
+        -- own copy loaded, or the name would not be registered at all, so
+        -- reinstalling Priestly would change nothing.
+        return "the LibGlass-1.0 library (r" .. tostring(glassMinor) .. ") did not finish loading"
+            .. SEE_WHICH
+    end
+    if type(active) == "number" and active < NEEDS_MINOR then
+        return "this version of Priestly needs the LibGroupBuffs-1.0 library r" .. NEEDS_MINOR
+            .. " or newer, and the newest copy loaded is r" .. tostring(active)
+            .. ". Reinstalling Priestly should fix it"
+    end
+    return "the LibGroupBuffs-1.0 library failed to load completely. Reinstalling Priestly should fix it"
 end
 
 local problem, detail
@@ -107,24 +142,11 @@ else
         GB = made
     else
         detail = tostring(made)
-        if not GlassLoaded() then
-            -- Priestly ships LibGlass in its own Libs folder, so this is
-            -- Priestly's install - and the library's own wording for it
-            -- ("embed it at ... and load its XML") is for developers.
-            problem = "the LibGlass-1.0 library is missing from Priestly's Libs folder, or did not"
-                .. " finish loading. Reinstalling Priestly should fix it"
-        elseif detail:match("^[^\n]-:%d+: ") then
-            -- A position means a Lua error, not a refusal: New raises its
-            -- refusals without one, because they are written for players. A
-            -- crash's file and line are for developers only.
-            problem = "the LibGroupBuffs-1.0 library failed to load completely."
-                .. " Reinstalling Priestly should fix it"
-        else
-            -- The library's refusal, already written for players: another
-            -- addon's copy failed, or the newest copy is older than this build
-            -- needs.
-            problem = detail
-        end
+        -- Under pcall too: it reads shared tables another copy may have left
+        -- half-built, and a throw here must still end in the chat line.
+        local asked, why = pcall(WhyRefused)
+        problem = asked and why
+            or "the LibGroupBuffs-1.0 library failed to load completely. Reinstalling Priestly should fix it"
     end
 end
 

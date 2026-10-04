@@ -158,10 +158,16 @@ local pinnedMinor
 if gb.kind == "tag" then
     pinnedMinor = tonumber(tostring(gb.ref):match("^r(%d+)$"))
 else
-    local cmd = 'git -C "' .. H.libraryRoot() .. '" show ' .. tostring(gb.ref) .. ":LibGroupBuffs.lua"
-    local pipe = io.popen(cmd .. " 2>&1")
-    local src = pipe and pipe:read("*a") or ""
-    if pipe then pipe:close() end
+    -- Only a full hex SHA reaches the shell (the pin check above requires one),
+    -- so nothing in .pkgmeta can become part of a command.
+    local sha = tostring(gb.ref):match("^%x+$")
+    local cmd = 'git -C "' .. H.libraryRoot() .. '" show ' .. tostring(sha) .. ":LibGroupBuffs.lua"
+    local src = ""
+    if sha and #sha == 40 then
+        local pipe = io.popen(cmd .. " 2>&1")
+        src = pipe and pipe:read("*a") or ""
+        if pipe then pipe:close() end
+    end
     pinnedMinor = tonumber(src:match('local MAJOR, MINOR = "LibGroupBuffs%-1%.0", (%d+)'))
     H.check(pinnedMinor ~= nil, "the pinned commit's MINOR could be read with `" .. cmd
         .. "` - the library checkout must have that commit: " .. src:sub(1, 200))

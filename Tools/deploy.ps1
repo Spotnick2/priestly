@@ -96,6 +96,7 @@ function Test-Pin {
         Write-Host ("  WARNING: the $Name checkout at $Root ($($s.Revision)) is not at the .pkgmeta pin ($($s.Pin))" +
             "$(if ($s.Dirty) { ', or has uncommitted changes' }); a release ships the pin") -ForegroundColor Yellow
     }
+    return $s
 }
 
 function Deploy-Priestly {
@@ -115,19 +116,14 @@ function Deploy-Priestly {
     if (-not $libRoot) { $libRoot = Join-Path (Split-Path -Parent $RepoRoot) "LibGroupBuffs" }
     $libFiles = Get-LibraryFiles -Root $libRoot -GlassRoot $glassRoot
     $libRoot = (Resolve-Path $libRoot).Path
-    Test-Pin -Name "LibGlass" -Path "Libs/LibGlass-1.0" -Root $glassRoot
-    Test-Pin -Name "LibGroupBuffs" -Path "Libs/LibGroupBuffs-1.0" -Root $libRoot
+    $null = Test-Pin -Name "LibGlass" -Path "Libs/LibGlass-1.0" -Root $glassRoot
+    # Its revision is printed with the copy below; pins.ps1 already asked git.
+    $revision = (Test-Pin -Name "LibGroupBuffs" -Path "Libs/LibGroupBuffs-1.0" -Root $libRoot).Revision
 
     # LibGlass first, by its own deploy: a refusal there must leave the
     # deployed Priestly untouched.
     & pwsh -NoProfile -File (Join-Path $glassRoot "Tools\deploy.ps1") -Addon Priestly -AddOnsPath $AddOnsPath -Lua $Lua
     if ($LASTEXITCODE -ne 0) { throw "LibGlass deploy refused; Priestly was not touched" }
-    # Informational: no git, or a library that is not a checkout, must not
-    # stop a deploy.
-    $revision = try {
-        $r = git -C $libRoot describe --tags --always --dirty 2>$null
-        if ($LASTEXITCODE -eq 0 -and $r) { $r } else { "not a git checkout" }
-    } catch { "git not available" }
 
     Write-Host "Deploying Priestly -> $dest" -ForegroundColor Cyan
     if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }

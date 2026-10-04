@@ -176,11 +176,16 @@ local g_IsPriest = false
 -- LibStub's number, not the instance's GB.MINOR: a newer copy registers with
 -- LibStub before any of its code runs, and its code upgrades this one section
 -- by section, while GB.MINOR is written only near its end. A copy that threw
--- partway is still the code that is (partly) running, and the report must
--- name it.
+-- partway is still the code that is (partly) running, so the report names it
+-- - and says it is incomplete, next to the last copy that did finish
+-- (lib.ready), because a bare number would read the same as a healthy one.
 local function LiveLibraryMinor()
-    local _, live = LibStub("LibGroupBuffs-1.0", true)
-    return live or "?"
+    local lib, live = LibStub("LibGroupBuffs-1.0", true)
+    if not live then return "?" end
+    if lib.ready ~= live then
+        return tostring(live) .. " (incomplete; r" .. tostring(lib.ready) .. " complete)"
+    end
+    return live
 end
 
 local FROM_NOTE = {
