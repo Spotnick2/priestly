@@ -176,6 +176,20 @@ local function saidSettings(fromIndex)
     return table.concat(out, " | ")
 end
 
+-- The build notice speaks only in a development copy; a release keeps quiet.
+-- The stub reports a release-shaped version, so the checks that want to hear
+-- the notice run as `dev`, what Tools/deploy.ps1 writes, and the release case
+-- is checked on its own below.
+local releaseMetadata = C_AddOns.GetAddOnMetadata
+local function runAsVersion(version)
+    C_AddOns.GetAddOnMetadata = function(_, key)
+        if key == "Version" then return version end
+        return nil
+    end
+end
+local function runAsRelease() C_AddOns.GetAddOnMetadata = releaseMetadata end
+runAsVersion("dev")
+
 local function freshSession(build)
     WoW.reset()
     WoW.build = build
@@ -300,6 +314,30 @@ Priestly_HandleEnteringWorld(true, false)
 H.check(said(before):find("tested on", 1, true),
     "it warns again at the next real login, until someone re-measures")
 H.eq(PriestlyAccountDB.warnedBuild, nil, "and records nothing that could silence it")
+
+-- An unpackaged checkout still carries the packager's token: also a
+-- development copy.
+runAsVersion("@project-version@")
+before = #WoW.messages
+Priestly_HandleEnteringWorld(true, false)
+H.check(said(before):find("tested on", 1, true),
+    "an unpackaged checkout warns too")
+
+-- A release keeps quiet on any build. What flags an addon out of date is the
+-- TOC's Interface number; this notice is for whoever re-measures.
+runAsRelease()
+H.check(Priestly.API.AddonVersion("Priestly") ~= "dev", "the stub reports a release version")
+freshSession(FIXED)
+before = #WoW.messages
+Priestly_HandleEnteringWorld(true, false)
+H.check(not said(before):find("tested on", 1, true),
+    "a release never shows the build notice: " .. said(before))
+freshSession(FIXED)
+PriestlyAccountDB = { svLoadCheck = { stamp = "then", build = BROKEN } }
+before = #WoW.messages
+Priestly_HandleEnteringWorld(true, false)
+H.check(said(before):find("came back", 1, true),
+    "while the settings announcement, which players do need, still speaks")
 
 ------------------------------------------------------------
 -- Settings moved back account-wide (#9), and what that owes players
