@@ -52,8 +52,10 @@ in count.
 | added: `C_Spell.GetItemCooldown(itemID)`, `UnitUsesAmmo(unit)`, event `PLAYER_PVP_FLAG_CHANGED`, 86 new `_G` functions | no |
 
 So the dump gives no reason to expect a break, and no evidence that behaviour held either.
-`MEASURED_ON_BUILD` stays at 70009 until `/pprobe` (in a fight) and the full-exit
-SavedVariables check are repeated on 70205. 70124 and 70170 were dumped too and skipped over.
+`MEASURED_ON_BUILD` moved to 70205 anyway on 2026-10-04, at the owner's request (#85), after
+Magely v1.0.4 (LibGroupBuffs r27) ran on 70205 with no errors. **Still not repeated on 70205:**
+`/pprobe` in a fight and the full-exit SavedVariables check. Until they are, the findings below are
+70009's. 70124 and 70170 were dumped too and skipped over.
 
 ### Re-probed on 70009 (2026-09-25 01:13)
 
