@@ -23,10 +23,10 @@ Priestly = Priestly or {}
 
 -- The oldest library this build of Priestly works against. A floor, not a
 -- feature check: behaviour changes cannot be feature-detected. r26 is where
--- lib:New arrived, so it is also the floor this file can be written against.
--- Keep this equal to the MINOR .pkgmeta pins; tests/test_manifest.lua checks
--- that.
-local NEEDS_MINOR = 26
+-- lib:New arrived, and r28 where lib:Refusal says why it refused; this file
+-- is written against both. Keep this equal to the MINOR .pkgmeta pins;
+-- tests/test_manifest.lua checks that.
+local NEEDS_MINOR = 28
 
 -- Priestly's own record of the events this client rejected, for
 -- `/dump Priestly.eventFailures`. The library also keeps it, as
@@ -76,41 +76,62 @@ if LibStub then lib, minor = LibStub("LibGroupBuffs-1.0", true) end
 local SEE_WHICH = " - one addon's copy of it failed. With /console scriptErrors 1 and /reload,"
     .. " the first error names that addon; updating or disabling it should fix this"
 
--- Why lib:New refused, in the words a player needs. New checks, in order:
--- the active copy finished loading (lib.ready, the library's marker), LibGlass
--- is there and finished loading (its own `ready` marker), and the active copy
--- is at least the floor. The same three facts are read here, in the same
--- order, from the libraries' documented markers - never from the error's
--- words, which are the library's to change. Anything else New throws is not
--- one of its refusals (a bug, or a host mistake such as a second New for the
--- same owner) and reads as a failed load; its text goes to developers only.
--- LibGroupBuffs#54 asks for New to raise this as a structured reason.
-local function WhyRefused()
-    local _, active = LibStub:GetLibrary("LibGroupBuffs-1.0", true)
-    if lib.ready ~= active then
-        return "the LibGroupBuffs-1.0 library (r" .. tostring(active) .. ") did not finish loading"
+local FAILED = "the LibGroupBuffs-1.0 library failed to load completely. Reinstalling Priestly should fix it"
+
+-- Why lib:New refused, in the words a player needs, by the code lib:Refusal
+-- gives (r28, LibGroupBuffs#54) - never by the error's words, which are the
+-- library's to change. Refusal returns nil when New would not refuse at all:
+-- what New threw was then a bug, or a host mistake such as a second New for
+-- the same owner, and reads as a failed load; its text goes to developers
+-- only. So does a code this build has never heard of - the library may add
+-- codes, and promises only never to rename or remove one.
+local function WhyRefusedByCode(why)
+    if why == nil then return FAILED end
+    if why.code == "incomplete" then
+        -- LibStub runs the newest copy any addon shipped, so it may well not
+        -- be Priestly's: reinstalling Priestly would change nothing.
+        return "the LibGroupBuffs-1.0 library (r" .. tostring(why.active) .. ") did not finish loading"
             .. SEE_WHICH
-    end
-    local glass, glassMinor = LibStub:GetLibrary("LibGlass-1.0", true)
-    if type(glass) ~= "table" then
+    elseif why.code == "glass-missing" then
         -- Not registered at all: no addon's copy loaded, and Priestly ships
         -- one in its own Libs folder, so it is Priestly's install.
         return "the LibGlass-1.0 library is missing from Priestly's Libs folder."
             .. " Reinstalling Priestly should fix it"
-    end
-    if glass.ready ~= glassMinor then
+    elseif why.code == "glass-incomplete" then
         -- Registered but never ready: the newest copy threw partway. Priestly's
         -- own copy loaded, or the name would not be registered at all, so
         -- reinstalling Priestly would change nothing.
-        return "the LibGlass-1.0 library (r" .. tostring(glassMinor) .. ") did not finish loading"
+        return "the LibGlass-1.0 library (r" .. tostring(why.glassMinor) .. ") did not finish loading"
             .. SEE_WHICH
-    end
-    if type(active) == "number" and active < NEEDS_MINOR then
+    elseif why.code == "too-old" then
         return "this version of Priestly needs the LibGroupBuffs-1.0 library r" .. NEEDS_MINOR
-            .. " or newer, and the newest copy loaded is r" .. tostring(active)
+            .. " or newer, and the newest copy loaded is r" .. tostring(why.active)
             .. ". Reinstalling Priestly should fix it"
     end
-    return "the LibGroupBuffs-1.0 library failed to load completely. Reinstalling Priestly should fix it"
+    return FAILED
+end
+
+-- The same three facts, read from the libraries' documented markers in New's
+-- order, for an active copy with no Refusal to ask: an r26 or r27 another
+-- addon shipped, active because Priestly's own r28 never registered. Then the
+-- copy running is behind the floor, and that is what the player hears.
+local function WhyRefusedByMarkers()
+    local _, active = LibStub:GetLibrary("LibGroupBuffs-1.0", true)
+    if lib.ready ~= active then return WhyRefusedByCode({ code = "incomplete", active = active }) end
+    local glass, glassMinor = LibStub:GetLibrary("LibGlass-1.0", true)
+    if type(glass) ~= "table" then return WhyRefusedByCode({ code = "glass-missing" }) end
+    if glass.ready ~= glassMinor then
+        return WhyRefusedByCode({ code = "glass-incomplete", glassMinor = glassMinor })
+    end
+    if type(active) == "number" and active < NEEDS_MINOR then
+        return WhyRefusedByCode({ code = "too-old", active = active })
+    end
+    return FAILED
+end
+
+local function WhyRefused()
+    if type(lib.Refusal) == "function" then return WhyRefusedByCode(lib:Refusal(NEEDS_MINOR)) end
+    return WhyRefusedByMarkers()
 end
 
 local problem, detail
@@ -129,8 +150,7 @@ elseif type(lib.New) ~= "function" then
             .. ", and this version of Priestly needs r" .. NEEDS_MINOR
             .. " - its own copy did not load. Reinstalling Priestly should fix it"
     else
-        problem = "the LibGroupBuffs-1.0 library failed to load completely."
-            .. " Reinstalling Priestly should fix it"
+        problem = FAILED
     end
 else
     -- Under pcall: New is library code on a shared table, and its refusals are
@@ -145,8 +165,7 @@ else
         -- Under pcall too: it reads shared tables another copy may have left
         -- half-built, and a throw here must still end in the chat line.
         local asked, why = pcall(WhyRefused)
-        problem = asked and why
-            or "the LibGroupBuffs-1.0 library failed to load completely. Reinstalling Priestly should fix it"
+        problem = asked and why or FAILED
     end
 end
 

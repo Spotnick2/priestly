@@ -109,9 +109,15 @@ Load order from `Priestly.toc`:
 2. `Libs\LibGroupBuffs-1.0\LibGroupBuffs-1.0.xml` — LibStub, then the library.
 3. `PriestlyCompat.lua` — `Priestly.GB = lib:New({ owner, report, needs = NEEDS_MINOR })` under
    pcall, and `Priestly.API = GB.API`. `New` refuses a copy that did not finish loading, a missing
-   or half-loaded LibGlass, and one older than the floor; the bridge prints its refusal in chat
-   and stops, and the two files below stop when `Priestly.API` is nil. Nothing else may touch a
-   moved API directly.
+   or half-loaded LibGlass, and one older than the floor. The bridge words the refusal for the
+   player by **`lib:Refusal`'s code** (r28): `incomplete` and `glass-incomplete` say how to see
+   which addon's copy failed (`/console scriptErrors 1`), not a reinstall that would change
+   nothing; `glass-missing` and `too-old` say reinstall Priestly. A `nil` reason (a crash or host
+   mistake) and a code this build does not know read as "failed to load completely", and an
+   active copy with no `Refusal` (another addon's r26/r27) is read from the libraries' markers
+   instead. `New`'s own text goes only into the developers' `error()`, as `lib:New said: …`. The
+   bridge prints one chat line and stops, and the two files below stop when `Priestly.API` is nil.
+   Nothing else may touch a moved API directly.
 4. `PriestlyConfig.lua` — `PriestlyAccountDB` defaults, instance database, `Priestly_*` helpers.
 5. `Priestly.lua` — UI and event logic; calls the config helpers.
 
@@ -314,7 +320,7 @@ Priestly never calls LibGlass itself. Its repo owns the code, the 15 textures an
   player was the exception and came back joined with a real realm; whether that changed with the
   client or with the realm the two runs sat on is **unresolved** (`docs/FOREVER-PROBE.md` §4), so
   write nothing that depends on either reading. Use `API.UnitDisplayName` (`GetUnitName(unit,
-  false)`), which joins under both. The test stub models 70009 by default and the 69913 shape for
+  false)`), which joins under both. The test stub models 70205 by default and the 69913 shape for
   a unit given a `realm`, so a player-only name path can be tested against both.
 - **`GetInstanceInfo()` returns the continent outdoors**, not an empty string — gate on
   `instanceType ~= "none"`.
@@ -374,7 +380,12 @@ unclamping or stopping a drag on one is refused (`ADDON_ACTION_BLOCKED`, silent,
 other addon's taint - measured in game, see `docs/FOREVER-PROBE.md`). Closing, resetting the
 position and releasing a drag are remembered and done by `ui:OnCombatEnd()`, which Priestly calls
 on `PLAYER_REGEN_ENABLED`. `ui:Close()` returns false when it could not hide the window, and
-`/priestly hide` says so. Anything that opens the window later goes through `ui:Open(delay)`, so a
+the host says so through `onCloseDeferred(ui, manual)`. Since r27 the window's own closes reach it
+too (the group emptied, the solo checkbox unticked), with `manual` false. **Priestly speaks for
+both, in different words**, as Magely and Wildly do (LibGroupBuffs#55): "The window closes when you
+leave combat." for the player's close, "Nothing to show here now: the window closes itself when you
+leave combat." for an automatic one. One line for both would print twice when the player clicks X
+after an automatic close in the same fight. Anything that opens the window later goes through `ui:Open(delay)`, so a
 close always beats an older queued show. The frames are anonymous — look them up through the `ui`
 object (`ui.main`, `ui.rows`, `ui.popRows`, `ui.footerBtns`), not `_G`.
 
