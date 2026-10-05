@@ -287,25 +287,33 @@ H.check(mainFrame:IsShown(), "clicking X in combat cannot hide it either")
 H.check(hideSaid:find("leave combat"), "and says the same thing: " .. hideSaid)
 
 -- The group empties mid-fight, so Priestly closes the window itself - but the
--- client refuses to hide it, so it is still there. Clicking X on a window you
--- can still see has to be answered, even though it is already closed as far
--- as the addon is concerned.
+-- client refuses to hide it, so it is still there. Since r27 that automatic
+-- close is explained too, in words of its own. Clicking X on a window you can
+-- still see has to be answered as well, even though it is already closed as
+-- far as the addon is concerned - in the player's words, so the same line
+-- does not print twice in one fight.
 WoW.inCombat = false
 WoW.dispatch("PLAYER_REGEN_ENABLED")
 WoW.flushTimers()
 T.UpdateUI()
 WoW.inCombat = true
+hideAt = #WoW.messages
 WoW.RemoveUnit("party1")
 WoW.groupMembers = 0
 WoW.dispatch("GROUP_ROSTER_UPDATE")
 WoW.flushTimers()
+local autoSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
 H.check(mainFrame:IsShown(), "the window is still on screen during the fight")
 H.check(not T.ui:IsVisible(), "though Priestly has closed it")
+H.check(autoSaid:find("closes itself when you leave combat", 1, true) ~= nil,
+    "and says the window will close itself: " .. autoSaid)
+H.check(not autoSaid:find("The window closes when you leave combat", 1, true),
+    "in words of its own, not the player's close: " .. autoSaid)
 hideAt = #WoW.messages
 runScript(mainFrame.closeBtn, "OnClick")
 hideSaid = table.concat(WoW.messages, " ", hideAt + 1, #WoW.messages)
-H.check(hideSaid:find("leave combat"),
-    "clicking X on it is still answered: " .. hideSaid)
+H.check(hideSaid:find("The window closes when you leave combat", 1, true) ~= nil,
+    "clicking X on it is still answered, in the player's words: " .. hideSaid)
 
 -- Put the group back for what follows.
 WoW.inCombat = false

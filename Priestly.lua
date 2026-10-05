@@ -444,19 +444,21 @@ local ui = Priestly.GB.UI({
     -- The window parents secure buttons, so in combat the client refuses to
     -- hide it (docs/FOREVER-PROBE.md section 13). Every close the PLAYER asked
     -- for - the X button, /priestly hide - lands here, so neither looks
-    -- ignored.
-    --
-    -- Not the solo checkbox. Unticking it while alone closes the window
-    -- because there is nothing left to show, which is an automatic close: it
-    -- deliberately does not write "the player does not want this window", and
-    -- Close only explains a close it recorded as the player's. So in combat
-    -- the frame stays up until the fight ends with nothing said. Worth fixing
-    -- one day - by letting Close explain an automatic close too, in the
-    -- library, for all three addons - and not by marking the toggle manual,
-    -- which would conflate "not while solo" with "not at all".
-    onCloseDeferred = function()
-        DEFAULT_CHAT_FRAME:AddMessage(
-            "|cff99ddff[Priestly]|r The window closes when you leave combat.")
+    -- ignored. Since r27 the window's own closes do too (the group emptied,
+    -- the solo checkbox unticked), with `manual` false - in the library, for
+    -- all three addons, rather than by marking the toggle manual, which would
+    -- conflate "not while solo" with "not at all". The two are worded apart on
+    -- purpose, as Magely and Wildly do: after an automatic close the player's
+    -- X is answered again in the same fight, and the same line twice would
+    -- read as a glitch (LibGroupBuffs#45).
+    onCloseDeferred = function(_, manual)
+        if manual then
+            DEFAULT_CHAT_FRAME:AddMessage(
+                "|cff99ddff[Priestly]|r The window closes when you leave combat.")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r Nothing to show here now:"
+                .. " the window closes itself when you leave combat.")
+        end
     end,
 })
 

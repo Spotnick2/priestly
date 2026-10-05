@@ -178,10 +178,12 @@ H.eq(needs, pinnedMinor,
 
 -- lib:New arrived in r26, and the bridge has no other way in: below r26 it
 -- would read every healthy library as "failed to load completely" and
--- Priestly would refuse to start for everyone. Rolling the pin back is the
--- way that happens, and this is what stops it landing quietly.
-H.check(needs ~= nil and needs >= 26,
-    "the floor is r26 or newer, which is where lib:New came from: " .. tostring(needs))
+-- Priestly would refuse to start for everyone. r28 added lib:Refusal, which
+-- is how the bridge words a refusal, and r27 the `manual` argument Priestly's
+-- onCloseDeferred reads. Rolling the pin back is the way either breaks, and
+-- this is what stops it landing quietly.
+H.check(needs ~= nil and needs >= 28,
+    "the floor is r28 or newer, which is where lib:Refusal came from: " .. tostring(needs))
 
 local libIgnored = false
 for line in ((H.readFile(".gitignore") or "") .. "\n"):gmatch("([^\n]*)\n") do
