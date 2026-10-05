@@ -1,5 +1,13 @@
 # Priestly Changelog
 
+## v2.0.14 - 2026-10-04
+
+### Changed
+- **Closing the window in combat is explained either way.** If the window closes itself during a
+  fight - say your group empties, or you untick "show when solo" - Priestly now says it will close
+  when you leave combat, in words of its own, so it no longer looks like it ignored you.
+- Needs LibGroupBuffs r28 and LibGlass r1, both included in the download.
+
 ## v2.0.13 - 2026-10-04
 
 ### Fixed
