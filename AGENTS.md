@@ -441,7 +441,9 @@ Changing patch compatibility:
   settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
   silences the only reminder that the notes are stale, so a dump comparison is not enough on its
   own: identical declarations say nothing about runtime behaviour like aura secrecy or secure
-  click casting.
+  click casting. **The 70205 bump is the exception** (#85, at the owner's request): the dump diff
+  and Magely run in game on 70205; `/pprobe` in a fight and the full-exit check are still owed
+  there (`docs/FOREVER-PROBE.md`, "70205 against 70009").
   `WoW.build`'s default in the shared stub (`../LibGroupBuffs/tests/wow_stubs.lua`) tracks the **client**, not this constant - it is
   the default every other test runs under, and it should show them what a player sees, notice
   included. The three builds are pinned as literals in `tests/test_config_seam.lua`; they are

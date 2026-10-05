@@ -68,11 +68,17 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); until then a development copy says so once per new
 -- client build, and a release keeps quiet (see Priestly.reportFilters.newBuild).
 --
--- These two are INDEPENDENT, and right now they differ. The installed client
--- is 70009 (.build.info, wow_classic_beta 1.60.1.70009), patched 2026-09-24.
--- MEASURED_ON_BUILD is 70009 as of 2026-09-25: /apidump, /pprobe including
--- aura secrecy in a real fight and secure click-casting on both mouse edges,
--- and the SavedVariables check. There is no companion constant for the
+-- These two are INDEPENDENT. The installed client is 70205 (.build.info,
+-- wow_classic_beta 1.60.1.70205, built Oct 2 2026). MEASURED_ON_BUILD is
+-- 70205 as of 2026-10-04 (#85), at the owner's request, on less than the
+-- procedure below asks for: 70205's API dump against 70009's (priestly#78): nothing Priestly, Wildly,
+-- Magely or LibGroupBuffs calls was removed or changed signature. And Magely
+-- v1.0.4 (LibGroupBuffs r27) ran in game on 70205 with no errors - the same
+-- engine, window and client, though not this addon itself.
+-- NOT re-run on 70205: /pprobe in a fight (aura secrecy, secure click-casting)
+-- and the full-exit SavedVariables check. Those stand as measured on 70009
+-- (2026-09-25: /apidump, /pprobe including aura secrecy in a real fight and
+-- secure click-casting on both mouse edges, and the SavedVariables check). There is no companion constant for the
 -- settings check any more: as of LibGroupBuffs r14 it works that out from the
 -- marker's own recorded build, so nothing here has to be kept current for it.
 --
@@ -104,7 +110,7 @@ local DEFAULTS = {
 --
 -- The test pins this literally, so a build that moves on cannot pass by
 -- agreeing with itself.
-local MEASURED_ON_BUILD = "70009"
+local MEASURED_ON_BUILD = "70205"
 
 -- ─── Where settings live, and how they got there ──────────────────────────────
 --
