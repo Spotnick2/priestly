@@ -13,9 +13,9 @@ Repository-specific additions:
 - Post every pull-request review and follow-up review on the PR, then link the posted review in the
   final response.
 - Match `MEASURED_ON_BUILD` in `PriestlyConfig.lua` to
-  `C:/Projects/References/forever-api-<version>.<build>.md`. Runtime measurements live in
+  `C:/Projects/WoW/References/forever-api-<version>.<build>.md`. Runtime measurements live in
   `docs/FOREVER-PROBE.md`; addon-agnostic Forever findings live in
-  `C:/Projects/References/PORTING-TBC-TO-FOREVER.md`.
+  `C:/Projects/WoW/References/PORTING-TBC-TO-FOREVER.md`.
 
 ## What This Repository Is
 
@@ -29,7 +29,7 @@ downloadable on CurseForge for Anniversary players, and the code is archived on 
 
 Forever is *Vanilla content running on Blizzard's Retail (Mainline) codebase*: content assumptions
 are Vanilla, API assumptions are Retail. The field notes for this client are
-`C:\Projects\References\PORTING-TBC-TO-FOREVER.md` — read them before touching an unfamiliar API.
+`C:\Projects\WoW\References\PORTING-TBC-TO-FOREVER.md` — read them before touching an unfamiliar API.
 
 There is no build system, compiler or package manager. The BigWigs packager handles releases.
 
@@ -325,7 +325,7 @@ Priestly never calls LibGlass itself. Its repo owns the code, the 15 textures an
 - **`GetInstanceInfo()` returns the continent outdoors**, not an empty string — gate on
   `instanceType ~= "none"`.
 - Declared API evidence is the build-matched
-  `C:/Projects/References/forever-api-<version>.<build>.md`. For a live declaration check, use
+  `C:/Projects/WoW/References/forever-api-<version>.<build>.md`. For a live declaration check, use
   `/api search <name>`, `/api system list`, or `/api <system> list` (system names omit `C_`).
   Runtime behaviour is measured in `docs/FOREVER-PROBE.md`; re-probe with
   `Tools/PriestlyProbe` rather than assuming.
@@ -452,9 +452,9 @@ Changing patch compatibility:
   settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
   silences the only reminder that the notes are stale, so a dump comparison is not enough on its
   own: identical declarations say nothing about runtime behaviour like aura secrecy or secure
-  click casting. **The 70205 bump is the exception** (#85, at the owner's request): the dump diff
-  and Magely run in game on 70205; `/pprobe` in a fight and the full-exit check are still owed
-  there (`docs/FOREVER-PROBE.md`, "70205 against 70009").
+  click casting. **70205 (#85) and 70338 were owner-approved bumps** on a dump diff plus an
+  in-game run (Magely on 70205; the owner's own test on 70338), not the full procedure
+  (`docs/FOREVER-PROBE.md`, "70338 against 70205").
   `WoW.build`'s default in the shared stub (`../LibGroupBuffs/tests/wow_stubs.lua`) tracks the **client**, not this constant - it is
   the default every other test runs under, and it should show them what a player sees, notice
   included. The three builds are pinned as literals in `tests/test_config_seam.lua`; they are
@@ -564,7 +564,7 @@ deliberate: the stub is the list of APIs verified present on this client, so it 
 client's *absences* too. Defining something there that Forever does not actually have is how a call
 to `MouseIsOver` — removed on this client — survived into a build and surfaced only as a Lua error
 on mouseover in game. Before stubbing a new global, confirm it exists in the newest
-`C:/Projects/References/forever-api-<build>.md`, and stub it with the client's exact signature
+`C:/Projects/WoW/References/forever-api-<build>.md`, and stub it with the client's exact signature
 (`strmatch = string.match`, not a two-argument wrapper). If what matters is how it *behaves* rather
 than whether it exists, measure that with `Tools/PriestlyProbe`: the dump says what exists, not
 what works.
@@ -581,7 +581,7 @@ nothing executed the handler and a no-op looks like success.
 
 So for anything built on a widget method: **execute the handler AND assert what it produced.**
 A test that only checks the handler ran would have passed against the broken call. Check the
-method against the newest `C:/Projects/References/forever-api-<build>.md` before relying on it - the
+method against the newest `C:/Projects/WoW/References/forever-api-<build>.md` before relying on it - the
 widget-method section is the only place that lists them.
 
 In game:

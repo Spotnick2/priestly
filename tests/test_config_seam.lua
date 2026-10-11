@@ -20,18 +20,18 @@ local T, TC = H.loadAddon()
 -- actually running. Moving the client forward has to be a two-file edit, and
 -- this is the file that says so.
 --
--- MEASURED and CLIENT agree today. MEASURED is 70205, the installed client, by
--- the owner's choice on the API dump diff (#85; /pprobe in a fight and the
--- full-exit check are still owed there). CLIENT is 70205 because the stub at
--- this repository's library pin has modelled it since LibGroupBuffs r27
--- (#50). They stay two constants, because the next patch parts them again.
+-- MEASURED and CLIENT part today. MEASURED is 70338, the installed client:
+-- the 70338 API dump diff against 70205 and the owner's test in game
+-- (2026-10-11). CLIENT is 70205 because that is what the stub at this
+-- repository's library pin (r28) models; it moves with the pin. They stay two
+-- constants, because a patch parts them again.
 --
 -- BROKEN is no longer a constant the addon declares. Since LibGroupBuffs r14
 -- the settings check reads the marker's own recorded build rather than a
 -- build the host names, so BROKEN here is a test fixture and means only "a
 -- build older than the one running" - which is what makes a returning marker
 -- news. Nothing below depends on WHICH build it is.
-local MEASURED = "70205"   -- #85: the dump diff, not a full re-measure
+local MEASURED = "70338"   -- dump diff + the owner in game, 2026-10-11
 local BROKEN = "69977"
 local CLIENT = "70205"  -- what .build.info reports; what the stub must model
 local CLIENT_DATE = "Oct  2 2026"   -- what GetBuildInfo reports on it
@@ -53,9 +53,9 @@ H.eq(TC.SV_BROKEN_ON_BUILD, nil,
 -- makes that true rather than remembered.
 -- The stub models the CLIENT, not whichever build Priestly last re-probed:
 -- it is the default every other test file runs under, so a stale one hides
--- from all of them what a player actually sees. Since the r28 pin it models
--- the real client, 70205, and every test in the suite sees what the player
--- sees.
+-- from all of them what a player actually sees. The r28 pin models 70205,
+-- one patch behind the real client (70338); the stub catches up when a
+-- library release models 70338 and the pin moves to it.
 WoW.reset()
 H.eq(WoW.build, CLIENT, "the stub models the build the client is on")
 -- The date moves with it, and was NOT pinned until a review pointed out that

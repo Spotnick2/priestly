@@ -519,7 +519,7 @@ Priestly.RegisterEvents(evtFrame,
     -- The client saying you JOINED, rather than us inferring it from the
     -- roster changing. It fires: Blizzard's own UI for this build registers
     -- and acts on it (Blizzard_DamageMeter/DamageMeter.lua:78,
-    -- Blizzard_QuickJoin/QuickJoin.lua:19, in C:/Projects/wow-ui-source).
+    -- Blizzard_QuickJoin/QuickJoin.lua:19, in C:/Projects/WoW/wow-ui-source).
     -- The roster heuristic stays as the fallback anyway - it costs nothing
     -- and covers every join we can see for ourselves.
     "GROUP_JOINED",

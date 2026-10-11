@@ -68,17 +68,17 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); until then a development copy says so once per new
 -- client build, and a release keeps quiet (see Priestly.reportFilters.newBuild).
 --
--- These two are INDEPENDENT. The installed client is 70205 (.build.info,
--- wow_classic_beta 1.60.1.70205, built Oct 2 2026). MEASURED_ON_BUILD is
--- 70205 as of 2026-10-04 (#85), at the owner's request, on less than the
--- procedure below asks for: 70205's API dump against 70009's (priestly#78): nothing Priestly, Wildly,
--- Magely or LibGroupBuffs calls was removed or changed signature. And Magely
--- v1.0.4 (LibGroupBuffs r27) ran in game on 70205 with no errors - the same
--- engine, window and client, though not this addon itself.
--- NOT re-run on 70205: /pprobe in a fight (aura secrecy, secure click-casting)
--- and the full-exit SavedVariables check. Those stand as measured on 70009
--- (2026-09-25: /apidump, /pprobe including aura secrecy in a real fight and
--- secure click-casting on both mouse edges, and the SavedVariables check). There is no companion constant for the
+-- These two are INDEPENDENT. The installed client is 70338 (.build.info,
+-- wow_classic_beta 1.60.1.70338, built Oct 9 2026). MEASURED_ON_BUILD is
+-- 70338 as of 2026-10-11: 70338's API dump against 70205's - nothing Priestly,
+-- Wildly, Magely, LibGroupBuffs or LibGlass calls was removed or changed
+-- signature (the removals are voice chat, Discord, LFG structures and the
+-- ComboFrame globals; widget methods are unchanged) - and the owner tested in
+-- game on 70338. 70235, 70245, 70291 and 70334 were dumped and skipped over.
+-- Before that, 70205 (2026-10-04, #85) was a dump diff plus Magely in game,
+-- and the last full re-measure was 70009 (2026-09-25: /apidump, /pprobe
+-- including aura secrecy in a real fight and secure click-casting on both
+-- mouse edges, and the SavedVariables check). There is no companion constant for the
 -- settings check any more: as of LibGroupBuffs r14 it works that out from the
 -- marker's own recorded build, so nothing here has to be kept current for it.
 --
@@ -110,7 +110,7 @@ local DEFAULTS = {
 --
 -- The test pins this literally, so a build that moves on cannot pass by
 -- agreeing with itself.
-local MEASURED_ON_BUILD = "70205"
+local MEASURED_ON_BUILD = "70338"
 
 -- ─── Where settings live, and how they got there ──────────────────────────────
 --

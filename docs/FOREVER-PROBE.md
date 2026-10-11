@@ -37,6 +37,24 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 | `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | §9's duration learning guesses at refresh behaviour; this may answer it outright |
 | `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | §4's surname handling is hand-rolled string work |
 
+### 70338 against 70205: declarations, and the owner in game (2026-10-11)
+
+`forever-api-1.60.1.70338.md` (dumped 2026-10-10; the installed client, built Oct 9 2026) against
+70205, matched against every identifier in Priestly, Wildly, Magely, LibGroupBuffs and LibGlass:
+**nothing they call was removed or changed signature.** Documented functions 6598 → 6604, events
+1806 → 1810, tables 797 → 798, global functions 6137 → 6188, namespace functions 5417 → 5421;
+widget methods unchanged (7530), line for line.
+
+| change | touches us? |
+|---|---|
+| `C_VoiceChat` / `C_Discord` IDs retyped (`number` → `VoiceChatID`, `DiscordMemberOpaqueID`); voice provider functions and events added; `C_VoiceChat.Login` gained an optional `channelType` | no |
+| `LfgEntryData`, `LfgListingCreateData`, `LfgSearchResultData` structures changed | no |
+| removed: the `ComboFrame_*` and `ComboPointShine*` globals, `require` | no |
+| added: `GetGlancingBlowChance`, `GetGlancingBlowPenalty`, `C_Discord.IsVoiceEnabled` | no |
+
+`MEASURED_ON_BUILD` moved to 70338 on 2026-10-11 on that diff and the owner's test in game on
+70338. 70235, 70245, 70291 and 70334 were dumped too and skipped over.
+
 ### 70205 against 70009: declarations only (2026-10-04)
 
 `forever-api-1.60.1.70205.md` (dumped 2026-10-02) against 70009, matched against every name
