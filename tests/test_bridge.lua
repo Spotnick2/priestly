@@ -387,6 +387,39 @@ do
     H.check(not said:find("did not finish", 1, true), "without claiming a failed load: " .. said)
 end
 
+-- The bridge asks lib:Refusal, not only the markers. Here the markers are
+-- healthy - read alone, they would say "failed to load completely" - and
+-- Refusal names a reason, so only a bridge that asked can repeat it. It is
+-- asked with a colon and the floor, as the library requires.
+do
+    local realNew, realRefusal = lib.New, lib.Refusal
+    local asked = {}
+    lib.New = function() error("refused", 0) end
+    for _, case in ipairs({
+        { code = "too-old", active = FLOOR - 1,
+          expect = { "r" .. (FLOOR - 1), "r" .. FLOOR, "Reinstalling Priestly" } },
+        { code = "glass-missing", expect = { "LibGlass-1.0 library is missing from Priestly's Libs folder" } },
+    }) do
+        lib.Refusal = function(self, needs)
+            asked[#asked + 1] = { self = self, needs = needs }
+            return { code = case.code, active = case.active, needs = needs }
+        end
+        local ok, why, said = reload()
+        H.check(not ok, case.code .. " from Refusal is refused")
+        for _, text in ipairs(case.expect) do
+            H.check(said:find(text, 1, true) ~= nil,
+                case.code .. " is worded from Refusal's code (\"" .. text .. "\"): " .. said)
+        end
+        H.check(not said:find("failed to load completely", 1, true),
+            case.code .. " is not read from the healthy markers instead: " .. said)
+        handsOverReason(why, case.code .. " from Refusal")
+    end
+    lib.New, lib.Refusal = realNew, realRefusal
+    H.eq(#asked, 2, "Refusal was asked once per refusal")
+    H.check(asked[1] and asked[1].self == lib and asked[1].needs == FLOOR,
+        "with a colon, and the floor the bridge declares")
+end
+
 -- A refusal code this build has never heard of. The library may add codes
 -- and promises only never to rename or remove one, so a new one reads as a
 -- failed load - not as nothing wrong, and not in the library's words.
