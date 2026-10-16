@@ -300,18 +300,35 @@ H.eq(record("click").status, "done", "the procedure ends")
 
 -- Now each button reports one cast, for real.
 WoW.reset()
-fp("pp clear")
-fp("pp click")
+fp("steps pp click")      -- starting it builds the bench and forgets earlier results
 for _, b in ipairs({ _G.PriestlyProbeBenchA, _G.PriestlyProbeBenchB, _G.PriestlyProbeBenchC }) do
     b._scripts.PreClick(b, "LeftButton", true)
     WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
     b._scripts.PreClick(b, "LeftButton", false)
     WoW.flushTimers()
 end
-fp("steps pp click")
 S.Next()
 S.Next()
 H.eq(record("click").results[2].check, "PASS", "and passes once A, B and C each reported one cast")
+
+-- A SECOND run with no new clicks must not inherit the first run's PASS: the
+-- owner retesting after changing a setting or combat state would otherwise be
+-- certified by the previous measurement.
+fp("steps pp click")
+S.Next()
+S.Next()
+H.eq(record("click").results[2].check, "FAIL",
+    "a repeat run with no new clicks fails; it does not inherit the last run's results")
+
+-- And a report still pending from before the reset cannot land in the new run.
+fp("pp clear")
+fp("pp click")
+local staleA = _G.PriestlyProbeBenchA
+staleA._scripts.PreClick(staleA, "LeftButton", true)     -- pressed; its 10s watchdog is queued
+fp("pp clear")                                           -- a new measurement begins
+before = #PriestlyProbeDB.log
+WoW.flushTimers()                                        -- the old watchdog comes due
+H.eq(logSince(before), "", "and nothing from the old click is reported after the reset")
 
 for _, name in ipairs({ "auras", "secure", "persist" }) do
     H.check(pcall(fp, "steps pp " .. name), "the " .. name .. " procedure starts")
@@ -401,6 +418,45 @@ H.check(said:find("arrived at load: YES", 1, true),
 H.check(said:find("before this one: account=4", 1, true), "with the count it brought: " .. said)
 H.eq(PriestlyProbePersist.launches, 5, "which this launch then advances")
 H.eq(#WoW.messages, 0, "and chat is still empty")
+
+------------------------------------------------------------
+-- The persist procedure gives each store its own verdict
+--
+-- SavedVariables restored with the CVar lost must not read as one PASS for
+-- "do SavedVariables and CVars survive". Walk the procedure through its
+-- resume and completion path: the check on the CVar step is its own.
+------------------------------------------------------------
+
+local function runPersist(label)
+    fp("steps pp persist")
+    S.Next()      -- the first reading is automatic; this completes it
+    S.Next()      -- the exit-and-relaunch step, taken as done
+    S.Next()      -- SavedVariables reading
+    S.Next()      -- CVar reading
+    return record("persist"), label
+end
+
+-- Both SavedVariables counters came back, the CVar did not.
+store = {}
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
+loadProbe()
+PriestlyProbePersist = { launches = 4, stamps = {} }
+PriestlyProbeChar = { launches = 4 }
+WoW.dispatch("PLAYER_LOGIN")
+local rec = runPersist("sv restored, cvar lost")
+H.eq(rec.results[3].check, "PASS", "SavedVariables restored: that step passes")
+H.eq(rec.results[4].check, "FAIL", "but the lost CVar fails its own step, not hidden behind it")
+
+-- No usable CVar API at all.
+C_CVar = nil
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
+loadProbe()
+PriestlyProbePersist = { launches = 4, stamps = {} }
+PriestlyProbeChar = { launches = 4 }
+WoW.dispatch("PLAYER_LOGIN")
+rec = runPersist("no cvar api")
+H.eq(rec.results[3].check, "PASS", "SavedVariables restored without a CVar API: still passes")
+H.eq(rec.results[4].check, "FAIL", "and the unavailable CVar API is a FAIL, not a silent pass")
 
 PriestlyProbePersist, PriestlyProbeChar = nil, nil
 C_CVar = nil

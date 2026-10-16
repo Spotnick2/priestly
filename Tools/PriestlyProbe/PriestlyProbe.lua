@@ -682,6 +682,15 @@ local function BenchReport(seq)
     end
 end
 
+-- A new measurement: forget what the buttons reported, and make every timer
+-- already queued for an earlier click stale, so a late report from before the
+-- reset cannot land in the new run.
+local function ResetBench()
+    for k in pairs(g_benchResults) do g_benchResults[k] = nil end
+    g_benchWho, g_benchCount = nil, 0
+    g_benchSeq = g_benchSeq + 1
+end
+
 local function MakeBenchButton(parent, key, label, y, useOnKeyDown)
     local b = CreateFrame("Button", "PriestlyProbeBench" .. key, parent,
         "SecureActionButtonTemplate")
@@ -827,7 +836,10 @@ Probe:Command("all", function()
     say("then /fp steps pp secure (click-cast button), click (both mouse edges), persist (full exit)")
 end, "every section but here, secure and click")
 
-Probe:Command("clear", function() Probe:ClearLog(); clearSections(); say("log and sections cleared") end,
+Probe:Command("clear", function()
+    Probe:ClearLog(); clearSections(); ResetBench()
+    say("log, sections and click results cleared")
+end,
     "empty the saved log and sections")
 
 Probe:Command("hide", function()
@@ -915,15 +927,21 @@ local function persistReport()
 end
 
 Probe:Steps("persist", {
-    rev = 1,
+    rev = 2,
     title = "Do SavedVariables and CVars survive a full exit?",
     { text = "Reading this launch's counters.", auto = true, run = persistReport },
     { text = "Exit the client fully (NOT /reload) and relaunch. This resumes at login.", reload = "exit" },
-    { text = "Reading the counters after the relaunch.", auto = true, run = persistReport,
+    -- One check per store, so a lost CVar cannot hide behind a SavedVariables PASS.
+    { text = "SavedVariables after the relaunch: did both counters come back?", auto = true, run = persistReport,
       check = function()
           return SV_ACCOUNT_BEFORE > 0 and SV_CHAR_BEFORE > 0,
               "account before=" .. SV_ACCOUNT_BEFORE .. " character before=" .. SV_CHAR_BEFORE
-              .. " cvar before=" .. tostring(CVAR_BEFORE)
+      end },
+    { text = "CVar after the relaunch: did its counter come back?", auto = true,
+      run = function() return tostring(CVAR_NOTE) .. "; before=" .. tostring(CVAR_BEFORE) end,
+      check = function()
+          if CVAR_API ~= "present" then return false, "no usable CVar API: " .. tostring(CVAR_API) end
+          return CVAR_BEFORE > 0, tostring(CVAR_NOTE) .. "; before=" .. tostring(CVAR_BEFORE)
       end },
 })
 
@@ -952,7 +970,8 @@ Probe:Steps("secure", {
 Probe:Steps("click", {
     rev = 1,
     title = "One cast per click on each edge setting",
-    { text = "Building the click bench.", auto = true, run = function() P.click(); return g_bench ~= nil end },
+    { text = "Building the click bench.", auto = true,
+      run = function() ResetBench(); P.click(); return g_bench ~= nil end },
     { text = "Left-click A, B and C once each. Each should report exactly 1 cast in the console "
           .. "(C is the keyup branch the dead-click reports run). Then press Next.",
       check = function()
