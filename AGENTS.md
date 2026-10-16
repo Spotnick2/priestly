@@ -67,7 +67,9 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 - `Tools/PriestlyProbe/` — throwaway in-game API probe. Delete once `docs/FOREVER-PROBE.md` is
   settled.
 - `.github/workflows/` — package-check: tests against the pinned libraries, dry-run package, and a
-  check that the zip is exactly the addon plus both libraries at their pins.
+  check that the zip is exactly the addon plus both libraries at their pins. On a tag it then
+  publishes that zip as a GitHub Release and on Wago Addons (see Packaging).
+- `tests/release_files.sh` — the tag's release notes and `release.json`, for those two jobs.
 - `.pkgmeta`, `README.md`, `CHANGELOG.md`, `LICENSE` — packaging and user-facing material.
 
 **Two dependencies, embedded side by side:**
@@ -489,7 +491,10 @@ ones — have something to attach to.
 ## Releasing
 
 CurseForge builds from the repository webhook when it sees a tag, and publishes `CHANGELOG.md` as
-the release notes.
+the release notes. The same tag's `package-check` run then publishes the zip it built and checked
+as a GitHub Release (with `release.json`) and on Wago Addons, with the tag's `CHANGELOG.md` section
+as the notes on both (see Packaging). A tag therefore reaches three places: watch its run, not just
+CurseForge.
 
 **Every tag needs a `CHANGELOG.md` entry, committed before the tag is pushed.** A tag without one
 publishes the *previous* release's notes against the new build, which is worse than no notes at all
@@ -508,10 +513,10 @@ and is invisible from this side.
    being right, not a broken release - CurseForge builds from the tag via the webhook regardless.
    It has hit two of the last three releases and looks alarming each time.
 
-   What it does cost is the one check that the release zip **embeds the library**. Confirm that on
-   the last commit that carries code, before the notes: its run is where `.pkgmeta`'s pin was
-   actually proved. Or push the tag only after the main run goes green, which keeps the check and
-   the tag on the same content.
+   The check isn't lost any more: the **tag's own run** builds the tag and checks that zip,
+   libraries included, before `release` and `wago` publish it (#103). If that run's `check`
+   fails, nothing goes to GitHub or Wago, but CurseForge's webhook build has already happened.
+   So still confirm the last code commit's run is green before tagging.
 5. The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
    Release. **This is a distribution channel, not a stability claim.** CurseForge defaults every
    user to the Release channel, so an Alpha or Beta file is not offered for install or update
@@ -625,15 +630,37 @@ CurseForge builds from `.pkgmeta` when it sees a tag. The credential is a per-pr
 embedded in that webhook URL; it is **not** `CF_API_KEY`, which is an account-level API token for
 the upload API and is not used here.
 
-**Do not add a release workflow.** One was added during the Forever port and removed again: running
-`BigWigsMods/packager` on a tag would publish a second time alongside the webhook, and without a
-secret it would silently skip the CurseForge upload while still cutting a GitHub release — a
-failure shaped to look like success. If a workflow is ever wanted, the webhook has to be disabled
-first, deliberately.
+**Never let the packager publish from CI.** A release workflow was added during the Forever port and
+removed again: running `BigWigsMods/packager` on a tag without `-d` would publish a second time
+alongside the webhook, and without a secret it would silently skip the CurseForge upload while still
+cutting a GitHub release (the whole `CHANGELOG.md` as its notes): a failure shaped to look like
+success. So the packager only ever runs with `-d`, and CurseForge stays the webhook's.
 
-`.github/workflows/package-check.yml` stays: it runs the syntax check, the unit tests and a
-`-d` dry-run package build on pull requests, and uploads the zip as an artifact. It publishes
-nothing.
+`.github/workflows/package-check.yml` (#103):
+- **`check`**, on every pull request, push to `main` and tag: the syntax check, the unit tests, the
+  `-d` dry-run package, the zip's exact contents, and `tests/release_files.sh` (the tag's notes and
+  `release.json`). It keeps the zip as an artifact and has read-only permissions.
+- **`release`**, on a tag once `check` passed: a GitHub Release with **that** zip, `release.json`
+  (the packager's schema, read from the packaged TOC, so addon managers such as WowUp pick the
+  Forever zip) and the tag's `CHANGELOG.md` section as the notes. Alpha/beta tags are pre-releases.
+  It's the only job with `contents: write`.
+- **`wago`**, on a tag once `check` passed: the same zip to
+  [Wago Addons](https://addons.wago.io/addons/priestly-priest-buff-manager-pally-power-style)
+  through its upload API (`curl`), to the project named by the packaged TOC's `## X-Wago-ID:`. It
+  sends the tag's section as the changelog, `alpha`/`beta`/`stable` from the tag, and
+  `supported_forever_patches` from the TOC's interface (16001 → `1.60.1`). It fails if Wago doesn't
+  list that patch for Forever yet (a new client build). Only this job sees the `WAGO_API_TOKEN`
+  secret: an account API key from addons.wago.io/account/apikeys.
+
+The packager's own Wago upload (`WAGO_API_TOKEN` without `-d`) is not used. It would package a
+second zip nobody checked and send the whole `CHANGELOG.md`; the same two reasons it doesn't make
+the GitHub Release. It also writes `release.json` only inside its GitHub upload, which is why
+`tests/release_files.sh` writes it.
+
+**To publish a tag again** where one target failed (Wago didn't list the patch yet, a network
+error): Actions → Package check → Run workflow **from `main`**, with the tag and `github` or `wago`.
+A second `github` run fails if the release already exists. Delete the release first if it has to be
+redone.
 
 The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
 Release. Flavor is derived from `## Interface: 16001` → `forever` (CurseForge `gameVersionTypeID`
