@@ -22,9 +22,9 @@ local T, TC = H.loadAddon()
 --
 -- MEASURED and CLIENT part today. MEASURED is 70338, the installed client:
 -- the 70338 API dump diff against 70205 and the owner's test in game
--- (2026-10-11). CLIENT is 70205 because that is what the stub at this
--- repository's library pin (r28) models; it moves with the pin. They stay two
--- constants, because a patch parts them again.
+-- (2026-10-11). CLIENT is 70338 because that is what the stub at this
+-- repository's library pin (r29) models; it moves with the pin. They are one
+-- build today, but stay two constants, because a patch parts them again.
 --
 -- BROKEN is no longer a constant the addon declares. Since LibGroupBuffs r14
 -- the settings check reads the marker's own recorded build rather than a
@@ -33,8 +33,8 @@ local T, TC = H.loadAddon()
 -- news. Nothing below depends on WHICH build it is.
 local MEASURED = "70338"   -- dump diff + the owner in game, 2026-10-11
 local BROKEN = "69977"
-local CLIENT = "70205"  -- what .build.info reports; what the stub must model
-local CLIENT_DATE = "Oct  2 2026"   -- what GetBuildInfo reports on it
+local CLIENT = "70338"  -- what .build.info reports; what the stub must model
+local CLIENT_DATE = "Oct  9 2026"   -- what GetBuildInfo reports on it
 local FIXED = "70123"   -- any build other than the three above
 
 H.eq(TC.MEASURED_ON_BUILD, MEASURED,
@@ -53,9 +53,9 @@ H.eq(TC.SV_BROKEN_ON_BUILD, nil,
 -- makes that true rather than remembered.
 -- The stub models the CLIENT, not whichever build Priestly last re-probed:
 -- it is the default every other test file runs under, so a stale one hides
--- from all of them what a player actually sees. The r28 pin models 70205,
--- one patch behind the real client (70338); the stub catches up when a
--- library release models 70338 and the pin moves to it.
+-- from all of them what a player actually sees. The r29 pin models 70338,
+-- the real client; when a patch parts them, the stub catches up with a
+-- library release and the pin moving to it.
 WoW.reset()
 H.eq(WoW.build, CLIENT, "the stub models the build the client is on")
 -- The date moves with it, and was NOT pinned until a review pointed out that
