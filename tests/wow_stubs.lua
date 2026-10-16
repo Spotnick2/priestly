@@ -105,7 +105,7 @@ WoW.allowGlobal(
     "Priestly_PopoverSide", "Priestly_ShowClickHints", "Priestly_WindowVisible",
     -- The probe's saved variables and frames, which start nil like any others.
     "PriestlyProbeDB", "PriestlyProbePersist", "PriestlyProbeChar",
-    "PriestlyProbeCopyFrame", "PriestlyProbeBench",
+    "PriestlyProbeBench",
     "PriestlyProbeBenchA", "PriestlyProbeBenchB", "PriestlyProbeBenchC",
     -- Globals the probe deliberately tests for the presence of.
     "C_EncounterJournal", "EJ_GetNumTiers", "EJ_SelectTier",
