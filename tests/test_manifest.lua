@@ -218,6 +218,8 @@ for _, file in ipairs(H.tocFiles()) do
         .. tostring(keyword) .. " at line " .. n)
 end
 H.check(directive("X-Curse-Project-ID") ~= nil, "the CurseForge project is declared")
+-- CI's `wago` job uploads to the project the packaged TOC names (#103).
+H.check(directive("X-Wago-ID") ~= nil, "the Wago project is declared")
 H.check(hasLine("Priestly"), "the title mentions the addon")
 
 ------------------------------------------------------------
