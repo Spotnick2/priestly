@@ -659,8 +659,11 @@ the GitHub Release. It also writes `release.json` only inside its GitHub upload,
 
 **To publish a tag again** where one target failed (Wago didn't list the patch yet, a network
 error): Actions → Package check → Run workflow **from `main`**, with the tag and `github` or `wago`.
-A second `github` run fails if the release already exists. Delete the release first if it has to be
-redone.
+`check` rebuilds the **tag's** tree: its zip, and its notes from the tag's own `CHANGELOG.md`. A
+fixed changelog on `main` doesn't change them. The publishers take all three from `check`'s
+artifacts. If another tag points at the same commit (an alpha promoted without a code change),
+`check` drops it from its checkout so the zip carries the requested tag's version. A second `github`
+run fails if the release already exists. Delete the release first if it has to be redone.
 
 The release type comes from the **tag name**: `alpha` → Alpha, `beta` → Beta, anything else →
 Release. Flavor is derived from `## Interface: 16001` → `forever` (CurseForge `gameVersionTypeID`

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # release_files.sh - Write what a tag publishes next to its zip: the release
 # notes (the tag's CHANGELOG.md section) and release.json, the manifest addon
-# managers read to pick the right zip for a client (#103). CI's `release` and
-# `wago` jobs use both; `check` runs it on every pull request, so a broken
-# changelog heading or TOC field fails there instead of at tag time.
+# managers read to pick the right zip for a client (#103). CI's `check` runs it
+# on every run, so a broken changelog heading or TOC field fails on the pull
+# request instead of at tag time; on a tag, `release` and `wago` publish the
+# files that run wrote.
 #
 # Why not the packager's own release.json: it writes one only inside its
 # GitHub upload, which also creates (or PATCHes) the GitHub Release with the
