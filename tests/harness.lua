@@ -75,6 +75,36 @@ function H.libGlassRoot()
     return root
 end
 
+-- ForeverProbe, the host PriestlyProbe is a module of. Private and local
+-- (..\ForeverProbe or $FOREVERPROBE), so CI sets FOREVERPROBE_OPTIONAL=1 and
+-- the probe's tests skip there; locally a missing checkout is an error, never
+-- a silent skip. Loaded into THIS stub environment the way the client loads a
+-- dependency: its files, then its ADDON_LOADED.
+function H.loadForeverProbe()
+    local root = (os.getenv("FOREVERPROBE") or "../ForeverProbe"):gsub("\\", "/"):gsub("/$", "")
+    local toc = io.open(root .. "/ForeverProbe.toc", "rb")
+    if not toc then
+        if os.getenv("FOREVERPROBE_OPTIONAL") == "1" then
+            io.write("SKIPPED: ForeverProbe isn't here (private, local only); the probe tests run locally\n")
+            os.exit(0)
+        end
+        error("ForeverProbe checkout not found at " .. root .. ": clone it there or set FOREVERPROBE", 0)
+    end
+    -- The widget methods the host's console calls that the shared stub does not
+    -- model. They are the host's, not Priestly's: ForeverProbe runs in game
+    -- with them, and its own tests carry the same list.
+    WoW.allowMethod("SetMultiLine", "SetAutoFocus", "SetMaxLetters", "EnableMouseWheel",
+        "GetVerticalScrollRange", "SetVerticalScroll")
+    local files = {}
+    for line in toc:read("*a"):gmatch("[^\r\n]+") do
+        if line:match("%.lua$") and not line:match("^#") then files[#files + 1] = root .. "/" .. line end
+    end
+    toc:close()
+    for _, file in ipairs(files) do assert(loadfile(file))("ForeverProbe", {}) end
+    WoW.dispatch("ADDON_LOADED", "ForeverProbe")
+    return ForeverProbe
+end
+
 -- Load a file or stop the run, naming it. A test that silently skipped a
 -- missing file is how a load error in the client can pass a green suite.
 -- The arguments are what the client passes an addon's file: its name and

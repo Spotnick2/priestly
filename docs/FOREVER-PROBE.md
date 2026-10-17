@@ -4,6 +4,10 @@ What `Tools/PriestlyProbe` actually measured on the live client, as opposed to w
 documentation says. Existence is not a contract: a namespace being present tells you nothing about
 arity, return order, or whether the underlying system is wired up on a Vanilla-content client.
 
+> **The probe is a ForeverProbe module now** (`/fp pp <section>`, procedures under `/fp steps pp`).
+> The sections below were measured with its old slash command, `/pprobe <section>`, and keep that
+> name where they say what was run then; every `/pprobe X` below is `/fp pp X` today.
+
 **Client:** WoW: Forever 1.60.1, build **70009**, `Sep 23 2026`, `tocVersion` **16001**,
 `WOW_PROJECT_ID == WOW_PROJECT_MAINLINE (1)`, locale enUS.
 Re-probed 2026-09-25 on a level 3 Priest in a 2-person party, in Tirisfal Glades, in and out of
@@ -17,7 +21,7 @@ included, which are the two this addon is built on. Where a finding moved betwee
 says so and keeps both readings.
 
 When the client next patches, the login notice fires again until someone repeats that: `/apidump`,
-`/pprobe` **in combat as well as out**, and the SavedVariables check. Advance the constant from
+`/fp pp all` and `/fp steps pp auras` **in combat as well as out**, and the SavedVariables check (`/fp steps pp persist`). Advance the constant from
 those, never from this document.
 
 What is known about the builds since is narrower than it looks, and it is **not** that the API
@@ -605,7 +609,7 @@ The SavedVariables result in the section above still stands: SavedVariables are 
 **`/reload` can prove something is broken, never that it works.** Confirm any persistence claim with
 a full exit and relaunch.
 
-`/pprobe cvar` and `/pprobe sv` are kept, and neither guesses how the session started. When a value
+`/fp pp cvar` and `/fp pp sv` are kept, and neither guesses how the session started. When a value
 comes back they call it inconclusive if the user only did a `/reload`, and confirmed if they did a
 full exit and relaunch. That keeps them able to recognise Blizzard's fix when it lands.
 
@@ -671,5 +675,5 @@ is blocked too. Nothing can be done about that from an addon.
   rows still cast during a fight (measured 2026-09-22); what is unverified is a wired unit token
   changing hands mid-fight.
 - **`ActionButtonUseKeyHeldSpell`**, and whether a live mouse click is CVar-gated — see the end of
-  section 1. `/pprobe secure`.
+  section 1. `/fp steps pp secure`.
 - **`INSTANCE_DB` names** against real `GetInstanceInfo()` output, once those zones are reachable.

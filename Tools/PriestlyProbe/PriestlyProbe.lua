@@ -1,17 +1,29 @@
 -- ============================================================================
 -- PriestlyProbe  -  throwaway API probe for the WoW: Forever 1.60.1 port.
+-- A ForeverProbe module: /fp pp
 --
--- Deploy alongside Priestly, log in, run /pprobe, then /reload (SavedVariables
--- are written on logout/reload) and read PriestlyProbeDB out of
+-- Deploy with `pwsh Tools\deploy.ps1 -Probe`, /reload, then:
+--   /fp pp            lists the commands
+--   /fp pp all        every section, into the console and the saved log
+--   /fp steps pp      the guided procedures (auras, secure, click, persist)
+-- After the owner's /reload, read PriestlyProbeDB (log + sections) from
 --   _classic_beta_\WTF\Account\<id>\SavedVariables\PriestlyProbe.lua
+-- and the procedures' results from ForeverProbe.lua (steps.records).
 --
 -- Nothing here ships. Delete Tools/PriestlyProbe once docs/FOREVER-PROBE.md
 -- is filled in.
 -- ============================================================================
 
-local C = "|cffff8800[Probe]|r "
+local ADDON, NS = ...
+local MAX_LOG = 3000
 
-PriestlyProbeDB = PriestlyProbeDB or {}
+local Probe = ForeverProbe:Module("PriestlyProbe", { api = 1, cmd = "pp" })
+
+local function say(msg) Probe:Say(msg) end
+
+-- PriestlyProbeDB is bound at this addon's own ADDON_LOADED (the bottom of the
+-- file). Until then sections is a scratch table; after it, the saved one.
+local sections = {}
 
 ------------------------------------------------------------
 -- Does this client load SavedVariables back at all?
@@ -160,69 +172,38 @@ local UNITS = { "player", "target", "pet", "party1", "party2", "raid1" }
 
 -- ─── formatting ──────────────────────────────────────────────────────────────
 
-local function fmt(v, depth)
-    depth = depth or 0
-    local t = type(v)
-    if t == "string" then return '"' .. v .. '"' end
-    if t ~= "table" then return tostring(v) end
-    if depth > 1 then return "<table>" end
-    local keys = {}
-    for k in pairs(v) do keys[#keys + 1] = k end
-    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-    local parts = {}
-    for _, k in ipairs(keys) do
-        local ok, s = pcall(fmt, v[k], depth + 1)
-        parts[#parts + 1] = tostring(k) .. "=" .. (ok and s or "<err>")
-        if #parts >= 24 then parts[#parts + 1] = "..." break end
-    end
-    return "{" .. table.concat(parts, ", ") .. "}"
+-- ForeverProbe's Show/Describe, so a secret value renders as <secret> instead
+-- of throwing. Strings stay quoted, as the recorded sections always had them.
+local function fmt(v)
+    if type(v) == "table" then return Probe.Describe(v, 2) end
+    return Probe.Show(v)
 end
 
 -- Call fn, never throw. Returns a printable string of everything it returned.
+-- Kept local rather than Probe:Try: the sections record this string, and
+-- Probe:Try logs a line of its own for MISSING and ERROR.
 local function try(fn, ...)
     if type(fn) ~= "function" then return "API MISSING" end
-    local packed = { pcall(fn, ...) }
-    if not packed[1] then return "ERROR: " .. tostring(packed[2]) end
-    if #packed <= 1 then return "<no return>" end
+    local packed = Probe.Pack(pcall(fn, ...))
+    if not packed[1] then return "ERROR: " .. Probe.Show(packed[2], true) end
+    if packed.n <= 1 then return "<no return>" end
     local parts = {}
-    for i = 2, #packed do parts[#parts + 1] = fmt(packed[i]) end
+    for i = 2, packed.n do parts[#parts + 1] = fmt(packed[i]) end
     return table.concat(parts, ", ")
-end
-
-local function logLine(text)
-    local lines = PriestlyProbeDB.lines
-    if not lines then lines = {} PriestlyProbeDB.lines = lines end
-    lines[#lines + 1] = text
 end
 
 local g_section
 local function rec(key, value)
-    local sec = PriestlyProbeDB[g_section]
-    if not sec then sec = {} PriestlyProbeDB[g_section] = sec end
+    local sec = sections[g_section]
+    if not sec then sec = {} sections[g_section] = sec end
     sec[key] = value
-    -- Also keep a flat log: easier to read off disk, and it is what the copy
-    -- window shows.
-    logLine(string.format("%-54s %s",
-        (g_section or "?") .. "." .. tostring(key), tostring(value)))
+    say(string.format("%-54s %s", (g_section or "?") .. "." .. tostring(key), tostring(value)))
 end
-
-local function say(msg) DEFAULT_CHAT_FRAME:AddMessage(C .. msg) end
 
 local function head(name)
     g_section = name
-    PriestlyProbeDB[name] = {}
-    logLine(" ")
-    logLine("== " .. name .. " ==")
-    say("|cff99ddff== " .. name .. " ==|r")
-end
-
-local function dumpSection(name)
-    local sec = PriestlyProbeDB[name]
-    if not sec then return end
-    local keys = {}
-    for k in pairs(sec) do keys[#keys + 1] = k end
-    table.sort(keys)
-    for _, k in ipairs(keys) do say("  " .. k .. " = " .. tostring(sec[k])) end
+    sections[name] = {}
+    say("== " .. name .. " ==")
 end
 
 -- ─── probes ──────────────────────────────────────────────────────────────────
@@ -240,7 +221,6 @@ function P.client()
     rec("playerLevel", tostring(UnitLevel("player")))
     local _, cls = UnitClass("player")
     rec("playerClass", tostring(cls))
-    dumpSection("client")
 end
 
 function P.events()
@@ -254,7 +234,7 @@ function P.events()
             pcall(f.UnregisterEvent, f, ev)
         else
             bad = bad + 1
-            say("  |cffff4444" .. ev .. " THROWS|r")
+            say("  " .. ev .. " THROWS")
         end
     end
     say("  " .. #EVENTS .. " probed, " .. bad .. " unusable")
@@ -289,7 +269,7 @@ function P.auras()
         end
     end
     if not C_UnitAuras then
-        say("  |cffff4444C_UnitAuras MISSING|r")
+        say("  C_UnitAuras MISSING")
         return
     end
 
@@ -318,8 +298,8 @@ function P.auras()
         end
     end
     say("  combat=" .. tostring(InCombatLockdown()) ..
-        " secret=" .. (C_Secrets and try(C_Secrets.ShouldAurasBeSecret) or "?"))
-    say("  |cffffff00re-run /pprobe auras IN COMBAT|r")
+        " secret=" .. (C_Secrets and try(C_Secrets.ShouldAurasBeSecret) or "?")
+        .. "  (/fp steps pp auras reads it in and out of combat)")
 end
 
 function P.spells()
@@ -402,10 +382,10 @@ function P.templates()
         else
             bad = bad + 1
             rec(tpl, "THROWS as " .. frameType .. ": " .. tostring(res))
-            say("  |cffff4444" .. tpl .. " THROWS|r")
+            say("  " .. tpl .. " THROWS")
         end
     end
-    say("  " .. #TEMPLATES .. " probed, " .. bad .. " threw; full list in SavedVariables")
+    say("  " .. #TEMPLATES .. " probed, " .. bad .. " threw")
 end
 
 function P.names()
@@ -434,8 +414,7 @@ function P.names()
     end
     rec("GetNumGroupMembers", try(GetNumGroupMembers))
     rec("IsInRaid", try(IsInRaid))
-    dumpSection("names")
-    say("  |cffffff00target another player, then re-run /pprobe names|r")
+    say("  target another player, then run /fp pp names again")
 end
 
 function P.misc()
@@ -457,7 +436,6 @@ function P.misc()
     rec("InterfaceOptions_AddCategory", tostring(InterfaceOptions_AddCategory ~= nil))
     rec("MouseIsOver", tostring(MouseIsOver ~= nil))
     rec("UnitIsConnected(player)", try(UnitIsConnected, "player"))
-    dumpSection("misc")
 end
 
 -- ─── secure click-cast test button ───────────────────────────────────────────
@@ -466,7 +444,7 @@ local g_btn
 local function BuildSecureButton()
     if g_btn then g_btn:Show() return end
     if InCombatLockdown() then
-        say("|cffff4444can't build the button in combat|r")
+        say("can't build the button in combat")
         return
     end
 
@@ -510,7 +488,7 @@ local function BuildSecureButton()
         local u = UnitExists("party1") and "party1" or "player"
         local ok, err = pcall(self.SetAttribute, self, "unit1", u)
         say("PreClick " .. tostring(btn) .. " SetAttribute(unit1=" .. u .. ") -> " ..
-            (ok and "ok" or ("|cffff4444" .. tostring(err) .. "|r")))
+            (ok and "ok" or ("" .. tostring(err) .. "")))
     end)
     b:SetScript("PostClick", function(self, btn)
         say("PostClick " .. tostring(btn) .. " combat=" .. tostring(InCombatLockdown()))
@@ -518,7 +496,7 @@ local function BuildSecureButton()
 
     g_btn = b
     say("secure button created - click it and watch for an actual cast")
-    say("|cffffff00then pull something and click it again IN COMBAT|r")
+    say("then pull something and click it again IN COMBAT")
 end
 
 function P.secure()
@@ -550,8 +528,8 @@ function P.secure()
             and (tostring(value) .. " (" .. type(value) .. ")")
             or ("THROWS: " .. tostring(value)))
     else
-        say("  |cffffff00no CVar API here - which no longer matters:|r")
-        say("  |cffffff00the rows register both edges and the client picks one.|r")
+        say("  no CVar API here - which no longer matters:")
+        say("  the rows register both edges and the client picks one.")
     end
 
     -- The other edge can still reach the press-and-hold release path, which
@@ -562,8 +540,7 @@ function P.secure()
     end
 
     rec("MANUAL", "did the click cast? out of combat / in combat - record by hand")
-    rec("MANUAL_edge", "use /pprobe click - it tests both edges without changing a setting")
-    dumpSection("secure")
+    rec("MANUAL_edge", "use /fp steps pp click - it tests both edges without changing a setting")
 end
 
 -- ─── encounter journal ───────────────────────────────────────────────────────
@@ -580,7 +557,7 @@ function P.journal()
     rec("C_EncounterJournal", tostring(C_EncounterJournal ~= nil))
 
     if not EJ_GetInstanceByIndex then
-        say("  |cffff4444no encounter journal on this client|r")
+        say("  no encounter journal on this client")
         return
     end
 
@@ -613,8 +590,8 @@ function P.journal()
         if not implicitTier and numTiers > 1 and not selected then
             rec("tier" .. tostring(tierName) .. ".WARNING",
                 "EJ_SelectTier failed - the instances below may be another tier's")
-            say("  |cffff4444could not select tier " .. tostring(tierName) ..
-                "; treat its list as unreliable|r")
+            say("  could not select tier " .. tostring(tierName) ..
+                "; treat its list as unreliable")
         end
 
         for _, isRaid in ipairs({ false, true }) do
@@ -632,7 +609,6 @@ function P.journal()
         end
     end
 
-    say("  |cffffff00/reload|r then read the journal section off disk")
 end
 
 -- Where am I standing right now? The INSTANCE_DB keys must match this exactly.
@@ -650,8 +626,7 @@ function P.here()
     rec("GetRealZoneText", try(GetRealZoneText))
     rec("GetZoneText", try(GetZoneText))
     rec("GetSubZoneText", try(GetSubZoneText))
-    dumpSection("here." .. tostring(name or "unknown"))
-    say("  |cffffff00run this INSIDE each instance|r - the name above is the key to use,")
+    say("  run this INSIDE each instance - the name above is the key to use,")
     say("  and instanceMapID is what issue #12 wants instead")
 end
 
@@ -679,6 +654,8 @@ end
 --   2 anywhere -> one click is casting twice, and reagents are being burned.
 
 local g_bench, g_benchCount, g_benchWho, g_benchAt = nil, 0, nil, 0
+-- What each button reported for its last click, for the click procedure to check.
+local g_benchResults = {}
 local g_benchFrame
 -- Every click gets a number, and a delayed callback carries the number of the
 -- click that scheduled it. Without that, a watchdog left over from an earlier
@@ -695,14 +672,23 @@ local function BenchReport(seq)
     if not g_benchWho then return end
     local n, who = g_benchCount, g_benchWho
     g_benchWho = nil
-    local colour = (n == 1) and "|cff55ff55" or "|cffff4444"
-    say(string.format("  %s%s: %d cast(s) sent for that click|r", colour, who, n))
+    say(string.format("  %s: %d cast(s) sent for that click", who, n))
+    g_benchResults[who] = n
     rec("click." .. who, tostring(n))
     if n == 0 then
-        say("    |cffff4444that branch does not dispatch on this client|r")
+        say("    that branch does not dispatch on this client")
     elseif n > 1 then
-        say("    |cffff4444DOUBLE CAST - two reagents per click|r")
+        say("    DOUBLE CAST - two reagents per click")
     end
+end
+
+-- A new measurement: forget what the buttons reported, and make every timer
+-- already queued for an earlier click stale, so a late report from before the
+-- reset cannot land in the new run.
+local function ResetBench()
+    for k in pairs(g_benchResults) do g_benchResults[k] = nil end
+    g_benchWho, g_benchCount = nil, 0
+    g_benchSeq = g_benchSeq + 1
 end
 
 local function MakeBenchButton(parent, key, label, y, useOnKeyDown)
@@ -763,7 +749,7 @@ end
 local function BuildBench()
     if g_bench then g_bench:Show() return end
     if InCombatLockdown() then
-        say("|cffff4444can't build the bench in combat|r")
+        say("can't build the bench in combat")
         return
     end
 
@@ -804,183 +790,222 @@ function P.click()
     local okBuild, err = pcall(BuildBench)
     rec("buildBench", okBuild and "OK" or ("ERROR: " .. tostring(err)))
     if not okBuild then return end
-    say("  click |cffffffffA|r, |cffffffffB|r and |cffffffffC|r once each, left button.")
-    say("  |cff55ff55each should report exactly 1 cast|r.")
-    say("  |cffffff00C is the one that matters|r - it is the setting the people who")
+    say("  click A, B and C once each, left button.")
+    say("  each should report exactly 1 cast.")
+    say("  C is the one that matters - it is the setting the people who")
     say("  reported dead clicks are running, simulated without changing yours.")
 end
 
--- ─── copy window ─────────────────────────────────────────────────────────────
--- The beta's chat frame cannot be copied from, so the whole dump also goes
--- into a selectable EditBox: click in it, Ctrl+A, Ctrl+C.
-
-local function ShowCopyWindow()
-    local f = PriestlyProbeCopyFrame
-    if not f then
-        f = CreateFrame("Frame", "PriestlyProbeCopyFrame", UIParent, "BackdropTemplate")
-        f:SetSize(760, 520)
-        f:SetPoint("CENTER")
-        f:SetFrameStrata("DIALOG")
-        f:SetMovable(true)
-        f:EnableMouse(true)
-        f:RegisterForDrag("LeftButton")
-        f:SetScript("OnDragStart", f.StartMoving)
-        f:SetScript("OnDragStop", f.StopMovingOrSizing)
-        if f.SetBackdrop then
-            f:SetBackdrop({
-                bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-                tile = true, tileSize = 16, edgeSize = 14,
-                insets = { left = 4, right = 4, top = 4, bottom = 4 },
-            })
-            f:SetBackdropColor(0.04, 0.04, 0.08, 0.97)
-        end
-
-        local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        title:SetPoint("TOPLEFT", 14, -12)
-        title:SetText("Priestly Probe  -  click inside, Ctrl+A, Ctrl+C")
-
-        local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT", 2, 2)
-
-        local scroll = CreateFrame("ScrollFrame", "PriestlyProbeCopyScroll", f,
-            "UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT", 14, -34)
-        scroll:SetPoint("BOTTOMRIGHT", -34, 14)
-
-        local eb = CreateFrame("EditBox", nil, scroll)
-        eb:SetMultiLine(true)
-        eb:SetAutoFocus(false)
-        eb:SetFontObject("ChatFontNormal")
-        eb:SetWidth(690)
-        eb:SetScript("OnEscapePressed", function(self)
-            self:ClearFocus()
-            f:Hide()
-        end)
-        scroll:SetScrollChild(eb)
-        f.eb = eb
-    end
-
-    local lines = PriestlyProbeDB and PriestlyProbeDB.lines
-    local text
-    if lines and #lines > 0 then
-        text = table.concat(lines, "\n")
-    else
-        text = "(nothing recorded yet - run /pprobe first)"
-    end
-    f.eb:SetText(text)
-    f.eb:SetCursorPosition(0)
-    f:Show()
-    f.eb:SetFocus()
-    f.eb:HighlightText()
-end
-
--- ─── driver ──────────────────────────────────────────────────────────────────
+-- ─── commands ────────────────────────────────────────────────────────────────
 
 local ORDER = { "client", "events", "templates", "spells", "spellbook", "auras", "names", "misc", "journal" }
 
-SLASH_PPROBE1 = "/pprobe"
-SlashCmdList["PPROBE"] = function(msg)
-    local cmd = strtrim(msg or ""):lower()
-    if cmd == "" or cmd == "all" then
-        PriestlyProbeDB = { _stamp = date("%Y-%m-%d %H:%M:%S"), lines = {} }
-        for _, name in ipairs(ORDER) do
-            local ok, err = pcall(P[name])
-            if not ok then say("|cffff4444" .. name .. " probe ERRORED: " .. tostring(err) .. "|r") end
-        end
-        say("|cffffff00/pprobe text|r opens a window you can select and copy from.")
-        say("done. |cffffff00/reload|r also writes it to WTF\\Account\\<id>\\SavedVariables\\PriestlyProbe.lua")
-        say("then run |cffffffff/pprobe secure|r for the click-cast test button")
-        say("and |cffffffff/pprobe click|r to check both mouse edges dispatch once each")
-    elseif P[cmd] then
-        local ok, err = pcall(P[cmd])
-        if not ok then say("|cffff4444ERROR: " .. tostring(err) .. "|r") end
-    elseif cmd == "sv" then
-        -- Must NOT capture here. Capturing latches, so a caller that beats
-        -- PLAYER_LOGIN - another addon running this from its own ADDON_LOADED
-        -- - would freeze the answer at "nothing arrived" for the session, and
-        -- the counter would not advance either, so the NEXT session reads the
-        -- same number and the client looks broken. That is the exact false
-        -- negative this probe was rebuilt to stop reporting.
-        if not svCaptured then
-            say("|cff99ddff== SavedVariables persistence ==|r")
-            say("  |cffffcc00Not captured yet.|r This is read at PLAYER_LOGIN, because the")
-            say("  client runs the saved file after the addon's own files. Ask again")
-            say("  once you are in the world.")
-            return
-        end
-        say("|cff99ddff== SavedVariables persistence ==|r")
-        say("  account-wide table arrived at load: " ..
-            (SV_ACCOUNT_ARRIVED and "|cff55ff55YES|r" or "|cffff4444NO|r"))
-        say("  per-character table arrived at load: " ..
-            (SV_CHAR_ARRIVED and "|cff55ff55YES|r" or "|cffff4444NO|r"))
-        say("  launches recorded before this one: account=" .. SV_ACCOUNT_BEFORE ..
-            " character=" .. SV_CHAR_BEFORE)
-        say("  launches now: account=" .. PriestlyProbePersist.launches ..
-            " character=" .. PriestlyProbeChar.launches)
-        -- The probe cannot know whether this session followed a /reload or a
-        -- full restart, and the answer depends on which. So it reports what
-        -- came back and says what that means under each procedure.
-        if SV_ACCOUNT_BEFORE == 0 and SV_CHAR_BEFORE == 0 then
-            say("  |cffff4444Nothing was read back.|r Expected on the very first run.")
-            say("  Otherwise this is a real failure, whether it followed /reload or a")
-            say("  full exit: SavedVariables are re-read from disk either way.")
-            say("  (Captured at PLAYER_LOGIN. Read at file scope - as this probe did")
-            say("  until 2026-09-25 - it always says NO: the client runs the saved")
-            say("  file after the addon's own files.)")
-        else
-            say("  |cffffcc00A value came back.|r What it means depends on what you did:")
-            say("  - after only /reload: |cffffcc00inconclusive|r. Settings have been seen to")
-            say("    survive /reload on this client and still be lost on a real restart.")
-            say("  - after a FULL exit and relaunch: SavedVariables load on this build.")
-        end
-    elseif cmd == "cvar" then
-        say("|cff99ddff== CVar persistence ==|r")
-        say("  CVar API: " .. tostring(CVAR_API))
-        say("  " .. tostring(CVAR_NOTE))
-        say("  value that arrived: " .. tostring(CVAR_ARRIVED))
-        say("  launches recorded before this one: " .. tostring(CVAR_BEFORE))
-        say("  launches now: " .. tostring(CVAR_BEFORE + 1))
-        local info = (C_CVar and C_CVar.GetCVarInfo) or _G.GetCVarInfo
-        if info then
-            say("  GetCVarInfo: " .. try(info, CVAR_NAME))
-        end
-        local loaded = C_CVar and C_CVar.AreCVarsLoaded
-        if loaded then say("  AreCVarsLoaded: " .. try(loaded)) end
-        -- As above: the probe cannot tell a /reload from a real restart, so it
-        -- must not guess. Assuming "/reload" would report Blizzard's eventual
-        -- fix as inconclusive forever; assuming "restart" is how CVars were
-        -- once wrongly recorded as a working store (AltStable PR #33).
-        if CVAR_BEFORE == 0 then
-            say("  |cffff4444Nothing came back.|r Expected on the very first run.")
-            say("  Otherwise, if this run follows a FULL exit and relaunch, CVars do")
-            say("  not persist on this build.")
-        else
-            say("  |cffffcc00A value came back.|r What it means depends on what you did:")
-            say("  - after only /reload: |cffffcc00inconclusive|r. /reload keeps the client")
-            say("    running, so the value may simply still be in memory.")
-            say("  - after a FULL exit and relaunch: CVars persist on this build.")
-        end
+local HELP = {
+    client = "build, project, locale, class",
+    events = "which events RegisterEvent accepts",
+    templates = "which frame templates exist",
+    spells = "spell lookups and range",
+    spellbook = "spellbook walk, rank subtext",
+    auras = "aura reads (/fp steps pp auras: in and out of combat)",
+    names = "unit name formats (target another player first)",
+    misc = "items, containers, settings API",
+    journal = "the encounter journal's instance list",
+    here = "where you stand now (run inside each instance)",
+    secure = "build the secure click-cast test button",
+    click = "build the click-edge test bench",
+}
 
-    elseif cmd == "text" or cmd == "copy" then
-        ShowCopyWindow()
-    elseif cmd == "hide" then
-        if g_btn then g_btn:Hide() end
-        if PriestlyProbeCopyFrame then PriestlyProbeCopyFrame:Hide() end
-    else
-        say("usage: /pprobe [all|" .. table.concat(ORDER, "|") .. "|secure|sv|here|text|hide]")
-    end
+local function runSection(name)
+    local ok, err = pcall(P[name])
+    if not ok then say(name .. " probe ERRORED: " .. tostring(err)) end
 end
 
-local f = CreateFrame("Frame")
-f:RegisterEvent("PLAYER_LOGIN")
-f:SetScript("OnEvent", function()
-    -- First, before anything reads or writes those tables.
+for _, name in ipairs({ "client", "events", "templates", "spells", "spellbook", "auras", "names",
+                        "misc", "journal", "here", "secure", "click" }) do
+    Probe:Command(name, function() runSection(name) end, HELP[name])
+end
+
+local function clearSections()
+    for k in pairs(sections) do sections[k] = nil end   -- in place: the saved table stays bound
+end
+
+Probe:Command("all", function()
+    clearSections()
+    for _, name in ipairs(ORDER) do runSection(name) end
+    say("done. /reload writes it to WTF\\Account\\<id>\\SavedVariables\\PriestlyProbe.lua")
+    say("then /fp steps pp secure (click-cast button), click (both mouse edges), persist (full exit)")
+end, "every section but here, secure and click")
+
+Probe:Command("clear", function()
+    Probe:ClearLog(); clearSections(); ResetBench()
+    say("log, sections and click results cleared")
+end,
+    "empty the saved log and sections")
+
+Probe:Command("hide", function()
+    if g_btn then g_btn:Hide() end
+    if g_bench then g_bench:Hide() end
+end, "hide the secure button and the click bench")
+
+-- Must NOT capture here. Capturing latches, so a caller that beats
+-- PLAYER_LOGIN - another addon running this from its own ADDON_LOADED
+-- - would freeze the answer at "nothing arrived" for the session, and
+-- the counter would not advance either, so the NEXT session reads the
+-- same number and the client looks broken. That is the exact false
+-- negative this probe was rebuilt to stop reporting.
+Probe:Command("sv", function()
+    say("== SavedVariables persistence ==")
+    if not svCaptured then
+        say("  Not captured yet. This is read at PLAYER_LOGIN, because the")
+        say("  client runs the saved file after the addon's own files. Ask again")
+        say("  once you are in the world.")
+        return
+    end
+    say("  account-wide table arrived at load: " .. (SV_ACCOUNT_ARRIVED and "YES" or "NO"))
+    say("  per-character table arrived at load: " .. (SV_CHAR_ARRIVED and "YES" or "NO"))
+    say("  launches recorded before this one: account=" .. SV_ACCOUNT_BEFORE ..
+        " character=" .. SV_CHAR_BEFORE)
+    say("  launches now: account=" .. PriestlyProbePersist.launches ..
+        " character=" .. PriestlyProbeChar.launches)
+    -- The probe cannot know whether this session followed a /reload or a
+    -- full restart, and the answer depends on which. So it reports what
+    -- came back and says what that means under each procedure.
+    if SV_ACCOUNT_BEFORE == 0 and SV_CHAR_BEFORE == 0 then
+        say("  Nothing was read back. Expected on the very first run.")
+        say("  Otherwise this is a real failure, whether it followed /reload or a")
+        say("  full exit: SavedVariables are re-read from disk either way.")
+        say("  (Captured at PLAYER_LOGIN. Read at file scope - as this probe did")
+        say("  until 2026-09-25 - it always says NO: the client runs the saved")
+        say("  file after the addon's own files.)")
+    else
+        say("  A value came back. What it means depends on what you did:")
+        say("  - after only /reload: inconclusive. Settings have been seen to")
+        say("    survive /reload on this client and still be lost on a real restart.")
+        say("  - after a FULL exit and relaunch: SavedVariables load on this build.")
+        say("  (/fp steps pp persist walks the full-exit check and records it.)")
+    end
+end, "did SavedVariables come back at login")
+
+Probe:Command("cvar", function()
+    say("== CVar persistence ==")
+    say("  CVar API: " .. tostring(CVAR_API))
+    say("  " .. tostring(CVAR_NOTE))
+    say("  value that arrived: " .. tostring(CVAR_ARRIVED))
+    say("  launches recorded before this one: " .. tostring(CVAR_BEFORE))
+    say("  launches now: " .. tostring(CVAR_BEFORE + 1))
+    local info = (C_CVar and C_CVar.GetCVarInfo) or _G.GetCVarInfo
+    if info then
+        say("  GetCVarInfo: " .. try(info, CVAR_NAME))
+    end
+    local loaded = C_CVar and C_CVar.AreCVarsLoaded
+    if loaded then say("  AreCVarsLoaded: " .. try(loaded)) end
+    -- As above: the probe cannot tell a /reload from a real restart, so it
+    -- must not guess. Assuming "/reload" would report Blizzard's eventual
+    -- fix as inconclusive forever; assuming "restart" is how CVars were
+    -- once wrongly recorded as a working store (AltStable PR #33).
+    if CVAR_BEFORE == 0 then
+        say("  Nothing came back. Expected on the very first run.")
+        say("  Otherwise, if this run follows a FULL exit and relaunch, CVars do")
+        say("  not persist on this build.")
+    else
+        say("  A value came back. What it means depends on what you did:")
+        say("  - after only /reload: inconclusive. /reload keeps the client")
+        say("    running, so the value may simply still be in memory.")
+        say("  - after a FULL exit and relaunch: CVars persist on this build.")
+    end
+end, "did the launch-counting CVar come back at login")
+
+-- ─── procedures ──────────────────────────────────────────────────────────────
+
+-- The login capture is latched, so calling it here is safe whichever of this
+-- and the PLAYER_LOGIN handler runs first after a relaunch.
+local function persistReport()
+    CaptureSavedVariables()
+    return string.format("account arrived=%s before=%d; character arrived=%s before=%d; cvar %s before=%d",
+        tostring(SV_ACCOUNT_ARRIVED), SV_ACCOUNT_BEFORE, tostring(SV_CHAR_ARRIVED), SV_CHAR_BEFORE,
+        tostring(CVAR_NOTE), CVAR_BEFORE)
+end
+
+Probe:Steps("persist", {
+    rev = 2,
+    title = "Do SavedVariables and CVars survive a full exit?",
+    { text = "Reading this launch's counters.", auto = true, run = persistReport },
+    { text = "Exit the client fully (NOT /reload) and relaunch. This resumes at login.", reload = "exit" },
+    -- One check per store, so a lost CVar cannot hide behind a SavedVariables PASS.
+    { text = "SavedVariables after the relaunch: did both counters come back?", auto = true, run = persistReport,
+      check = function()
+          return SV_ACCOUNT_BEFORE > 0 and SV_CHAR_BEFORE > 0,
+              "account before=" .. SV_ACCOUNT_BEFORE .. " character before=" .. SV_CHAR_BEFORE
+      end },
+    { text = "CVar after the relaunch: did its counter come back?", auto = true,
+      run = function() return tostring(CVAR_NOTE) .. "; before=" .. tostring(CVAR_BEFORE) end,
+      check = function()
+          if CVAR_API ~= "present" then return false, "no usable CVar API: " .. tostring(CVAR_API) end
+          return CVAR_BEFORE > 0, tostring(CVAR_NOTE) .. "; before=" .. tostring(CVAR_BEFORE)
+      end },
+})
+
+local function combatState() return InCombatLockdown() and "in combat" or "out of combat" end
+
+Probe:Steps("auras", {
+    rev = 1,
+    title = "Aura reads, out of combat and in",
+    { text = "Out of combat, with a party member targeted if you can. Press Run.",
+      button = "Run auras", run = function() P.auras(); return combatState() end },
+    { text = "Pull something. Once in combat, press Run again.",
+      button = "Run in combat", run = function() P.auras(); return combatState() end },
+})
+
+Probe:Steps("secure", {
+    rev = 1,
+    title = "The secure click-cast button",
+    { text = "Building the test button (middle-drag moves it).", auto = true,
+      run = function() P.secure(); return g_btn ~= nil end },
+    { text = "Left-click the button out of combat. Did Power Word: Fortitude cast?",
+      ask = true, screenshot = "secure button" },
+    { text = "Right-click it (casts on yourself). Did it cast?", ask = true },
+    { text = "Pull something and left-click the button IN COMBAT. Did it cast?", ask = true },
+})
+
+Probe:Steps("click", {
+    rev = 1,
+    title = "One cast per click on each edge setting",
+    { text = "Building the click bench.", auto = true,
+      run = function() ResetBench(); P.click(); return g_bench ~= nil end },
+    { text = "Left-click A, B and C once each. Each should report exactly 1 cast in the console "
+          .. "(C is the keyup branch the dead-click reports run). Then press Next.",
+      check = function()
+          local r = g_benchResults
+          return r.A == 1 and r.B == 1 and r.C == 1,
+              "A=" .. tostring(r.A) .. " B=" .. tostring(r.B) .. " C=" .. tostring(r.C)
+      end },
+})
+
+-- ─── boot ────────────────────────────────────────────────────────────────────
+
+local boot = CreateFrame("Frame")
+Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_LOGIN" })
+boot:SetScript("OnEvent", function(_, event, name)
+    if event == "ADDON_LOADED" then
+        if name ~= ADDON then return end
+        Probe:Ready()
+        -- Saved tables only here, never at file scope: the client loads
+        -- SavedVariables after this file runs and would replace them.
+        if type(PriestlyProbeDB) ~= "table" then PriestlyProbeDB = {} end
+        if type(PriestlyProbeDB.log) ~= "table" then PriestlyProbeDB.log = {} end
+        if type(PriestlyProbeDB.sections) ~= "table" then PriestlyProbeDB.sections = {} end
+        PriestlyProbeDB.lines = nil          -- the flat log from before ForeverProbe; the host's log replaces it
+        sections = PriestlyProbeDB.sections
+        Probe:UseLog(PriestlyProbeDB.log, MAX_LOG)
+        return
+    end
+    -- PLAYER_LOGIN. First, before anything reads or writes those tables.
     CaptureSavedVariables()
     PriestlyProbeChar.lastCharacter = (GetUnitName and GetUnitName("player", false)) or "?"
-    say("loaded. |cffffffff/pprobe|r runs everything, |cffffffff/pprobe sv|r checks persistence.")
-    say("  SavedVariables seen at load: account=" ..
-        (SV_ACCOUNT_ARRIVED and "yes" or "|cffff4444no|r") ..
-        " character=" .. (SV_CHAR_ARRIVED and "yes" or "|cffff4444no|r") ..
+    say("loaded. /fp pp lists the commands, /fp steps pp the procedures.")
+    say("  SavedVariables seen at load: account=" .. (SV_ACCOUNT_ARRIVED and "yes" or "no") ..
+        " character=" .. (SV_CHAR_ARRIVED and "yes" or "no") ..
         "  (launch #" .. PriestlyProbePersist.launches .. ")")
 end)
+
+NS._test = { Probe = Probe }                 -- the test seam, never on _G

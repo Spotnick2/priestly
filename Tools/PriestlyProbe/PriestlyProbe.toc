@@ -1,8 +1,10 @@
 ## Interface: 16001
-## Title: |cffff8800Priestly Probe|r
-## Notes: Throwaway API probe for the WoW: Forever port. /pprobe
+## Title: PriestlyProbe
+## Notes: Throwaway API probe for the WoW: Forever port. A ForeverProbe module: /fp pp
 ## Author: Spotnick
 ## Version: dev
+## Dependencies: ForeverProbe
+## OptionalDeps: Priestly
 ## SavedVariables: PriestlyProbeDB, PriestlyProbePersist
 ## SavedVariablesPerCharacter: PriestlyProbeChar
 

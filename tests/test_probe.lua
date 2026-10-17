@@ -1,5 +1,5 @@
 ------------------------------------------------------------
--- test_probe.lua - Tools/PriestlyProbe.
+-- test_probe.lua - Tools/PriestlyProbe, a ForeverProbe module (/fp pp).
 --
 -- The probe is a throwaway dev tool and would normally not be worth testing.
 -- It is tested because of what it is FOR: it is the instrument that answers
@@ -13,6 +13,10 @@
 -- TRUTHY in Lua. `for tier = 1, 0` never ran and the journal dump came back
 -- empty, looking exactly like "this client has no dungeon list".
 --
+-- ForeverProbe is private and local (..\ForeverProbe, or $FOREVERPROBE): the
+-- host is loaded into this stub environment, and CI, which cannot see it,
+-- sets FOREVERPROBE_OPTIONAL=1 and skips this file.
+--
 --   & 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_probe.lua
 ------------------------------------------------------------
 
@@ -20,15 +24,56 @@ dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 
 WoW.reset()
-assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
+local FP = H.loadForeverProbe()
 
-local slash = SlashCmdList["PPROBE"]
-H.check(slash ~= nil, "the probe registers its slash command")
+local PROBE = "Tools/PriestlyProbe/PriestlyProbe.lua"
+
+-- The client's order: the addon's files, then its ADDON_LOADED (which is when
+-- its saved tables are readable), then PLAYER_LOGIN.
+-- Only ONE copy of the probe answers an event: a copy left over from an
+-- earlier load would satisfy a check on its own, without the copy under test
+-- having seen anything (which is how the original of the persistence checks
+-- passed a file-scope mutation). So loading drops the previous copy's boot
+-- frame, and keeps the host's registrations.
+local function loadProbe(login)
+    for frame in pairs(WoW.events) do
+        if frame._probeBoot then WoW.events[frame] = nil end
+    end
+    local known = {}
+    for frame in pairs(WoW.events) do known[frame] = true end
+    local ns = {}
+    assert(loadfile(PROBE))("PriestlyProbe", ns)
+    for frame in pairs(WoW.events) do
+        if not known[frame] then frame._probeBoot = true end
+    end
+    WoW.dispatch("ADDON_LOADED", "PriestlyProbe")
+    if login then WoW.dispatch("PLAYER_LOGIN") end
+    return ns
+end
+
+loadProbe()
+
+local function fp(cmd) SlashCmdList.FOREVERPROBE(cmd) end
+
+local function sections() return PriestlyProbeDB.sections end
+
+-- Everything the probe has said since line n, from its saved log. Note the
+-- guard: table.concat(t, sep, i) defaults j to #t, so with nothing new i > j
+-- and it quietly returns the LAST OLD line - which reads as a fresh report that
+-- never happened.
+local function logSince(n)
+    local log = PriestlyProbeDB.log
+    if #log <= n then return "" end
+    return table.concat(log, " | ", n + 1, #log)
+end
+
+H.check(PriestlyProbeDB ~= nil and type(PriestlyProbeDB.log) == "table",
+    "the saved log is bound at the probe's own ADDON_LOADED")
+H.check(SlashCmdList["PPROBE"] == nil, "the probe has no slash command of its own any more")
 
 local function journalEntries()
-    local section = PriestlyProbeDB and PriestlyProbeDB.journal
     local n = 0
-    for key in pairs(section or {}) do
+    for key in pairs(sections().journal or {}) do
         if key:find("dungeon%[") or key:find("raid%[") then n = n + 1 end
     end
     return n
@@ -45,7 +90,7 @@ WoW.ejDungeons = {
 }
 WoW.ejRaids = { { id = 10, name = "The Barrow Deeps" } }
 
-H.check(pcall(slash, "journal"), "the journal probe runs")
+H.check(pcall(fp, "pp journal"), "the journal probe runs")
 H.eq(journalEntries(), 3,
     "it enumerates the instances even though EJ_GetNumTiers() reports 0 - the whole point")
 
@@ -54,7 +99,7 @@ H.eq(journalEntries(), 3,
 ------------------------------------------------------------
 
 WoW.ejNumTiers = 2
-H.check(pcall(slash, "journal"), "the journal probe runs with real tiers")
+H.check(pcall(fp, "pp journal"), "the journal probe runs with real tiers")
 H.eq(journalEntries(), 6,
     "and walks every tier - the stub returns the same list for both, so six entries under two "
     .. "tier keys is the right answer, not a duplicate")
@@ -69,9 +114,9 @@ H.eq(journalEntries(), 6,
 
 WoW.ejNumTiers = 3
 WoW.ejSelectThrows = true
-H.check(pcall(slash, "journal"), "it survives EJ_SelectTier throwing")
+H.check(pcall(fp, "pp journal"), "it survives EJ_SelectTier throwing")
 local warned = false
-for key in pairs(PriestlyProbeDB.journal or {}) do
+for key in pairs(sections().journal or {}) do
     if key:find("WARNING") then warned = true end
 end
 H.check(warned, "and says the listing may not be the tier it claims")
@@ -95,26 +140,40 @@ H.eq(next(WoW.ejDungeons), nil, "with no instances left over from the section be
 -- `here` accumulates rather than overwriting
 ------------------------------------------------------------
 
-WoW.reset()
 WoW.instanceName = "The Hall of Thanes"
 WoW.instanceType = "party"
-H.check(pcall(slash, "here"), "the here probe runs")
+H.check(pcall(fp, "pp here"), "the here probe runs")
 WoW.instanceName = "Ruins of Lordaeron"
-H.check(pcall(slash, "here"), "and again somewhere else")
+H.check(pcall(fp, "pp here"), "and again somewhere else")
 
-H.check(PriestlyProbeDB["here.The Hall of Thanes"] ~= nil, "the first instance is kept")
-H.check(PriestlyProbeDB["here.Ruins of Lordaeron"] ~= nil, "and so is the second")
+H.check(sections()["here.The Hall of Thanes"] ~= nil, "the first instance is kept")
+H.check(sections()["here.Ruins of Lordaeron"] ~= nil, "and so is the second")
 
 ------------------------------------------------------------
--- Nothing in the probe throws
+-- Nothing in the probe throws, and none of it goes to chat
+--
+-- The point of ForeverProbe: diagnostics go to the console and the saved log.
+-- (The click bench and the secure button are built here too; their own
+-- behaviour is checked below.)
 ------------------------------------------------------------
 
+WoW.reset()
+local before = #PriestlyProbeDB.log
 for _, cmd in ipairs({ "client", "events", "templates", "spells", "spellbook",
                        "auras", "names", "misc", "sv", "cvar", "secure", "click",
-                       "hide", "nonsense" }) do
-    local ok, err = pcall(slash, cmd)
-    H.check(ok, "/pprobe " .. cmd .. ": " .. tostring(err))
+                       "hide", "all", "nonsense" }) do
+    local ok, err = pcall(fp, "pp " .. cmd)
+    H.check(ok, "/fp pp " .. cmd .. ": " .. tostring(err))
 end
+H.check(#PriestlyProbeDB.log > before, "the sections reach the saved log")
+H.check(logSince(before):find("== client ==", 1, true), "with their headings")
+H.eq(#WoW.messages, 0, "and chat stays empty")
+
+H.check(pcall(fp, "pp clear"), "clear runs")
+H.eq(next(sections()), nil, "it empties the sections")
+H.check(PriestlyProbeDB.log ~= nil and #PriestlyProbeDB.log <= 1,
+    "and the log, in place (the line it says afterwards is the only one)")
+loadProbe()      -- the next case builds its own state
 
 ------------------------------------------------------------
 -- The click bench actually counts
@@ -125,7 +184,7 @@ end
 ------------------------------------------------------------
 
 WoW.reset()
-H.check(pcall(slash, "click"), "the click bench builds")
+H.check(pcall(fp, "pp click"), "the click bench builds")
 
 local bench = _G.PriestlyProbeBenchC
 H.check(bench ~= nil, "the forced-keyup button exists - the branch that matters")
@@ -136,22 +195,14 @@ H.eq(_G.PriestlyProbeBenchB:GetAttribute("useOnKeyDown"), true, "and B forces th
 H.check(_G.PriestlyProbeBenchA:GetAttribute("useOnKeyDown") == nil,
     "while A sets none and follows the client")
 
--- Everything said since message n. Note the guard: table.concat(t, sep, i)
--- defaults j to #t, so with nothing new i > j and it quietly returns the LAST
--- OLD message - which reads as a fresh report that never happened.
-local function reportSince(n)
-    if #WoW.messages <= n then return "" end
-    return table.concat(WoW.messages, " | ", n + 1, #WoW.messages)
-end
-
 -- One physical click on a keydown-acting button: press, cast, release.
 -- The release must not reset the count, or every reading is a half-click.
-local before = #WoW.messages
+before = #PriestlyProbeDB.log
 bench._scripts.PreClick(bench, "LeftButton", true)
 WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
 bench._scripts.PreClick(bench, "LeftButton", false)
 WoW.flushTimers()
-local said = reportSince(before)
+local said = logSince(before)
 H.check(said:find("1 cast"), "reports exactly one cast, got: " .. said)
 H.check(not said:find("DOUBLE"), "and does not cry double-cast for a single one")
 
@@ -165,15 +216,15 @@ H.check(not said:find("DOUBLE"), "and does not cry double-cast for a single one"
 -- because it argues for reverting a correct fix.
 ------------------------------------------------------------
 
-before = #WoW.messages
+before = #PriestlyProbeDB.log
 bench._scripts.PreClick(bench, "LeftButton", true)      -- pressed, and held
 WoW.flushTimers(1.0)                                    -- a second goes by
-H.eq(reportSince(before), "", "nothing is reported while the button is still held")
+H.eq(logSince(before), "", "nothing is reported while the button is still held")
 
 WoW.dispatch("UNIT_SPELLCAST_SENT", "player")           -- the release-edge cast
 bench._scripts.PreClick(bench, "LeftButton", false)     -- released at last
 WoW.flushTimers()
-said = reportSince(before)
+said = logSince(before)
 H.check(said:find("1 cast"), "the held click still counts its cast, got: " .. said)
 
 ------------------------------------------------------------
@@ -191,26 +242,26 @@ H.check(said:find("1 cast"), "the held click still counts its cast, got: " .. sa
 ------------------------------------------------------------
 
 local benchA = _G.PriestlyProbeBenchA
-before = #WoW.messages
+before = #PriestlyProbeDB.log
 benchA._scripts.PreClick(benchA, "LeftButton", true)
 WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
 benchA._scripts.PreClick(benchA, "LeftButton", false)
 WoW.flushTimers(0.5)          -- the release report only; A's watchdog stays queued
-said = reportSince(before)
+said = logSince(before)
 H.check(said:find("A: 1 cast"), "A reports its own click, got: " .. said)
 
 -- Nearly ten seconds pass, so A's watchdog is about to come due...
 WoW.flushTimers(9.3)
 -- ...and C is clicked right before it does.
-before = #WoW.messages
+before = #PriestlyProbeDB.log
 bench._scripts.PreClick(bench, "LeftButton", true)
 WoW.flushTimers(0.3)          -- A's stale watchdog fires in here
-H.eq(reportSince(before), "", "A's leftover timer does not report against C")
+H.eq(logSince(before), "", "A's leftover timer does not report against C")
 
 WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
 bench._scripts.PreClick(bench, "LeftButton", false)
 WoW.flushTimers()
-said = reportSince(before)
+said = logSince(before)
 H.check(said:find("C: 1 cast"), "C still counts its own cast, got: " .. said)
 H.check(not said:find("does not dispatch"),
     "and is never declared dead by someone else's timer")
@@ -219,18 +270,75 @@ H.check(not said:find("does not dispatch"),
 -- A client that does not pass `down` to PreClick
 ------------------------------------------------------------
 
-before = #WoW.messages
+before = #PriestlyProbeDB.log
 bench._scripts.PreClick(bench)                          -- press
 WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
 bench._scripts.PreClick(bench)                          -- release
 WoW.flushTimers()
-said = reportSince(before)
+said = logSince(before)
 H.check(said:find("1 cast"), "the edge is inferred when the client stays quiet, got: " .. said)
 
-H.check(pcall(slash, ""), "/pprobe with no argument runs everything")
+------------------------------------------------------------
+-- The procedures
+--
+-- The click procedure passes only when A, B and C each reported exactly one
+-- cast, so it is run end to end: its check reads what the bench recorded.
+------------------------------------------------------------
+
+local S = FP.Steps
+local function record(name) return ForeverProbeDB.steps.records["PriestlyProbe/" .. name] end
+
+H.check(pcall(fp, "steps pp click"), "the click procedure starts")
+H.eq(record("click").status, "active", "and is running")
+H.check(_G.PriestlyProbeBenchA ~= nil, "its first step built the bench")
+-- Step 1 ran on arrival (auto); step 2 waits for the owner. Nothing was
+-- clicked on THIS bench yet, so its check must fail rather than pass blind.
+S.Next()
+S.Next()
+H.eq(record("click").results[2].check, "FAIL", "the check fails when no button has reported")
+H.eq(record("click").status, "done", "the procedure ends")
+
+-- Now each button reports one cast, for real.
+WoW.reset()
+fp("steps pp click")      -- starting it builds the bench and forgets earlier results
+for _, b in ipairs({ _G.PriestlyProbeBenchA, _G.PriestlyProbeBenchB, _G.PriestlyProbeBenchC }) do
+    b._scripts.PreClick(b, "LeftButton", true)
+    WoW.dispatch("UNIT_SPELLCAST_SENT", "player")
+    b._scripts.PreClick(b, "LeftButton", false)
+    WoW.flushTimers()
+end
+S.Next()
+S.Next()
+H.eq(record("click").results[2].check, "PASS", "and passes once A, B and C each reported one cast")
+
+-- A SECOND run with no new clicks must not inherit the first run's PASS: the
+-- owner retesting after changing a setting or combat state would otherwise be
+-- certified by the previous measurement.
+fp("steps pp click")
+S.Next()
+S.Next()
+H.eq(record("click").results[2].check, "FAIL",
+    "a repeat run with no new clicks fails; it does not inherit the last run's results")
+
+-- And a report still pending from before the reset cannot land in the new run.
+fp("pp clear")
+fp("pp click")
+local staleA = _G.PriestlyProbeBenchA
+staleA._scripts.PreClick(staleA, "LeftButton", true)     -- pressed; its 10s watchdog is queued
+fp("pp clear")                                           -- a new measurement begins
+before = #PriestlyProbeDB.log
+WoW.flushTimers()                                        -- the old watchdog comes due
+H.eq(logSince(before), "", "and nothing from the old click is reported after the reset")
+
+for _, name in ipairs({ "auras", "secure", "persist" }) do
+    H.check(pcall(fp, "steps pp " .. name), "the " .. name .. " procedure starts")
+    H.eq(record(name).status, "active", name .. " is running")
+    S.Stop()
+end
+H.eq(#WoW.messages, 0, "and none of it went to chat")
 
 ------------------------------------------------------------
--- /pprobe cvar when a value comes back
+-- /fp pp cvar when a value comes back
 --
 -- This branch produced a false conclusion once: a counter that survived
 -- /reload was reported as "CVars DO persist", but /reload keeps the client
@@ -248,11 +356,11 @@ C_CVar = {
     GetCVarInfo = function(name) return store[name] end,
     AreCVarsLoaded = function() return true end,
 }
-assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
-
-local before = #WoW.messages
-H.check(pcall(SlashCmdList["PPROBE"], "cvar"), "/pprobe cvar runs when a value came back")
-local said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
+loadProbe()
+before = #PriestlyProbeDB.log
+H.check(pcall(fp, "pp cvar"), "/fp pp cvar runs when a value came back")
+said = logSince(before)
 
 H.check(said:find("before this one: 2", 1, true), "it reads the value that arrived: " .. said)
 H.eq(store.priestlyProbeLaunches, "3", "and counts this launch")
@@ -267,7 +375,8 @@ H.check(not said:find("process stayed alive", 1, true),
 H.check(not said:find("DO persist", 1, true), "and with no unconditional claim: " .. said)
 H.check(not said:find("usable store", 1, true), "or advice to build on it: " .. said)
 
--- /pprobe sv had the same flaw: it said "SavedVariables DO load" on any value
+------------------------------------------------------------
+-- /fp pp sv had the same flaw: it said "SavedVariables DO load" on any value
 -- that came back, which a /reload alone can produce.
 --
 -- The tables arrive AFTER the addon's files run - that is the client's
@@ -275,48 +384,81 @@ H.check(not said:find("usable store", 1, true), "or advice to build on it: " .. 
 -- "arrived: NO" on a build where loading worked. So: load the probe with
 -- nothing set, hand it the saved tables the way the client does, and only
 -- then log in.
--- ONE copy answers this login. Earlier cases in this file left their own
--- copies registered, and any of them printing "account=yes" would satisfy the
--- check below without the copy under test having seen anything - which is
--- exactly how this assertion passed a file-scope mutation when it was first
--- written.
-local otherCopies = WoW.events
-WoW.events = {}
+------------------------------------------------------------
 
 PriestlyProbePersist, PriestlyProbeChar = nil, nil
-assert(loadfile("Tools/PriestlyProbe/PriestlyProbe.lua"))()
+loadProbe()
 PriestlyProbePersist = { launches = 4, stamps = {} }
 PriestlyProbeChar = { launches = 4 }
-before = #WoW.messages
+
+before = #PriestlyProbeDB.log
+H.check(pcall(fp, "pp sv"), "/fp pp sv before login runs")
+said = logSince(before)
+H.check(said:find("Not captured yet", 1, true),
+    "and says it has not captured, rather than reporting nothing arrived: " .. said)
+H.eq(PriestlyProbePersist.launches, 4, "without counting a launch (a latch here would freeze the answer)")
+
 WoW.dispatch("PLAYER_LOGIN")
 -- The login line reports what the capture saw, and the capture happens there.
 -- Move it to file scope - where this copy was loaded with the tables still
--- nil - and this says "account=|cffff4444no|r" however well loading works.
-said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+-- nil - and this says "account=no" however well loading works.
+said = logSince(before)
 H.check(said:find("SavedVariables seen at load: account=yes", 1, true),
     "a table handed over after the addon's files ran is seen at login: " .. said)
 
-before = #WoW.messages
-H.check(pcall(SlashCmdList["PPROBE"], "sv"), "/pprobe sv runs when values came back")
-said = table.concat(WoW.messages, " | ", before + 1, #WoW.messages)
+before = #PriestlyProbeDB.log
+H.check(pcall(fp, "pp sv"), "/fp pp sv runs when values came back")
+said = logSince(before)
 H.check(said:find("inconclusive", 1, true), "sv is inconclusive after only /reload: " .. said)
 H.check(said:find("FULL exit and relaunch", 1, true), "and conclusive after a full exit: " .. said)
 H.check(not said:find("DO load", 1, true), "with no unconditional claim: " .. said)
 -- The point of the change: tables handed over after the files ran are SEEN.
-H.check(said:find("arrived at load: |cff55ff55YES", 1, true),
+H.check(said:find("arrived at load: YES", 1, true),
     "and a table that arrived after the addon's files ran is seen, not missed: " .. said)
--- Not the exact number: this file loads the probe several times over, each
--- copy answers the same login, and they run in table order.
-local broughtBack = tonumber(said:match("before this one: account=(%d+)"))
-H.check(broughtBack ~= nil and broughtBack >= 4,
-    "with the count it brought: " .. tostring(broughtBack))
--- Advanced, not reset. Not an exact number: this file loads the probe several
--- times over, and every loaded copy has its own login handler.
-H.check(PriestlyProbePersist.launches > 4, "which this launch then advances: "
-    .. tostring(PriestlyProbePersist.launches))
-PriestlyProbePersist, PriestlyProbeChar = nil, nil
-WoW.events = otherCopies
+H.check(said:find("before this one: account=4", 1, true), "with the count it brought: " .. said)
+H.eq(PriestlyProbePersist.launches, 5, "which this launch then advances")
+H.eq(#WoW.messages, 0, "and chat is still empty")
 
+------------------------------------------------------------
+-- The persist procedure gives each store its own verdict
+--
+-- SavedVariables restored with the CVar lost must not read as one PASS for
+-- "do SavedVariables and CVars survive". Walk the procedure through its
+-- resume and completion path: the check on the CVar step is its own.
+------------------------------------------------------------
+
+local function runPersist(label)
+    fp("steps pp persist")
+    S.Next()      -- the first reading is automatic; this completes it
+    S.Next()      -- the exit-and-relaunch step, taken as done
+    S.Next()      -- SavedVariables reading
+    S.Next()      -- CVar reading
+    return record("persist"), label
+end
+
+-- Both SavedVariables counters came back, the CVar did not.
+store = {}
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
+loadProbe()
+PriestlyProbePersist = { launches = 4, stamps = {} }
+PriestlyProbeChar = { launches = 4 }
+WoW.dispatch("PLAYER_LOGIN")
+local rec = runPersist("sv restored, cvar lost")
+H.eq(rec.results[3].check, "PASS", "SavedVariables restored: that step passes")
+H.eq(rec.results[4].check, "FAIL", "but the lost CVar fails its own step, not hidden behind it")
+
+-- No usable CVar API at all.
+C_CVar = nil
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
+loadProbe()
+PriestlyProbePersist = { launches = 4, stamps = {} }
+PriestlyProbeChar = { launches = 4 }
+WoW.dispatch("PLAYER_LOGIN")
+rec = runPersist("no cvar api")
+H.eq(rec.results[3].check, "PASS", "SavedVariables restored without a CVar API: still passes")
+H.eq(rec.results[4].check, "FAIL", "and the unavailable CVar API is a FAIL, not a silent pass")
+
+PriestlyProbePersist, PriestlyProbeChar = nil, nil
 C_CVar = nil
 
 H.done("test_probe")

@@ -64,7 +64,11 @@ There is no build system, compiler or package manager. The BigWigs packager hand
   A change to how buffs are read, targeted or drawn belongs in the library.
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
 - `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, both libraries included.
-- `Tools/PriestlyProbe/` — throwaway in-game API probe. Delete once `docs/FOREVER-PROBE.md` is
+- `Tools/PriestlyProbe/` — throwaway in-game API probe, a **ForeverProbe module** (`/fp pp`; its
+  procedures are `/fp steps pp auras|secure|click|persist`). Read `C:\Projects\WoW\References\PROBES.md`
+  before changing it. `Tools\deploy.ps1 -Probe` deploys `..\ForeverProbe` first. Its tests
+  (`tests/test_probe.lua`) load the host from that checkout, so CI skips them
+  (`FOREVERPROBE_OPTIONAL=1`) and they run locally only. Delete once `docs/FOREVER-PROBE.md` is
   settled.
 - `.github/workflows/` — package-check: tests against the pinned libraries, dry-run package, and a
   check that the zip is exactly the addon plus both libraries at their pins.
@@ -262,7 +266,7 @@ it holds for SavedVariables on 70009 and later, not for CVars (unmeasured there)
 still on 69977 or earlier, who loses everything at every restart. Priestly still runs on those
 builds, so nothing may *require* a setting to have survived; read it, and cope when it is absent.
 
-Keep `Tools/PriestlyProbe`: `/pprobe sv` is how the client gets re-tested if saved variables ever
+Keep `Tools/PriestlyProbe`: `/fp pp sv` (and `/fp steps pp persist`, which walks the full exit) is how the client gets re-tested if saved variables ever
 misbehave again, and it reads its counters at `PLAYER_LOGIN` for the reason §11 gives.
 
 **Spell names come from the client, by ID** — never from the English literals in `DEFS`, which
@@ -448,7 +452,7 @@ Changing patch compatibility:
   `## Interface:`, not this. Both rules live in `Priestly.reportFilters.newBuild`
   (`PriestlyConfig.lua`), the filter for the library's `newBuild` kind, which also rewords it for
   the developer. The procedure lives here.
-  When the build changes, re-measure - `/apidump`, `/pprobe`, and a **full-exit** check of saved
+  When the build changes, re-measure - `/apidump`, `/fp pp all` and `/fp steps pp auras` (in combat as well as out), and a **full-exit** check (`/fp steps pp persist`) of saved
   settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
   silences the only reminder that the notes are stale, so a dump comparison is not enough on its
   own: identical declarations say nothing about runtime behaviour like aura secrecy or secure

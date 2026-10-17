@@ -31,6 +31,11 @@ pin. A single test run by hand reads the `LIBGROUPBUFFS` and `LIBGLASS`
 environment variables, or the sibling checkouts. There is no vendored copy to
 fall back to, on purpose; a missing checkout fails loudly.
 
+`test_probe.lua` also needs **ForeverProbe** (`../ForeverProbe`, or
+`FOREVERPROBE`), the host PriestlyProbe is a module of. It is private, so CI
+sets `FOREVERPROBE_OPTIONAL=1` and the file skips itself there; locally a
+missing checkout is an error.
+
 To test exactly what a release ships, clone each library at its pin:
 `bash tests/fetch_external.sh Libs/LibGlass-1.0 <dir>` (and
 `Libs/LibGroupBuffs-1.0`), then point the variables at those clones. CI does

@@ -47,7 +47,11 @@ jobs:
           luac5.1 -p $toc \
             $(printf '%s\n' $files | sed "s|^|$LIBGROUPBUFFS/|")
 
+      # PriestlyProbe is a ForeverProbe module, and ForeverProbe is private and
+      # local (..\ForeverProbe): test_probe skips here and runs locally.
       - name: Unit tests
+        env:
+          FOREVERPROBE_OPTIONAL: "1"
         run: |
           for f in tests/test_*.lua; do
             echo "-- $f"
