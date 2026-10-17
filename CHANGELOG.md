@@ -1,5 +1,14 @@
 # Priestly Changelog
 
+## v2.0.16 - 2026-10-17
+
+### Changed
+- **A cleaner glass look** for the buff window, from the updated shared libraries (LibGroupBuffs
+  r29 and LibGlass r8, both included in the download). Coloured bars are now slightly
+  see-through.
+- **Priestly is now also on [Wago Addons](https://addons.wago.io/addons/priestly-priest-buff-manager-pally-power-style)**
+  and on GitHub Releases, so the Wago app and WowUp can install and update it.
+
 ## v2.0.15 - 2026-10-11
 
 ### Changed
