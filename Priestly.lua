@@ -672,7 +672,8 @@ SlashCmdList["PRIESTLY"] = function(msg)
         end
         DEFAULT_CHAT_FRAME:AddMessage("  R = green (in range) / yellow (out of range) / grey (offline)")
         DEFAULT_CHAT_FRAME:AddMessage("  Timer = green >50% / yellow 10-50% / red <10%")
-        DEFAULT_CHAT_FRAME:AddMessage("  ? = buff state unreadable right now (combat aura secrecy)")
+        DEFAULT_CHAT_FRAME:AddMessage("  ? beside the class icon = spell range unknown")
+        DEFAULT_CHAT_FRAME:AddMessage("  ? instead of a timer = buff state unreadable, with no cached reading")
         -- LAST, and deliberately: the login warning sends people here to copy
         -- these lines, and a default chat frame shows about ten. Printed in
         -- the middle of the dump they scroll off behind the click legend.

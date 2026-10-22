@@ -756,6 +756,10 @@ T.RefreshSpellData()
 said = saidBy(function() SlashCmdList["PRIESTLY"]("help") end)
 H.check(said:find("Spell names, as this client gave them", 1, true),
     "/priestly help carries the report: " .. said)
+H.check(said:find("? beside the class icon = spell range unknown", 1, true),
+    "help distinguishes an unknown range from an unreadable aura")
+H.check(said:find("? instead of a timer = buff state unreadable, with no cached reading", 1, true),
+    "help describes the unknown buff state without assuming combat is its only cause")
 -- LAST in the dump: a default chat frame shows about ten lines, and these are
 -- the ones the warning asks people to copy.
 local lines = {}

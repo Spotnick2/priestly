@@ -6,6 +6,8 @@
 - Updated the embedded LibGlass material from r8 to r11.
 
 ### Fixed
+- `/priestly help` now distinguishes unknown spell range (`?` beside the class icon)
+  from unreadable buff state (`?` instead of a timer).
 - Hunter and Warlock pets no longer count as missing Fortitude or appear as Fortitude
   click targets. Forever deliberately prevents these pets from receiving stat buffs.
   Tracking for other priest buffs and other pet types is unchanged.
