@@ -40,6 +40,13 @@ This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16
 /priestly help     full command and click reference
 ```
 
+If a member shows `?`, note where it appears: beside the class icon it means the
+spell's range is unknown; in place of a timer it means the buff cannot be read and
+there is no cached observation. These are independent, and neither proves a language
+problem. For a battleground report, include a screenshot showing the column, whether
+you are in combat, whether it recovers afterwards, and the spell-name report at the
+end of `/priestly help` (locale, game build, addon/library versions and resolved names).
+
 The window opens on its own when you join a group.
 
 **Row colours:** green = everyone has it · yellow = some missing · red = nobody has it ·
