@@ -1454,7 +1454,7 @@ local function BuildPanel(panel)
     -- ── Pet Tracking ─────────────────────────────────────────────────────────
     MakeHeader(settingsChild, y, "Pet Tracking", PANEL_W)
     MakeCheckbox(settingsChild, y,
-        "Track pets (Hunter, Warlock, Mage water elemental, Shadowfiend)", "trackPets")
+        "Track pets (Fortitude excludes Hunter and Warlock pets)", "trackPets")
     MakeDesc(settingsChild, y, "Pets appear in a separate group at the bottom of the frame.")
 
     -- ── Appearance ───────────────────────────────────────────────────────────
