@@ -2,7 +2,14 @@
 
 ## Unreleased
 
+### Added
+- Header controls to minimize the window and restore it without closing it.
+  Requests made in combat apply when combat ends. Minimized state is session-only.
+
 ### Changed
+- The buff window and popup now sit below normal UI panels, including bags.
+- Pilots LibGroupBuffs r31's minimize/restore interface at a fixed commit pending
+  library review and in-game validation.
 - Updated the embedded LibGlass material from r8 to r11.
 
 ### Fixed

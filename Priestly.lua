@@ -437,6 +437,7 @@ local ui = Priestly.GB.UI({
     engine  = engine,                   -- owner is the instance's: GB.UI fills it in
     title   = "|cff99ddffPriestly|r",
     version = VERSION,
+    minimizable = true,
     appearance = function() return { icon = GetSpecIcon() } end,
     unknownClassIcon = PRIEST_ICON,
     footerItems = FooterItems,
@@ -456,6 +457,10 @@ local ui = Priestly.GB.UI({
     end,
     setPos     = function(pos) SetConfig("pos", pos) end,
     setVisible = function(visible) Priestly_SetWindowVisible(visible) end,
+    onMinimizeDeferred = function(_, minimized)
+        DEFAULT_CHAT_FRAME:AddMessage("|cff99ddff[Priestly]|r The window "
+            .. (minimized and "minimizes" or "restores") .. " when you leave combat.")
+    end,
     -- The window parents secure buttons, so in combat the client refuses to
     -- hide it (docs/FOREVER-PROBE.md section 13). Every close the PLAYER asked
     -- for - the X button, /priestly hide - lands here, so neither looks
@@ -663,6 +668,7 @@ SlashCmdList["PRIESTLY"] = function(msg)
             DEFAULT_CHAT_FRAME:AddMessage("  Right-click  same (no group Prayer known yet)")
         end
         DEFAULT_CHAT_FRAME:AddMessage("  Mouseover    open per-member popover")
+        DEFAULT_CHAT_FRAME:AddMessage("  Header -/+   minimize/restore (this session; waits for combat to end)")
         DEFAULT_CHAT_FRAME:AddMessage(c .. " Popover (left panel):")
         if anyGroup then
             DEFAULT_CHAT_FRAME:AddMessage("  Left-click   cast group Prayer on that person")
