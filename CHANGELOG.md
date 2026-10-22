@@ -1,5 +1,15 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Changed
+- Updated the embedded LibGlass material from r8 to r11.
+
+### Fixed
+- Hunter and Warlock pets no longer count as missing Fortitude or appear as Fortitude
+  click targets. Forever deliberately prevents these pets from receiving stat buffs.
+  Tracking for other priest buffs and other pet types is unchanged.
+
 ## v2.0.16 - 2026-10-17
 
 ### Changed

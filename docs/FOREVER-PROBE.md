@@ -1,5 +1,24 @@
 # Forever client probe — findings
 
+## Pet stat-buff eligibility — owner report, 2026-10-21
+
+The owner could not cast Power Word: Fortitude on a hunter pet. The exact build,
+rank and failure message were not recorded; this is an owner observation, not a
+new probe run. [forever-bugs #27](https://github.com/ClassicWoWCommunity/forever-bugs/issues/27)
+reports hunter and warlock pets rejecting class buffs with `Invalid Target` and
+was closed as Not a Bug: removing the need for pet buffs and scrolls is intentional.
+
+Priestly #106 excludes hunter and warlock pets from the Fortitude row's requirements
+and targets, including its single-target click when Prayer is known. This is not a
+measurement of Prayer's area effect. Spirit, Shadow Protection and other pet types
+remain unchanged pending separate evidence. Wildly's reported Thorns exception is
+another reason not to treat the upstream wording as a complete spell eligibility table.
+
+On 2026-10-22 the owner tested the #106 development copy in game and confirmed it
+was working after updating the embedded LibGlass to r11 (LibGroupBuffs r29).
+This validates the deployed change; it does not extend the spell/pet eligibility
+measurements above. The exact client build was not supplied for this test.
+
 What `Tools/PriestlyProbe` actually measured on the live client, as opposed to what the
 documentation says. Existence is not a contract: a namespace being present tells you nothing about
 arity, return order, or whether the underlying system is wired up on a Vanilla-content client.

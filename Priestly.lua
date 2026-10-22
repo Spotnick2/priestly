@@ -103,11 +103,26 @@ local DEFS = {
 -- Protection mode and where learned durations are stored. The UI below calls
 -- the engine through these thin locals, which look the method up at call time
 -- so a newer embedded copy of the library is the one that runs.
+-- Forever deliberately rejects stat buffs on hunter and warlock pets (#106).
+-- Filter the Fortitude row, including its single-target click when a Prayer is
+-- known. Other priest buffs and pet types have not been verified separately.
+local function EligibleMembers(def, members)
+    if def.id ~= "fort" then return members end
+    local out = {}
+    for _, member in ipairs(members) do
+        if member.class ~= "PET_HUNTER" and member.class ~= "PET_WARLOCK" then
+            out[#out + 1] = member
+        end
+    end
+    return out
+end
+
 local engine = Priestly.GB.Engine({
     defs       = DEFS,
     bucketSize = MAX_MEMBERS,           -- pets are split into popover-sized buckets
     showSolo      = function() return Priestly_ShowSolo() end,
     trackPets     = function() return Priestly_TrackPets() end,
+    membersFor    = EligibleMembers,
     isBuffEnabled = function(defId) return Priestly_IsBuffEnabled(defId) end,
     isVisible = function(def, groups, ord)
         if def.visibility ~= "shadow" then return true end

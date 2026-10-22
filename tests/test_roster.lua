@@ -149,7 +149,7 @@ for _, r in ipairs(T.rows()) do
     end
 end
 
-H.eq(activeRows, 39, "13 groups x 3 buffs, all of them rendered")
+H.eq(activeRows, 34, "8 player groups x 3 buffs plus 5 pet buckets x 2 eligible buffs")
 
 local missingRaiders, missingPets = 0, 0
 for i = 1, 40 do
