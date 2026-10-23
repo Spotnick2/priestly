@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.0.17 - 2026-10-22
 
 ### Added
 - Header controls to minimize the window and restore it without closing it.
