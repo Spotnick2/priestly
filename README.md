@@ -49,6 +49,12 @@ end of `/priestly help` (locale, game build, addon/library versions and resolved
 
 The window opens on its own when you join a group.
 
+Use **-** in the header to minimize to a small header, and **+** to restore the
+buff rows. This keeps the window accessible; **X** still closes it. Minimize and
+restore wait until combat ends. The choice lasts for the current session and
+resets to expanded on `/reload` or login. Dragging, locking and resetting the
+window work in either mode outside combat.
+
 **Row colours:** green = everyone has it · yellow = some missing · red = nobody has it ·
 grey `?` = buff state cannot be read right now (the client hides aura data during combat; Priestly
 keeps counting down from the last reading instead of guessing).
