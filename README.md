@@ -6,6 +6,10 @@ you rebuff with a single click.
 
 This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16001`).
 
+![Priestly buff window in a group](https://raw.githubusercontent.com/Spotnick2/priestly/main/docs/screenshots/priestly-05.gif)
+
+*Example from an earlier build; the current window has additional controls.*
+
 > **Playing TBC Classic Anniversary?** Install **v1.0.6** — the last release for that client. It
 > stays available on CurseForge and the CurseForge app will keep offering it for the Anniversary
 > game version. The Anniversary line is no longer being developed.
@@ -23,9 +27,11 @@ This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16
 * **Per-member popover** — mouse over a row for the full list with range indicators and per-person
   click casting.
 * **Group-aware** — follows party and raid changes, subgroups, and pets.
-* **Reagent tracking** — Sacred/Holy Candle and Light Feather counts, once those spells matter.
+* **Reagent tracking** — shows the candles and Light Feathers needed by spells you know.
 * **Shadow Protection when it counts** — always, only when someone in the group already has it, or
   only inside instances you pick.
+* **Window controls** — minimize without closing, lock its position, adjust opacity and choose
+  which side the member popover opens on.
 
 ---
 
@@ -37,6 +43,8 @@ This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16
 /priestly hide     close
 /priestly config   open the options panel
 /priestly reset    reset the window position
+/priestly pos      explain the window's saved position
+/priestly adopt    use this character's old settings for all your priests
 /priestly help     full command and click reference
 ```
 
@@ -48,6 +56,11 @@ you are in combat, whether it recovers afterwards, and the spell-name report at 
 end of `/priestly help` (locale, game build, addon/library versions and resolved names).
 
 The window opens on its own when you join a group.
+
+Settings persist between sessions. Buff choices and window options are shared across your priests;
+whether the window is open is saved per character. If you previously configured different priests
+and want one character's older setup to become the shared setup, log into that character and use
+`/priestly adopt`.
 
 Use **-** in the header to minimize to a small header, and **+** to restore the
 buff rows. This keeps the window accessible; **X** still closes it. Minimize and
@@ -67,6 +80,12 @@ keeps counting down from the last reading instead of guessing).
 
 Install through the CurseForge app and enable it in game.
 
+### GitHub and Wago
+
+Download from [GitHub Releases](https://github.com/Spotnick2/priestly/releases/latest)
+or [Wago Addons](https://addons.wago.io/addons/priestly-priest-buff-manager-pally-power-style).
+Both include the required libraries.
+
 ### Manual
 
 Download the release zip and extract it so the folder lands at:
@@ -77,43 +96,24 @@ World of Warcraft/_classic_beta_/Interface/AddOns/Priestly/
 
 ---
 
-## Beta notes
+## Good to know
 
-Forever is in beta and the level cap is still low, so some of Priestly is waiting for content to
-catch up:
+Priestly uses single-target buffs until you learn the corresponding Prayer. It learns buff
+durations from live auras and relearns them when the client build changes. If an instance is
+missing from the Shadow Protection list, please report its in-game name.
 
-* The group **Prayer of X** spells are not learnable yet. Every row works single-target until they
-  are, and switches over automatically once you learn one.
-* **Buff durations differ from both TBC and Vanilla** and are still being tuned. Priestly learns the
-  real duration from your own buffs rather than assuming one, and forgets what it learned whenever
-  the client build changes.
-* **Reagents** (candles, Light Feather) only appear once you know the spells that need them.
-* The **by-instance** Shadow Protection mode lists Forever's own raids and dungeons. Most are above
-  the current level cap, so the names it matches on are still unverified — if it ever fails to
-  notice an instance you are standing in, that is why.
-* **Your settings used to reset every session — game build 70009 fixed that.** Forever wrote addon
-  settings to disk correctly and then never read them back at login, which affected every addon,
-  not just this one. The window position, the lock, the buff toggles and the Shadow Protection list
-  all started fresh each time, and no addon could work around it: there was nowhere on the client
-  to save to that survived a restart.
-
-  It is fixed now. If you played through the patch, Priestly says so in chat once it sees your
-  settings survive it — it can only tell by watching them come back across a game update, so a
-  fresh install on an already-fixed build will simply work and say nothing. If you are on an older
-  build, the old behaviour is still the old behaviour — update the game. If settings go missing on
-  70009 or later, that *is* worth reporting.
-
-* **Your settings are shared by all your characters again.** While the client bug was live they
-  were stored per character; now that it is fixed they are back to being account-wide, so a second
-  priest starts from your setup rather than from defaults. The first character you log in after
-  updating brings their settings across for everyone. If that was the wrong one, log in as the
-  character whose setup you want and run **`/priestly adopt`**.
+Forever can hide aura data during combat. When it does, Priestly uses its last observation and
+shows `?` if no reliable reading is available. Window movement, closing and minimize/restore
+requests made during combat take effect after combat ends.
 
 ---
 
 ## Feedback
 
-Open an issue on GitHub or leave a comment on CurseForge.
+Open an [issue on GitHub](https://github.com/Spotnick2/priestly/issues) or leave a comment on
+CurseForge. Include the addon version, client build, locale, whether the problem happened in
+combat, and a screenshot if the display looks wrong. Use `/console scriptErrors 1` to show Lua
+errors that the client otherwise hides.
 
 ## Author
 
