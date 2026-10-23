@@ -8,8 +8,8 @@
 
 ### Changed
 - The buff window and popup now sit below normal UI panels, including bags.
-- Pilots LibGroupBuffs r31's minimize/restore interface at a fixed commit pending
-  library review and in-game validation.
+- Updated the embedded LibGroupBuffs library to r31 for minimize/restore controls
+  and lower window layering.
 - Updated the embedded LibGlass material from r8 to r11.
 
 ### Fixed
