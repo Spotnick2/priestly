@@ -90,7 +90,9 @@ Neither is ever committed here — `Libs/` is git-ignored:
   `Libs/LibGlass-1.0`, each **pinned** — to a tag (`r<MINOR>`), or to a full commit while Priestly
   pilots a library release before it is tagged — so a release cannot change underneath its own
   source. Never `tag: latest`, and **no comment on a value line**: the packager's YAML reader keeps
-  it as part of the ref.
+  it as part of the ref. **Never push a Priestly tag, alphas included, with a commit pin:**
+  CurseForge's webhook silently builds no file from one (Buffy v0.1.1-alpha1/-alpha2). Get the
+  library tagged first.
 - **Development:** check both out **next to this repository**, as `../LibGroupBuffs` and
   `../LibGlass`. `tests/run.ps1` and `Tools/deploy.ps1` read them from there (or from `-Library` /
   `-LibGlass`, and `$env:LIBGLASS`), print the revision they used, warn when a checkout is not at
