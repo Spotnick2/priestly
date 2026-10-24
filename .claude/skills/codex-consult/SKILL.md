@@ -59,11 +59,14 @@ depending on whether the evidence is in the prompt or in the repo:
   lead with *"OPINION ONLY — do NOT read files, edit, or run commands. Answer from the description
   below."* This keeps it fast and stops Codex wandering the tree. (Still run with `-s read-only`.)
 - **Code / repository review mode** (the request references a diff, file paths, or "review the
-  code"): **do NOT forbid reading** — Codex must inspect the evidence. Lead with *"Review the code.
-  Read these files: <paths>. Do NOT edit anything or run commands — read-only advice only."* The
-  `-s read-only` sandbox already blocks edits; the prompt just scopes what to read.
+  code"): **do NOT forbid reading, and do NOT forbid commands** — Codex must inspect the evidence,
+  and it reads by running shell commands. Lead with *"Review the code. Read these files: <paths>.
+  Use whatever read-only shell commands you need. The sandbox is read-only, so you cannot edit
+  anything; please also do not try to."* The `-s read-only` sandbox already blocks edits; the
+  prompt just scopes what to read.
 
-Never tell Codex to both "review the code" and "do not read files" — that contradiction produces a
+Never tell Codex to both "review the code" and "do not read files" *or* "do not run commands" —
+reading is done by running commands, so both forbid the same thing. That contradiction produces a
 critique of nothing. Match the instruction to the mode.
 
 **"Do not run commands" counts as "do not read files."** Codex reads through the shell, so that
@@ -81,7 +84,7 @@ or a tri-state return), or a change to the `PriestlyDB` shape.
 measured on the live client, and a cold reviewer will otherwise argue from Classic-era or Retail
 behaviour that does not hold here - that auras throw for the whole group in combat, that
 account-wide SavedVariables never load, that the client's secure handler decides which mouse edge
-acts. `C:/Projects/WoW/References/forever-api-1.60.1.70338.md` is the full measured API surface if a
+acts. The newest `C:/Projects/WoW/References/Forever/api/forever-api-<build>.md` is the full measured API surface if a
 question turns on whether something exists.
 
 Say what you have already established and ask it not to repeat that work. A clean "no defect found"
