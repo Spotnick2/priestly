@@ -29,12 +29,12 @@
         pwsh Tools/deploy.ps1                # addon only
         pwsh Tools/deploy.ps1 -Probe         # addon + ForeverProbe + PriestlyProbe
         pwsh Tools/deploy.ps1 -ProbeOnly     # just ForeverProbe + PriestlyProbe
-        pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_classic_beta_\Interface\AddOns"
+        pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_forever_\Interface\AddOns"
         pwsh Tools/deploy.ps1 -Library "D:\src\LibGroupBuffs" -LibGlass "D:\src\LibGlass"
 #>
 
 param(
-    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns",
+    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns",
     [switch]$Probe,
     [switch]$ProbeOnly,
     [string]$Library = "",
