@@ -12,8 +12,9 @@ enable-nolib-creation: no
 # packager's YAML reader keeps it as part of the ref.
 #
 # A pin may be `commit: <full sha>` while Priestly pilots a library release
-# before it is tagged (r26 was, #79); it goes back to a tag before Priestly
-# releases.
+# before it is tagged (r26 was, #79), but only on a branch: never tag Priestly,
+# alphas included, with a commit pin. CurseForge's webhook builds no file from
+# one (Buffy v0.1.1-alpha1/-alpha2, 2026-10-24; EMBEDDED-LIBRARIES.md section 3).
 externals:
   Libs/LibGlass-1.0:
     url: https://github.com/Spotnick2/LibGlass
