@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## v2.0.18 - 2026-11-04
+## v2.1.0 - 2026-11-04
 
 ### Changed
 - Updated the embedded LibGroupBuffs library to r34. LibGlass stays at r11. The window looks
