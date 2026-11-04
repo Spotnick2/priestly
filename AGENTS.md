@@ -509,6 +509,10 @@ and is invisible from this side.
 1. Add a `## <version> - <date>` section at the top. Write it for players, not from the diff: what
    changed for someone using the addon, in what they would call it. Internal refactors belong in
    commit messages.
+   A release tag (`vX.Y.Z`, not an alpha or beta) also updates **both READMEs** in its prep PR:
+   `README.md` and the untracked `README.curseforge.md` describe what this release does, and
+   nothing it no longer does. Say in the PR whether `README.curseforge.md` changed: the owner pastes
+   it into CurseForge and Wago after the release (RELEASING.md §3, §4; #128).
 2. Note anything that resets or behaves differently after updating — a settings change, a default
    that moved — under its own heading. People read release notes to find out what broke.
 3. Commit the changelog, then tag: `git tag v2.0.0-beta1 && git push --tags`.

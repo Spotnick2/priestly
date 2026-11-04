@@ -251,10 +251,17 @@ function Priestly_PrintSpellReport()
             .. "burns, so the reagent counter stays hidden rather than count "
             .. "the wrong one. Please report this with the line above.")
     end
-    if report.unresolved > 0 then
+    if (report.unresolved or 0) > 0 then
         DEFAULT_CHAT_FRAME:AddMessage("  |cffff6666" .. report.unresolved
             .. " name(s) could not be read from the client.|r Buffs Priestly cannot name are "
             .. "read as missing on everyone. Please report this with the lines above.")
+    end
+    -- r34: forms built by an older copy of the library, whose names may be
+    -- either. Counted apart so they are said rather than hidden in a zero.
+    -- Read with `or 0`: an older active copy has no such field.
+    if (report.unknown or 0) > 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("  " .. report.unknown .. " name(s) of unknown origin "
+            .. "(built by an older copy of the library, so English or this client's).")
     end
 end
 

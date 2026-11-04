@@ -6,6 +6,11 @@ you rebuff with a single click.
 
 This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16001`).
 
+> **[Buffy](https://github.com/Spotnick2/Buffy) is the new consolidated version.** It combines
+> Priestly, Magely and Wildly in one addon on the same engine, and picks Priest, Mage or Druid
+> buffs for the character you log in. It starts with fresh settings rather than importing
+> Priestly's, so disable Priestly while you use it, or you get two buff windows.
+
 ![Priestly buff window in a group](https://raw.githubusercontent.com/Spotnick2/priestly/main/docs/screenshots/priestly-05.gif)
 
 *Example from an earlier build; the current window has additional controls.*
@@ -45,7 +50,7 @@ This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16
 /priestly reset    reset the window position
 /priestly pos      explain the window's saved position
 /priestly adopt    use this character's old settings for all your priests
-/priestly help     full command and click reference
+/priestly help     full command and click reference, then the spell names Priestly reads
 ```
 
 If a member shows `?`, note where it appears: beside the class icon it means the
@@ -91,7 +96,7 @@ Both include the required libraries.
 Download the release zip and extract it so the folder lands at:
 
 ```
-World of Warcraft/_classic_beta_/Interface/AddOns/Priestly/
+World of Warcraft/_forever_/Interface/AddOns/Priestly/
 ```
 
 ---
@@ -111,9 +116,10 @@ requests made during combat take effect after combat ends.
 ## Feedback
 
 Open an [issue on GitHub](https://github.com/Spotnick2/priestly/issues) or leave a comment on
-CurseForge. Include the addon version, client build, locale, whether the problem happened in
-combat, and a screenshot if the display looks wrong. Use `/console scriptErrors 1` to show Lua
-errors that the client otherwise hides.
+CurseForge. Include whether the problem happened in combat, a screenshot if the display looks
+wrong, and the lines `/priestly help` ends with: your locale, game build, Priestly and library
+versions, and the spell names Priestly reads from the client, with any it could not read flagged.
+Use `/console scriptErrors 1` to show Lua errors that the client otherwise hides.
 
 ## Author
 
