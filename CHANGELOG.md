@@ -1,5 +1,14 @@
 # Priestly Changelog
 
+## v2.0.18 - 2026-11-04
+
+### Changed
+- Updated the embedded LibGroupBuffs library to r34. LibGlass stays at r11. The window looks
+  and behaves as before.
+- The spell report at the end of `/priestly help` now also counts names it cannot vouch for
+  either way (built by an older copy of the library another addon loaded), apart from names it
+  could not read from the client.
+
 ## v2.0.17 - 2026-10-22
 
 ### Added

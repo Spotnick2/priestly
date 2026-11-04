@@ -639,6 +639,23 @@ H.check(said:find(H.NAME.FORT_SINGLE, 1, true), "with the name each spell resolv
 H.check(said:find("not learned", 1, true),
     "marking a spell the player has not learned, which is ordinary")
 H.check(not said:find("UNRESOLVED", 1, true), "and claiming nothing is broken when nothing is")
+H.check(not said:find("unknown origin", 1, true), "nor any name of unknown origin")
+
+-- r34 counts a form built by an older library copy apart from an English
+-- fallback (#126). Both on one def, so each count is 1 and said separately.
+do
+    local d = T.DEFS[1]
+    local sngl, grp = d.snglFrom, d.grpFrom
+    d.snglFrom, d.grpFrom = "fallback", "unknown"
+    local both = saidBy(Priestly_PrintSpellReport)
+    d.snglFrom, d.grpFrom = sngl, grp
+    H.check(both:find("(provenance unknown)", 1, true),
+        "an unknown-origin name is noted on its line: " .. both)
+    H.check(both:find("1 name(s) could not be read from the client.", 1, true),
+        "the unresolved count is said")
+    H.check(both:find("1 name(s) of unknown origin", 1, true),
+        "and the unknown-origin count, apart from it")
+end
 
 -- The failure it exists for: names the client never gave. The defs live for
 -- the whole file and earlier cases resolved them, so a bare failure here
@@ -852,5 +869,17 @@ said = saidBy(Priestly_PrintSpellReport)
 H.check(said:find("locale deDE", 1, true), "the report says which language: " .. said)
 H.check(said:find("Machtwort", 1, true), "and the names that client gave")
 H.check(not said:find("UNRESOLVED", 1, true), "nothing is called broken")
+
+-- Help is a slash command, and slash commands run in combat: nothing in it,
+-- the spell report included, may write to the protected window (the rule
+-- LibGroupBuffs r34's AGENTS.md adds; #126).
+setup()
+H.check(T.ui:IsVisible(), "the window is open before the combat help")
+WoW.inCombat = true
+WoW.combatTouches = {}
+said = saidBy(function() SlashCmdList["PRIESTLY"]("help") end)
+H.check(said:find("Spell names, as this client gave them", 1, true), "help still answers in combat")
+H.eq(#WoW.combatTouches, 0, "and touches no protected frame doing it")
+WoW.inCombat = false
 
 H.done("test_frames")
