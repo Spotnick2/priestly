@@ -111,6 +111,10 @@ Forever can hide aura data during combat. When it does, Priestly uses its last o
 shows `?` if no reliable reading is available. Window movement, closing and minimize/restore
 requests made during combat take effect after combat ends.
 
+The window's text uses the font for your game's language, so a Korean or Chinese client shows
+names and labels as text. A Korean or Chinese character name on an English client still shows as
+boxes: the client's English font has no such characters.
+
 ---
 
 ## Feedback

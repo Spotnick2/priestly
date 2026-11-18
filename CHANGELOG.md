@@ -1,15 +1,16 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.1.1 - 2026-11-18
 
 ### Changed
 - **Checked on game build 1.60.1.70959**, the current WoW: Forever client. Nothing Priestly relies on
   changed in this build, so there is nothing to do after updating.
-- Updated the embedded LibGlass library from r11 to r13. The window looks and behaves as
-  before.
-- The buff window's text now uses the font for the game's language, so names and labels on a
-  Korean or Chinese client show as text instead of empty boxes (LibGroupBuffs r36). English and
-  other Latin-alphabet clients, and Russian, keep the same font as before.
+- The buff window's text now uses the font for your game's language: on a Korean or Chinese client,
+  names and labels show as text instead of empty boxes. English and other Latin-alphabet clients,
+  and Russian, keep the same font as before. A Korean or Chinese character name on an English
+  client still shows as boxes; that is a limit of the game client.
+- Updated the embedded libraries: LibGroupBuffs r34 to r36 and LibGlass r11 to r13, both included
+  in the download.
 
 ## v2.1.0 - 2026-11-04
 
