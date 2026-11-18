@@ -560,12 +560,28 @@ Offline, on every change:
 
 ```powershell
 pwsh tests\run.ps1        # luac -p + all unit tests; needs ../LibGroupBuffs and ../LibGlass
+pwsh tests\run.ps1 -KitDev   # the same against the ..\WowTestKit working copy, not the pin
 bash tests/fetch_external.sh Libs/LibGlass-1.0 <dir>   # clone a library at its .pkgmeta pin (what CI does)
 ```
 
 The first lines of output name each library checkout and revision the tests ran against, and
 warn when one is not at its `.pkgmeta` pin. They differ while working on a library, which is fine;
 they must match before a release.
+
+**The test scaffolding is WowTestKit** (`C:\Projects\WoW\WowTestKit`; its README is the reference)
+at the commit and client build `tests\kit.pin` names. `tests\run.ps1` puts that commit in
+`%LOCALAPPDATA%\WowTestKit\<sha>` and hands off to the kit's runner; CI fetches it with
+`tests\fetch_kit.sh`. `tests\kit.lua`, `kit.ps1` and `fetch_kit.sh` are the kit's bootstrap
+copies: never edit them here. A kit need is an issue on the kit, worked around in
+`tests\wow_stubs.lua` with a `-- WowTestKit #N:` comment meanwhile. `tests\run.ps1 -KitDev`
+runs against the `..\WowTestKit` working copy instead of the pin. LibGroupBuffs' shared stub
+(r35 on) loads the kit through **this** repository's `tests/kit.lua`, so Priestly picks its own
+kit commit and build. `kit.pin`'s `build` picks only the API lists the kit checks against (the
+newest measured build); the stub's `WoW.build` still models 70338, the client the shared stub
+pins. Assertions are the kit's globals (`check`, `eq`, `done`; `H.check` / `H.eq` / `H.done` are
+the same functions), and a file's last line is `<name>: N passed, M failed`. `done` also fails on
+a stray `|` in any printed line. `tests/test_methods.lua` checks every widget method the exercise
+reaches exists on that widget type in the pinned build (`Kit.checkMethods`).
 
 **The stub is shared.** The client surface lives in `../LibGroupBuffs/tests/wow_stubs.lua`, one
 copy for Priestly, Wildly and Magely (LibGroupBuffs#21); `tests/wow_stubs.lua` is a thin layer

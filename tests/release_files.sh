@@ -34,9 +34,13 @@ mkdir -p "$out"
 
 # The heading is "## v2.0.15 - 2026-10-11": the tag, then a space or nothing.
 # The blank lines around the section are dropped.
+# awk reads to the end rather than exiting at the next heading: an early exit
+# closes the pipe while `tr` is still writing a changelog longer than the pipe
+# buffer (64 KB on Linux), and under `pipefail` its broken pipe failed the run
+# (AltStable #345, CHANGELOG.md at 71 KB).
 section() {
     tr -d '\r' < CHANGELOG.md |
-        awk -v h="## $1" '$0 == h || index($0, h " ") == 1 { on = 1; next } on && /^## / { exit } on' |
+        awk -v h="## $1" 'done { next } $0 == h || index($0, h " ") == 1 { on = 1; next } on && /^## / { done = 1; next } on' |
         sed -e '/[^[:space:]]/,$!d' | sed -e ':a' -e '/^[[:space:]]*$/{$d;N;ba' -e '}'
 }
 section "$tag" > "$out/notes.md"
