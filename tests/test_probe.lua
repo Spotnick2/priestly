@@ -330,7 +330,22 @@ before = #PriestlyProbeDB.log
 WoW.flushTimers()                                        -- the old watchdog comes due
 H.eq(logSince(before), "", "and nothing from the old click is reported after the reset")
 
-for _, name in ipairs({ "auras", "secure", "persist" }) do
+-- The smoke check reads Priestly's own API, so it must FAIL, not pass blind,
+-- when Priestly isn't running, and pass on a priest once it is.
+fp("steps pp smoke")
+H.eq(record("smoke").results[1].check, "FAIL", "smoke fails its first check without Priestly running")
+S.Stop()
+Priestly = { API = {
+    SpellName = function() return "Power Word: Fortitude" end,
+    ReadBuff = function() return "HAS", 1800 end,
+    AddonVersion = function() return "2.0.0-test" end,
+} }
+fp("steps pp smoke")
+H.eq(record("smoke").results[1].check, "PASS", "and passes on a priest with Priestly running")
+S.Stop()
+Priestly = nil
+
+for _, name in ipairs({ "smoke", "auras", "secure", "persist" }) do
     H.check(pcall(fp, "steps pp " .. name), "the " .. name .. " procedure starts")
     H.eq(record(name).status, "active", name .. " is running")
     S.Stop()

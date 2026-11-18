@@ -68,14 +68,17 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); until then a development copy says so once per new
 -- client build, and a release keeps quiet (see Priestly.reportFilters.newBuild).
 --
--- These two are INDEPENDENT. The installed client is 70338 (.build.info,
--- wow_classic_beta 1.60.1.70338, built Oct 9 2026). MEASURED_ON_BUILD is
--- 70338 as of 2026-10-11: 70338's API dump against 70205's - nothing Priestly,
--- Wildly, Magely, LibGroupBuffs or LibGlass calls was removed or changed
--- signature (the removals are voice chat, Discord, LFG structures and the
--- ComboFrame globals; widget methods are unchanged) - and the owner tested in
--- game on 70338. 70235, 70245, 70291 and 70334 were dumped and skipped over.
--- Before that, 70205 (2026-10-04, #85) was a dump diff plus Magely in game,
+-- These two are INDEPENDENT. The installed client is 70959 (.build.info
+-- 1.60.1.70959; GetBuildInfo dates it Nov 13 2026). MEASURED_ON_BUILD is
+-- 70959 as of 2026-11-18 (#131): 70959's API dump against 70338's - nothing
+-- Priestly, LibGroupBuffs r34 or LibGlass r13 calls was removed or changed
+-- signature (the changes are mail, title icons, transmog, game rules and
+-- PLAYER_LEVEL_UP / PARTY_INVITE_REQUEST payloads; widget methods are
+-- unchanged) - and the owner's /fp steps pp smoke on a priest: the window
+-- opened, Priestly's ReadBuff saw Fortitude, and a row click cast it
+-- (docs/FOREVER-PROBE.md, "70959 against 70338"; combat secrecy, click edges
+-- and persistence across a full exit not re-run). The builds between were dumped and skipped over. Before that,
+-- 70338 (2026-10-11) was a dump diff plus the owner in game, 70205 (2026-10-04, #85) was a dump diff plus Magely in game,
 -- and the last full re-measure was 70009 (2026-09-25: /apidump, /pprobe
 -- including aura secrecy in a real fight and secure click-casting on both
 -- mouse edges, and the SavedVariables check). There is no companion constant for the
@@ -110,7 +113,7 @@ local DEFAULTS = {
 --
 -- The test pins this literally, so a build that moves on cannot pass by
 -- agreeing with itself.
-local MEASURED_ON_BUILD = "70338"
+local MEASURED_ON_BUILD = "70959"
 
 -- ─── Where settings live, and how they got there ──────────────────────────────
 --

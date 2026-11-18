@@ -65,7 +65,8 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
 - `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, both libraries included.
 - `Tools/PriestlyProbe/` — throwaway in-game API probe, a **ForeverProbe module** (`/fp pp`; its
-  procedures are `/fp steps pp auras|secure|click|persist`). Read `C:\Projects\WoW\References\Docs\PROBES.md`
+  procedures are `/fp steps pp smoke|auras|secure|click|persist`; `smoke` is the priest check a
+  build bump rests on: Priestly's window, its buff read and a row click). Read `C:\Projects\WoW\References\Docs\PROBES.md`
   before changing it. `Tools\deploy.ps1 -Probe` deploys `..\ForeverProbe` first. Its tests
   (`tests/test_probe.lua`) load the host from that checkout, so CI skips them
   (`FOREVERPROBE_OPTIONAL=1`) and they run locally only. Delete once `docs/FOREVER-PROBE.md` is
@@ -460,9 +461,10 @@ Changing patch compatibility:
   settings - then bump `MEASURED_ON_BUILD` in `PriestlyConfig.lua`. Bumping without re-measuring
   silences the only reminder that the notes are stale, so a dump comparison is not enough on its
   own: identical declarations say nothing about runtime behaviour like aura secrecy or secure
-  click casting. **70205 (#85) and 70338 were owner-approved bumps** on a dump diff plus an
-  in-game run (Magely on 70205; the owner's own test on 70338), not the full procedure
-  (`docs/FOREVER-PROBE.md`, "70338 against 70205").
+  click casting. **70205 (#85), 70338 and 70959 (#131) were owner-approved bumps** on a dump
+  diff plus an in-game run (Magely on 70205; the owner's own test on 70338; the owner's
+  `/fp steps pp smoke` on a priest on 70959), not the full procedure (`docs/FOREVER-PROBE.md`, "70338 against 70205" and
+  "70959 against 70338").
   `WoW.build`'s default in the shared stub (`../LibGroupBuffs/tests/wow_stubs.lua`) tracks the **client**, not this constant - it is
   the default every other test runs under, and it should show them what a player sees, notice
   included. The three builds are pinned as literals in `tests/test_config_seam.lua`; they are
