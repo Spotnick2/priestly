@@ -74,9 +74,10 @@ local DEFAULTS = {
 -- Priestly, LibGroupBuffs r34 or LibGlass r13 calls was removed or changed
 -- signature (the changes are mail, title icons, transmog, game rules and
 -- PLAYER_LEVEL_UP / PARTY_INVITE_REQUEST payloads; widget methods are
--- unchanged) - and Priestly has loaded on 70959 since 2026-11-17 (its
--- login path ran and wrote its settings; persistence across a full exit and
--- a priest buffing not checked: docs/FOREVER-PROBE.md, "70959 against 70338"). The builds between were dumped and skipped over. Before that,
+-- unchanged) - and the owner's /fp steps pp smoke on a priest: the window
+-- opened, Priestly's ReadBuff saw Fortitude, and a row click cast it
+-- (docs/FOREVER-PROBE.md, "70959 against 70338"; combat secrecy, click edges
+-- and persistence across a full exit not re-run). The builds between were dumped and skipped over. Before that,
 -- 70338 (2026-10-11) was a dump diff plus the owner in game, 70205 (2026-10-04, #85) was a dump diff plus Magely in game,
 -- and the last full re-measure was 70009 (2026-09-25: /apidump, /pprobe
 -- including aura secrecy in a real fight and secure click-casting on both

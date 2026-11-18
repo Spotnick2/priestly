@@ -76,15 +76,24 @@ events +9 -3, tables +9 -6, namespace functions +15 -2; widget methods unchanged
 | `GroupBuffItem` gained `displaySpellID` (nothing here reads that structure) | no |
 | removed: `C_GamepadTargeting.HasReticleHoverTarget`, `EXTERNAL_EVENT_LAUNCH_URL_FAILED` | no |
 
-`MEASURED_ON_BUILD` moved to 70959 on 2026-11-18 on that diff and on Priestly loading on 70959 in
-the owner's play since 2026-11-17: five characters across two accounts each carry an `svLoadCheck`
-marker written on 70959, so Priestly's login path ran (`PLAYER_LOGIN` runs the settings check,
-spell resolution and `ui:Init` on every class) and wrote its settings. What that does **not** show:
-that saved settings load back on 70959 - r34's `CheckLoad` rewrites `build` at every check and
-carries an earlier `loads = true` forward, and a file read is never evidence of persistence (§11;
-only a full exit and relaunch, observed in game, is) - that any of the five is a priest (some are
-not), or that a priest buffed on 70959 (`learnedDurations` was last written on 70532). It is ordinary play, not a probe
-run: `/fp pp` and the aura and persist procedures were not repeated on this build.
+`MEASURED_ON_BUILD` moved to 70959 on 2026-11-18 on that diff and on **`/fp steps pp smoke`**, run
+by the owner on a priest (Karuzo Macphisto, level 29, solo, out of combat; LibGroupBuffs r35,
+LibGlass r11; 2026-11-18 17:11-17:12), everything read through Priestly's own API:
+
+| step | result |
+|---|---|
+| client and addon | PASS: `build=70959 class=PRIEST Priestly=running` |
+| `/priestly show` opens the window with a Fortitude row | yes (screenshot: the row, timer 23:13) |
+| `API.ReadBuff("player", { Fortitude })` after a self-cast | PASS: `HAS, remaining=3598.2` |
+| buff removed, the Fortitude row left-clicked once: did it cast? | yes (screenshot: the row at 59:58, mana 100% to 61%) |
+| `ReadBuff` after the click | PASS: `HAS, remaining=3597.7`, 11 s after the read above: a fresh cast, not the old buff (which would be at about 3587) |
+
+Not covered on 70959: aura secrecy in combat (`/fp steps pp auras`), the click edges
+(`/fp steps pp click`), a group, and persistence across a full exit (`/fp steps pp persist`).
+Before the smoke run, Priestly had also loaded in the owner's play since 2026-11-17: five
+characters each carry an `svLoadCheck` marker written on 70959. That shows its login path ran and
+wrote its settings, not that they load back (r34's `CheckLoad` rewrites `build` at every check
+and carries `loads = true` forward; a file read never proves persistence, §11).
 
 The shared engine's buff read **has** run on 70959, in the sibling addons on the same LibGroupBuffs
 r34: Wildly on a Druid learned Mark of the Wild = 3600 and Thorns = 600 under build 70959, and its

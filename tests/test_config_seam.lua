@@ -21,9 +21,9 @@ local T, TC = H.loadAddon()
 -- this is the file that says so.
 --
 -- MEASURED and CLIENT part today. MEASURED is 70959, the installed client:
--- the 70959 API dump diff against 70338 and Priestly loading on it in game
--- (2026-11-18, #131). CLIENT is still 70338 because that is what the stub at
--- this repository's library pin (r34) models; it moves with the pin, when a
+-- the 70959 API dump diff against 70338 and the owner's /fp steps pp smoke on
+-- a priest (2026-11-18, #131). CLIENT is still 70338 because that is what the
+-- stub at this repository's library pin (r35) models; it moves with the pin, when a
 -- LibGroupBuffs release catches the stub up. Two constants for that reason.
 --
 -- BROKEN is no longer a constant the addon declares. Since LibGroupBuffs r14
@@ -31,7 +31,7 @@ local T, TC = H.loadAddon()
 -- build the host names, so BROKEN here is a test fixture and means only "a
 -- build older than the one running" - which is what makes a returning marker
 -- news. Nothing below depends on WHICH build it is.
-local MEASURED = "70959"   -- dump diff + Priestly loading in game, 2026-11-18 (#131)
+local MEASURED = "70959"   -- dump diff + /fp steps pp smoke on a priest, 2026-11-18 (#131)
 local BROKEN = "69977"
 local CLIENT = "70338"  -- what .build.info reports; what the stub must model
 local CLIENT_DATE = "Oct  9 2026"   -- what GetBuildInfo reports on it
