@@ -5,6 +5,8 @@
 ### Changed
 - **Checked on game build 1.60.1.70959**, the current WoW: Forever client. Nothing Priestly relies on
   changed in this build, so there is nothing to do after updating.
+- Updated the embedded LibGlass library from r11 to r13. The window looks and behaves as
+  before.
 
 ## v2.1.0 - 2026-11-04
 

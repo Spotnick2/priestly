@@ -295,7 +295,7 @@ not by buff id: the single and group forms of one buff share an id and do not sh
 
 The window's look is **LibGlass-1.0** (`..\LibGlass`, github.com/Spotnick2/LibGlass, public, MIT),
 the material every glass addon embeds. LibGroupBuffs draws with one LibGlass instance per session;
-Priestly never calls LibGlass itself. Its repo owns the code, the textures (27 at r8) and the write-up
+Priestly never calls LibGlass itself. Its repo owns the code, the textures (34 at r13) and the write-up
 (`docs/GLASS-MATERIAL.md`), and its `CLAUDE.md` holds the contract.
 
 - **Material changes are LibGlass PRs**, never edits here; how the window uses it is a
@@ -544,8 +544,8 @@ and is invisible from this side.
      files it loads - then count the files in `LibGroupBuffs-1.0/`: **four**, those three plus
      `LICENSE`. There is no `Media/` any more.
    - `lua tests/libfiles.lua --glass <p>/LibGlass-1.0 ship` - the XML, the two files it loads,
-     `LICENSE` and the textures - then count the files in `LibGlass-1.0/`: **thirty-one** at r8 (27
-     textures; r1 had 15, so 19 files). The count moves with the pin.
+     `LICENSE` and the textures - then count the files in `LibGlass-1.0/`: **thirty-eight** at r13 (34
+     textures; r8 to r11 had 27, so 31 files). The count moves with the pin.
    A zip without either is an addon that does not start for everyone who updates.
 
    **CurseForge does not apply an external's own `.pkgmeta`.** Measured on the v2.0.6 download: the
