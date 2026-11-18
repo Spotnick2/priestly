@@ -60,6 +60,28 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 | `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | §9's duration learning guesses at refresh behaviour; this may answer it outright |
 | `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | §4's surname handling is hand-rolled string work |
 
+### 70959 against 70338: declarations, and Priestly in game (2026-11-18, #131)
+
+`forever-api-1.60.1.70959.md` (the installed client; `GetBuildInfo` dates it Nov 13 2026) against
+70338, every removed or changed name grepped in Priestly (probe included), LibGroupBuffs r34 and
+LibGlass r13: **nothing they call was removed or changed signature.** Documented functions +28 -9,
+events +9 -3, tables +9 -6, namespace functions +15 -2; widget methods unchanged (7530).
+
+| change | touches us? |
+|---|---|
+| `C_SecureTransfer.GetMailInfo` split into `GetMailSendInfo` / `GetMailReceiveInfo`; `C_Mail.IsCODEnabled`, `TakeMailMoney` added | no |
+| `C_Texture.*TitleIconTexture` and `C_TransmogOutfitInfo.*SecondarySlotState` gained a parameter | no |
+| `C_GameRules.SetForeverExperiencePreset` split into `...PreLogin` / `...PostLogin`; the preset enum's `Modern` is now `Enhanced`; `SetSDHDToggleValue` gained a location | no |
+| `PLAYER_LEVEL_UP` gained `spiritDelta`, `PARTY_INVITE_REQUEST` gained `isCrossShard` (both appended) | no |
+| `GroupBuffItem` gained `displaySpellID` (nothing here reads that structure) | no |
+| removed: `C_GamepadTargeting.HasReticleHoverTarget`, `EXTERNAL_EVENT_LAUNCH_URL_FAILED` | no |
+
+`MEASURED_ON_BUILD` moved to 70959 on 2026-11-18 on that diff and on Priestly running on 70959 in
+the owner's play since 2026-11-17: five characters across two accounts, each with an `svLoadCheck`
+marker recorded on 70959. That is ordinary play, not a probe run: `/fp pp` and the aura and
+persist procedures were not repeated on this build. The builds between 70338 and 70959 were dumped
+and skipped over.
+
 ### 70338 against 70205: declarations, and the owner in game (2026-10-11)
 
 `forever-api-1.60.1.70338.md` (dumped 2026-10-10; the installed client, built Oct 9 2026) against
