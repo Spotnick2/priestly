@@ -1,7 +1,10 @@
 # Priestly tests
 
 Automated unit tests that run under **Lua 5.1** (the interpreter WoW uses) with
-no game client. Plain scripts, no external dependencies.
+no game client. Plain scripts on **[WowTestKit](https://github.com/Spotnick2/WowTestKit)**,
+the scaffolding the addons share (assertions, the WoW API mock's mechanics, the
+methods and TOC checks, each Forever build's API lists), at the commit and
+client build `tests/kit.pin` names.
 
 ## Running
 
@@ -9,9 +12,16 @@ All tests:
 
 ```powershell
 pwsh tests/run.ps1
+pwsh tests/run.ps1 -KitDev    # against the ..\WowTestKit working copy, not the pin
 ```
 
-A single test (from the repo root, so the relative `loadfile`/`dofile` paths
+`run.ps1` puts the pinned kit in `%LOCALAPPDATA%\WowTestKit\<sha>` (fetched
+once, offline after that) and hands off to the kit's runner. `tests/kit.lua`,
+`kit.ps1` and `fetch_kit.sh` are the kit's bootstrap copies: never edit them
+here. A kit need is an issue on the kit, worked around in `wow_stubs.lua` with
+a `-- WowTestKit #N:` comment meanwhile.
+
+A single test, once `run.ps1` has fetched the kit (from the repo root, so the relative `loadfile`/`dofile` paths
 resolve):
 
 ```powershell
@@ -51,15 +61,18 @@ exactly that.
   Journal functions only its probe calls, and the journal's defaults re-applied
   on every `WoW.reset()`. **Add a new global here; look for an API's stub in
   the library.**
-- **The shared stub** — a minimal WoW: Forever API mock: chainable
-  `CreateFrame` whose frames *record their secure attributes*, a `C_Timer` that
+- **The shared stub** — LibGroupBuffs' client APIs on top of WowTestKit's
+  core (r35 on). It loads the kit through this repository's `tests/kit.lua`,
+  so Priestly picks its own kit commit and build. Frames are the kit's: they
+  *record their secure attributes*, a `C_Timer` that
   collects callbacks instead of waiting, `C_UnitAuras` backed by an injectable
   per-unit aura table with a secrecy switch, `C_Spell` / `C_SpellBook` backed
   by an injectable known-spell set, and units that carry a GUID and a Forever
   surname. Drive it through the exported `WoW` table:
   `WoW.reset()`, `WoW.SetUnit`, `WoW.SetAura`, `WoW.Know`, `WoW.DefineSpell`,
-  `WoW.fire`. `dofile("tests/wow_stubs.lua")` **first** in every test.
-- **`harness.lua`** — `check`/`eq`/`near`, `loadAddon()` (loads LibGlass and
+  `WoW.dispatch`. `dofile("tests/wow_stubs.lua")` **first** in every test.
+- **`harness.lua`** — `check`/`eq`/`done` are the kit's globals (`H.check`,
+  `H.eq`, `H.done` are the same functions), plus `near`, `loadAddon()` (loads LibGlass and
   then LibGroupBuffs, each through its own XML, then Priestly's files in TOC
   order, passing each `("Priestly", ns)` as the client does, failing on anything
   missing, and hands back the test seams) and `TeachSpells{...}` for the common
@@ -74,14 +87,17 @@ exactly that.
 - Internals that are file-local are reached through a **test seam**:
   `Priestly._test` at the end of `Priestly.lua` and `Priestly._testConfig` at
   the end of `PriestlyConfig.lua`. Both are harmless in game.
-- A file prints `name: N tests passed` and exits non-zero on failure.
+- A file's last line is the kit's `name: N passed, M failed`, and it exits
+  non-zero on failure. `done` also fails on a stray `|` in any printed line
+  (the client reads one as an escape).
 
 ## Test files
 
 | File | What it pins down |
 |---|---|
 | `test_bridge.lua` | Priestly on top of LibGroupBuffs-1.0: `Priestly.GB` is the instance `lib:New` made, `Priestly.API` the library's own table, every `API.*` function Priestly calls exists there, rejected events and the settings checks reach the player through the one reporter, and Priestly refuses to start - saying why in chat, worded by `lib:Refusal`'s code - when the library is missing, did not finish loading, is below the floor, or LibGlass is missing or half-loaded; a code it does not know, a `Refusal` that throws, and an active copy with no `Refusal` are covered too. Run against the real library put into each state, not a fake. The real load order: r25's six files and r27's one, loaded first by another addon, are upgraded and accepted without a word. The compat adapters' own tests are in LibGroupBuffs' suite. |
-| `test_manifest.lua` | The TOC and `.pkgmeta`: load order (LibGlass, LibGroupBuffs, then Priestly's three files), both externals read by path and pinned, `NEEDS_MINOR` equal to the pinned MINOR, saved variables, and each library's dev files ignored from here. |
+| `test_methods.lua` | Every widget method the exercise reaches (login, the window, every slash command, every options handler) exists on that widget type in the pinned build: `Kit.checkMethods`, with a floor on how many it records so the exercise cannot quietly shrink. |
+| `test_manifest.lua` | The kit's `Kit.checkToc` (interface, version token, every listed `.lua` file exists, none listed twice), then the TOC and `.pkgmeta`: load order (LibGlass, LibGroupBuffs, then Priestly's three files), both externals read by path and pinned, `NEEDS_MINOR` equal to the pinned MINOR, saved variables, and each library's dev files ignored from here. |
 | `test_availability.lua` | Which buffs get a row and what each click casts, per spell the priest actually knows — including the level-20 case where no group Prayer exists, and the Divine-Spirit-without-Prayer-of-Spirit case that used to show nothing. |
 | `test_buffs.lua` | `GroupStat` counts, offline handling, the GUID-keyed aura cache surviving a roster reshuffle, combat secrecy (count down from cache, `UNKNOWN` rather than a confident `MISS`), duration learning in both directions with a build reset, `PickTarget`, and `UNIT_AURA` filtering. |
 | `test_clicks.lua` | The secure attributes after a rebuild: what `spell1`/`unit1` are actually set to, that they clear rather than cast on a corpse, that `PreClick` re-aims out of combat and leaves things alone in it, and the popover rows. |
@@ -109,9 +125,8 @@ and about behaviour that differs:
 - `UnitName` returns only the first name for units other than the player, as measured.
 - `C_Spell.GetSpellInfo(name)` resolves only spells the player knows; by ID it always resolves.
 - Aura reads throw under combat secrecy, while `GetAuraDataBySpellName` returns nil.
-- Frame predicates (`IsMouseOver`, `IsShown`) are explicit, and underscore-prefixed keys return nil,
-  because the catch-all `__index` returns a function for anything else — and a function is truthy,
-  so an unset `_active` would otherwise read as "this row is in use".
+- A widget method the pinned build lacks reads as nil and fails where it is called; one the build
+  has but on another widget type fails `test_methods`.
 - `WoW.dispatch(event, ...)` fires every frame registered for an event, the way the game does. The
   addon has three event frames; firing one leaves the others in a state that never occurs in play.
 

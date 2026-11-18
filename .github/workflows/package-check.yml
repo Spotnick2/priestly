@@ -71,16 +71,22 @@ jobs:
           luac5.1 -p $toc \
             $(printf '%s\n' $files | sed "s|^|$LIBGROUPBUFFS/|")
 
+      # The tests' scaffolding is WowTestKit, at the commit tests/kit.pin names,
+      # fetched outside the tree and checked to BE that commit. LibGroupBuffs'
+      # shared stub loads it through tests/kit.lua, which reads WOWTESTKIT.
+      - name: Fetch WowTestKit at its pin
+        run: |
+          bash tests/fetch_kit.sh "$RUNNER_TEMP/WowTestKit"
+          echo "WOWTESTKIT=$RUNNER_TEMP/WowTestKit" >> "$GITHUB_ENV"
+
       # PriestlyProbe is a ForeverProbe module, and ForeverProbe is private and
       # local (..\ForeverProbe): test_probe skips here and runs locally.
       - name: Unit tests
         env:
           FOREVERPROBE_OPTIONAL: "1"
-        run: |
-          for f in tests/test_*.lua; do
-            echo "-- $f"
-            lua5.1 "$f" || exit 1
-          done
+        # No TOC (the syntax step above checked the Lua): the kit's runner
+        # runs every tests/test_*.lua, one process each, and counts skips.
+        run: bash "$WOWTESTKIT/scripts/run.sh" ""
 
       # On a manual run GITHUB_REF is main, and the packager names the build
       # after whichever tag at HEAD it sorts first (release.sh 613-628 prefers

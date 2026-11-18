@@ -45,6 +45,12 @@ H.eq(directive("Interface"), "16001",
     "WoW: Forever 1.60.1 is interface 16001 - the %d%02d%02d form, not the transposed 11601 "
     .. "that circulates in the wild")
 
+-- The kit's TOC check on top: the interface again, the packager's version
+-- token, every listed .lua file exists, and no line is listed twice. Its
+-- existence check covers .lua lines only; the library XML lines are checked
+-- below, against .pkgmeta's externals.
+Kit.checkToc("Priestly.toc")
+
 ------------------------------------------------------------
 -- Settings storage
 --

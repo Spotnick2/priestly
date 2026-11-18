@@ -1,9 +1,11 @@
 <#
-    run.ps1 - Run all Priestly unit tests.
+    run.ps1 - Run all Priestly unit tests, through WowTestKit's runner at the
+    commit tests\kit.pin names (the kit's README).
 
-    The tests are plain Lua 5.1 scripts (no dependencies) that load the addon
-    files against tests/wow_stubs.lua. WoW uses Lua 5.1, so the tests do too -
-    not the newer Lua that may be first on PATH.
+    The tests are plain Lua 5.1 scripts that load the addon files against
+    tests/wow_stubs.lua: Priestly's layer over LibGroupBuffs' shared stub,
+    which runs on the kit. WoW uses Lua 5.1, so the tests do too - not the
+    newer Lua that may be first on PATH.
 
     Priestly embeds two libraries, loaded before its own files: LibGlass-1.0
     (the glass material) and LibGroupBuffs-1.0 (the compat layer, engine and
@@ -17,12 +19,14 @@
         pwsh tests/run.ps1
         pwsh tests/run.ps1 -Lua "C:\path\to\lua5.1.exe"
         pwsh tests/run.ps1 -Library "D:\src\LibGroupBuffs" -LibGlass "D:\src\LibGlass"
+        pwsh tests/run.ps1 -KitDev        # the ..\WowTestKit working copy instead of the pin
 #>
 
 param(
     [string]$Lua = "C:\Program Files (x86)\Lua\5.1\lua.exe",
     [string]$Library = "",
-    [string]$LibGlass = ""
+    [string]$LibGlass = "",
+    [switch]$KitDev
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,54 +78,20 @@ function Show-Pin {
 Show-Pin -Name "LibGlass" -Path "Libs/LibGlass-1.0" -Root $LibGlass
 Show-Pin -Name "LibGroupBuffs" -Path "Libs/LibGroupBuffs-1.0" -Root $Library
 
-# Run from the repo root so the tests can dofile('tests/...') and
-# loadfile('Priestly.lua') with paths relative to the project.
-Push-Location $RepoRoot
-try {
-    $failed = 0
+# The kit at its pin (or -KitDev's working copy); sets $env:WOWTESTKIT, which
+# tests/kit.lua reads.
+. (Join-Path $PSScriptRoot "kit.ps1")
+$kit = Get-WowTestKit -RepoRoot $RepoRoot -KitDev:$KitDev
 
-    # Syntax-check Priestly's files and LibGroupBuffs': a parse error there
-    # would show up as a confusing load failure inside every test. LibGlass is
-    # checked in its own repository, and loading it is the first thing every
-    # test does. Skipping this quietly was how the syntax check could look
-    # green while never running: say so, loudly, rather than printing nothing.
-    $luac = Join-Path (Split-Path -Parent $Lua) "luac.exe"
-    if (-not (Test-Path $luac)) {
-        Write-Host "luac -p SKIPPED: no luac.exe beside $Lua - syntax was NOT checked" -ForegroundColor Yellow
-    }
-    else {
-        # Priestly's files come from the TOC and the library's from
-        # tests/libfiles.lua, the one reader of its XML that the harness,
-        # deploy.ps1 and CI use too. Neither list is written out here, so a new
-        # file cannot be left unchecked.
-        $tocFiles = Get-Content (Join-Path $RepoRoot "Priestly.toc") |
-            ForEach-Object { $_.Trim() } |
-            Where-Object { $_ -notmatch "^#" -and $_ -match "[.]lua$" }
-        if (-not $tocFiles) { Write-Host "Priestly.toc lists no Lua files" -ForegroundColor Red; exit 1 }
-        $libFiles = & $Lua (Join-Path $PSScriptRoot "libfiles.lua") $Library load $LibGlass
-        if ($LASTEXITCODE -ne 0) { Write-Host "LibGroupBuffs file list FAILED" -ForegroundColor Red; exit 1 }
-        $libFiles = $libFiles | ForEach-Object { Join-Path $Library $_ }
-        & $luac -p @tocFiles @libFiles
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "luac -p FAILED" -ForegroundColor Red
-            exit 1
-        }
-        Remove-Item -LiteralPath (Join-Path $RepoRoot "luac.out") -ErrorAction SilentlyContinue
-        Write-Host "luac -p: ok ($($tocFiles.Count) addon + $($libFiles.Count) library files)" -ForegroundColor DarkGray
-    }
-
-    Get-ChildItem (Join-Path $PSScriptRoot "test_*.lua") | Sort-Object Name | ForEach-Object {
-        Write-Host "-- $($_.Name) " -NoNewline -ForegroundColor Cyan
-        & $Lua $_.FullName
-        if ($LASTEXITCODE -ne 0) { $failed++ }
-    }
-
-    if ($failed -gt 0) {
-        Write-Host "$failed test file(s) FAILED" -ForegroundColor Red
-        exit 1
-    }
-    Write-Host "All test files passed." -ForegroundColor Green
-}
-finally {
-    Pop-Location
-}
+# The kit's runner syntax-checks the TOC's Lua files and these extras, then
+# runs every tests/test_*.lua from the repo root, one process each. A parse
+# error in the library would otherwise show up as a confusing load failure
+# inside every test. The library's files come from tests/libfiles.lua, the one
+# reader of its XML that the harness, deploy.ps1 and CI use too, so a new file
+# cannot be left unchecked. LibGlass is checked in its own repository, and
+# loading it is the first thing every test does.
+$libFiles = & $Lua (Join-Path $PSScriptRoot "libfiles.lua") $Library load $LibGlass
+if ($LASTEXITCODE -ne 0) { Write-Host "LibGroupBuffs file list FAILED" -ForegroundColor Red; exit 1 }
+$extra = @($libFiles | ForEach-Object { Join-Path $Library $_ })
+& (Join-Path $kit "scripts\run.ps1") -RepoRoot $RepoRoot -Toc "Priestly.toc" -Extra $extra -Lua $Lua
+exit $LASTEXITCODE
