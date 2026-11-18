@@ -171,6 +171,9 @@ jobs:
       # built on every run so a changelog heading or TOC field that breaks it
       # fails on the pull request. Off a tag there is no tag section, so it
       # reads the newest one. `release` and `wago` publish these very files.
+      # The script is the workflow's own (GITHUB_SHA), not the checked-out
+      # tree's: a manual run checks out the requested tag, and a tag from
+      # before the script has none (Codex, NodeRadar #36).
       - name: The release notes and release.json build
         env:
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
@@ -180,7 +183,8 @@ jobs:
           if [ -z "$tag" ]; then
             tag=$(tr -d '\r' < CHANGELOG.md | sed -n 's/^## \(v[^ ]*\).*/\1/p' | head -1)
           fi
-          bash tests/release_files.sh "$tag" "$zip" "$RUNNER_TEMP/release-files"
+          git show "$GITHUB_SHA:tests/release_files.sh" > "$RUNNER_TEMP/release_files.sh"
+          bash "$RUNNER_TEMP/release_files.sh" "$tag" "$zip" "$RUNNER_TEMP/release-files"
 
       # .release is a hidden directory, and upload-artifact@v4 skips hidden
       # content by default - without include-hidden-files the upload finds
@@ -238,14 +242,59 @@ jobs:
             { echo "release.json is not $TAG's:"; cat out/release.json; exit 1; }
           echo "ZIP=$zip" >> "$GITHUB_ENV"
 
+      # The title is release.json's name: the packaged TOC's Title, colour
+      # codes stripped. GitHub renames an asset with characters it doesn't
+      # allow (!Bugsy-v0.1.0-forever.zip was stored as Bugsy-v0.1.0-forever.zip),
+      # and WowUp picks the asset by release.json's filename: so the zip goes
+      # up first, and release.json names it as GitHub stored it (Bugsy #38).
+      # Creating a release and uploading each asset are separate requests, so
+      # any of them can fail after the others succeeded. The release stays a
+      # draft until both assets are there, and a run again (workflow_dispatch)
+      # completes whatever an earlier run left: it reuses the release, keeps a
+      # zip already uploaded, replaces release.json, then publishes.
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          pre=
-          case "${TAG,,}" in *alpha*|*beta*) pre=--prerelease ;; esac
-          gh release create "$TAG" "$ZIP" out/release.json --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "Priestly ${TAG#v}" --notes-file out/notes.md $pre
+          pre=false
+          case "${TAG,,}" in *alpha*|*beta*) pre=true ;; esac
+          title="$(jq -r '.releases[0].name' out/release.json) ${TAG#v}"
+          repo=(--repo "$GITHUB_REPOSITORY")
+          if gh release view "$TAG" "${repo[@]}" > /dev/null 2>&1; then
+            echo "$TAG already has a release: completing it"
+            gh release edit "$TAG" "${repo[@]}" --title "$title" --notes-file out/notes.md --prerelease="$pre"
+          else
+            gh release create "$TAG" "${repo[@]}" --verify-tag --draft \
+              --title "$title" --notes-file out/notes.md --prerelease="$pre"
+          fi
+          stored_zip() {
+            gh release view "$TAG" "${repo[@]}" --json assets \
+              --jq '.assets[] | select(.state == "uploaded") | .name' | grep -- '-forever\.zip$' | head -1
+          }
+          asset=$(stored_zip || true)
+          if [ -n "$asset" ]; then
+            echo "keeping the zip an earlier run uploaded"
+          else
+            # An upload that failed can leave an empty asset in "starter"
+            # state. It still holds its name, and gh refuses to upload over a
+            # name that exists, so a retry deletes every unfinished asset first
+            # (release.json is uploaded again below). A finished zip is kept.
+            gh release view "$TAG" "${repo[@]}" --json assets \
+              --jq '.assets[] | select(.state != "uploaded") | .apiUrl' |
+              while read -r url; do
+                echo "deleting an unfinished asset: $url"
+                gh api -X DELETE "${url#https://api.github.com/}"
+              done
+            gh release upload "$TAG" "$ZIP" "${repo[@]}"
+            asset=$(stored_zip || true)
+          fi
+          test -n "$asset" || { echo "the release has no -forever.zip asset"; exit 1; }
+          echo "the zip is stored as $asset"
+          mkdir -p gh
+          jq -c --arg f "$asset" '.releases[0].filename = $f' out/release.json > gh/release.json
+          cat gh/release.json
+          gh release upload "$TAG" gh/release.json "${repo[@]}" --clobber
+          gh release edit "$TAG" "${repo[@]}" --draft=false
 
   # The same zip on Wago Addons, through its upload API - the request the
   # packager's upload_wago makes, minus its two problems: it would package a
