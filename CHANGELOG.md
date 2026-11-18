@@ -1,5 +1,11 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Changed
+- **Checked on game build 1.60.1.70959**, the current WoW: Forever client. Nothing Priestly relies on
+  changed in this build, so there is nothing to do after updating.
+
 ## v2.1.0 - 2026-11-04
 
 ### Changed
