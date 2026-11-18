@@ -65,7 +65,8 @@ There is no build system, compiler or package manager. The BigWigs packager hand
 - `tests/` — Lua 5.1 unit tests, no game client. See `tests/README.md`.
 - `Tools/deploy.ps1` — deploy to the local Forever AddOns folder, both libraries included.
 - `Tools/PriestlyProbe/` — throwaway in-game API probe, a **ForeverProbe module** (`/fp pp`; its
-  procedures are `/fp steps pp auras|secure|click|persist`). Read `C:\Projects\WoW\References\Docs\PROBES.md`
+  procedures are `/fp steps pp smoke|auras|secure|click|persist`; `smoke` is the priest check a
+  build bump rests on: Priestly's window, its buff read and a row click). Read `C:\Projects\WoW\References\Docs\PROBES.md`
   before changing it. `Tools\deploy.ps1 -Probe` deploys `..\ForeverProbe` first. Its tests
   (`tests/test_probe.lua`) load the host from that checkout, so CI skips them
   (`FOREVERPROBE_OPTIONAL=1`) and they run locally only. Delete once `docs/FOREVER-PROBE.md` is

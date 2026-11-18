@@ -5,7 +5,7 @@
 -- Deploy with `pwsh Tools\deploy.ps1 -Probe`, /reload, then:
 --   /fp pp            lists the commands
 --   /fp pp all        every section, into the console and the saved log
---   /fp steps pp      the guided procedures (auras, secure, click, persist)
+--   /fp steps pp      the guided procedures (smoke, auras, secure, click, persist)
 -- After the owner's /reload, read PriestlyProbeDB (log + sections) from
 --   _classic_beta_\WTF\Account\<id>\SavedVariables\PriestlyProbe.lua
 -- and the procedures' results from ForeverProbe.lua (steps.records).
@@ -834,6 +834,7 @@ Probe:Command("all", function()
     for _, name in ipairs(ORDER) do runSection(name) end
     say("done. /reload writes it to WTF\\Account\\<id>\\SavedVariables\\PriestlyProbe.lua")
     say("then /fp steps pp secure (click-cast button), click (both mouse edges), persist (full exit)")
+    say("and on a new build: /fp steps pp smoke (Priestly's window, buff read and row click)")
 end, "every section but here, secure and click")
 
 Probe:Command("clear", function()
@@ -979,6 +980,47 @@ Probe:Steps("click", {
           return r.A == 1 and r.B == 1 and r.C == 1,
               "A=" .. tostring(r.A) .. " B=" .. tostring(r.B) .. " C=" .. tostring(r.C)
       end },
+})
+
+-- The smoke test a client build bump rests on (#131, Codex on PR #133): on a
+-- priest, Priestly's window opens, its own buff read sees Fortitude, and a
+-- row click casts it. Everything is read through Priestly's own API, so a
+-- PASS means Priestly's path works on this build, not just the client's.
+local FORT_ID = 1243
+local function priestly() return type(Priestly) == "table" and Priestly.API or nil end
+local function fortOnPlayer()
+    local API = priestly()
+    if not API then return false, "Priestly.API is nil (Priestly not loaded, or it refused to start)" end
+    local name = API.SpellName(FORT_ID)
+    if not name then return false, "Priestly cannot resolve spell " .. FORT_ID end
+    local state, remaining = API.ReadBuff("player", { name })
+    return state == "HAS", string.format("%s on player: %s, remaining=%s",
+        name, tostring(state), tostring(remaining))
+end
+
+Probe:Steps("smoke", {
+    rev = 1,
+    title = "Priestly on this build: window, buff read, click cast",
+    { text = "Reading the client and Priestly.", auto = true,
+      run = function()
+          local _, build = GetBuildInfo()
+          local _, cls = UnitClass("player")
+          local API = priestly()
+          return string.format("build=%s class=%s Priestly=%s version=%s", tostring(build), tostring(cls),
+              API and "running" or "NOT running", API and tostring(API.AddonVersion("Priestly")) or "?")
+      end,
+      check = function()
+          local _, cls = UnitClass("player")
+          return cls == "PRIEST" and priestly() ~= nil, "needs a priest with Priestly running"
+      end },
+    { text = "Out of combat, type /priestly show. Does Priestly's window open with a Fortitude row?",
+      ask = true, screenshot = "priestly window" },
+    { text = "Cast Power Word: Fortitude on yourself, then press Run.",
+      button = "Read the buff", run = fortOnPlayer, check = fortOnPlayer },
+    { text = "Right-click the Fortitude buff icon to remove it. Then left-click Priestly's Fortitude "
+          .. "row once. Did it cast Power Word: Fortitude?",
+      ask = true, screenshot = "after the row click" },
+    { text = "Reading the buff after the click.", auto = true, run = fortOnPlayer, check = fortOnPlayer },
 })
 
 -- ─── boot ────────────────────────────────────────────────────────────────────
