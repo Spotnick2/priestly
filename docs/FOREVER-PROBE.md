@@ -76,10 +76,13 @@ events +9 -3, tables +9 -6, namespace functions +15 -2; widget methods unchanged
 | `GroupBuffItem` gained `displaySpellID` (nothing here reads that structure) | no |
 | removed: `C_GamepadTargeting.HasReticleHoverTarget`, `EXTERNAL_EVENT_LAUNCH_URL_FAILED` | no |
 
-`MEASURED_ON_BUILD` moved to 70959 on 2026-11-18 on that diff and on Priestly running on 70959 in
-the owner's play since 2026-11-17: five characters across two accounts, each with an `svLoadCheck`
-marker recorded on 70959. That is ordinary play, not a probe run: `/fp pp` and the aura and
-persist procedures were not repeated on this build. The builds between 70338 and 70959 were dumped
+`MEASURED_ON_BUILD` moved to 70959 on 2026-11-18 on that diff and on Priestly loading on 70959 in
+the owner's play since 2026-11-17: five characters across two accounts each carry an `svLoadCheck`
+marker written on 70959 with `loads = true`, so Priestly's login path ran (`PLAYER_LOGIN` runs the
+settings check, spell resolution and `ui:Init` on every class) and saved settings loaded back.
+What that does **not** show: that any of the five is a priest (some are not), or that a priest
+buffed on 70959 (`learnedDurations` was last written on 70532). It is ordinary play, not a probe
+run: `/fp pp` and the aura and persist procedures were not repeated on this build. The builds between 70338 and 70959 were dumped
 and skipped over.
 
 ### 70338 against 70205: declarations, and the owner in game (2026-10-11)
