@@ -82,7 +82,13 @@ marker written on 70959 with `loads = true`, so Priestly's login path ran (`PLAY
 settings check, spell resolution and `ui:Init` on every class) and saved settings loaded back.
 What that does **not** show: that any of the five is a priest (some are not), or that a priest
 buffed on 70959 (`learnedDurations` was last written on 70532). It is ordinary play, not a probe
-run: `/fp pp` and the aura and persist procedures were not repeated on this build. The builds between 70338 and 70959 were dumped
+run: `/fp pp` and the aura and persist procedures were not repeated on this build.
+
+The shared engine's buff read **has** run on 70959, in the sibling addons on the same LibGroupBuffs
+r34: Wildly on a Druid learned Mark of the Wild = 3600 and Thorns = 600 under build 70959, and its
+Mark row cast, solo and out of combat (Wildly PR #60); Buffy learned Arcane Intellect = 3600 under
+70959 (SPOTNICK3's account-wide `Buffy.lua`). That is library evidence - aura reads, duration
+learning and the secure click on this build - not a priest buffing with Priestly. The builds between 70338 and 70959 were dumped
 and skipped over.
 
 ### 70338 against 70205: declarations, and the owner in game (2026-10-11)
