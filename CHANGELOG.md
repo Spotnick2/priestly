@@ -1,5 +1,11 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Changed
+- Updated the embedded LibGlass library from r11 to r13. The window looks and behaves as
+  before.
+
 ## v2.1.0 - 2026-11-04
 
 ### Changed

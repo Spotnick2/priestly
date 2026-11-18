@@ -294,7 +294,7 @@ not by buff id: the single and group forms of one buff share an id and do not sh
 
 The window's look is **LibGlass-1.0** (`..\LibGlass`, github.com/Spotnick2/LibGlass, public, MIT),
 the material every glass addon embeds. LibGroupBuffs draws with one LibGlass instance per session;
-Priestly never calls LibGlass itself. Its repo owns the code, the textures (27 at r8) and the write-up
+Priestly never calls LibGlass itself. Its repo owns the code, the textures (34 at r13) and the write-up
 (`docs/GLASS-MATERIAL.md`), and its `CLAUDE.md` holds the contract.
 
 - **Material changes are LibGlass PRs**, never edits here; how the window uses it is a
