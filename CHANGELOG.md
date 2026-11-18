@@ -7,6 +7,9 @@
   changed in this build, so there is nothing to do after updating.
 - Updated the embedded LibGlass library from r11 to r13. The window looks and behaves as
   before.
+- The buff window's text now uses the font for the game's language, so names and labels on a
+  Korean or Chinese client show as text instead of empty boxes (LibGroupBuffs r36). English and
+  other Latin-alphabet clients, and Russian, keep the same font as before.
 
 ## v2.1.0 - 2026-11-04
 
