@@ -21,7 +21,7 @@ externals:
     tag: r11
   Libs/LibGroupBuffs-1.0:
     url: https://github.com/Spotnick2/LibGroupBuffs
-    tag: r34
+    tag: r35
 
 manual-changelog:
   filename: CHANGELOG.md

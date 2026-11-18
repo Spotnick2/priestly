@@ -1,5 +1,7 @@
 ------------------------------------------------------------
--- harness.lua - tiny assertion harness + addon loader.
+-- harness.lua - the addon loader, over WowTestKit's assertions (check / eq /
+-- done are the kit's globals, loaded by tests/wow_stubs.lua; H.check, H.eq and
+-- H.done are the same functions, under the names these tests use).
 --
 --     local H = dofile("tests/harness.lua")
 --     H.loadAddon()
@@ -9,24 +11,15 @@
 -- Run from the repo root so the relative paths resolve.
 ------------------------------------------------------------
 
-local H = { run = 0, failures = 0 }
+local H = {}
 
-function H.check(cond, msg)
-    H.run = H.run + 1
-    if not cond then
-        H.failures = H.failures + 1
-        print("  FAIL: " .. (msg or "assertion failed"))
-    end
-end
-
-function H.eq(a, b, msg)
-    H.check(a == b, (msg or "values differ") ..
-        "  (expected " .. tostring(b) .. ", got " .. tostring(a) .. ")")
-end
+-- The kit's message is "<msg>: expected X, got Y"; a nil msg would read "nil".
+H.check = function(cond, msg) return check(cond, msg or "assertion failed") end
+H.eq = function(a, b, msg) return eq(a, b, msg or "values differ") end
 
 function H.near(a, b, tol, msg)
     tol = tol or 0.001
-    H.check(type(a) == "number" and math.abs(a - b) <= tol,
+    check(type(a) == "number" and math.abs(a - b) <= tol,
         (msg or "values differ") .. "  (expected ~" .. tostring(b) .. ", got " .. tostring(a) .. ")")
 end
 
@@ -41,16 +34,12 @@ function H.readFile(path)
     return (s:gsub("\r\n", "\n"))
 end
 
--- The addon's own Lua files, in the order Priestly.toc loads them. Read from
--- the TOC so a new file cannot be missed by the tests that scan every file.
+-- The addon's own Lua files, in the order Priestly.toc loads them (the kit's
+-- reader). Read from the TOC so a new file cannot be missed by the tests that
+-- scan every file.
 function H.tocFiles()
-    local files = {}
-    local toc = assert(H.readFile("Priestly.toc"), "Priestly.toc not found - run from the repo root")
-    for line in (toc .. "\n"):gmatch("([^\n]*)\n") do
-        local file = line:match("^%s*([^#%s][^%s]*%.lua)%s*$")
-        if file then files[#files + 1] = file end
-    end
-    return files
+    assert(H.readFile("Priestly.toc"), "Priestly.toc not found - run from the repo root")
+    return Kit.tocFiles("Priestly.toc")
 end
 
 -- Where LibGroupBuffs-1.0 is checked out. tests/run.ps1 sets LIBGROUPBUFFS to
@@ -186,12 +175,9 @@ function H.secrecy(on)
     WoW.inCombat = on and true or false
 end
 
-function H.done(name)
-    if H.failures > 0 then
-        print(string.format("%s: %d/%d FAILED", name, H.failures, H.run))
-        os.exit(1)
-    end
-    print(string.format("%s: %d tests passed", name, H.run))
-end
+-- Prints "<name>: N passed, M failed" and exits (the kit's done, which also
+-- fails on a stray "|" in any printed line and on a blocked secret a pcall
+-- swallowed).
+H.done = done
 
 return H
