@@ -78,10 +78,12 @@ events +9 -3, tables +9 -6, namespace functions +15 -2; widget methods unchanged
 
 `MEASURED_ON_BUILD` moved to 70959 on 2026-11-18 on that diff and on Priestly loading on 70959 in
 the owner's play since 2026-11-17: five characters across two accounts each carry an `svLoadCheck`
-marker written on 70959 with `loads = true`, so Priestly's login path ran (`PLAYER_LOGIN` runs the
-settings check, spell resolution and `ui:Init` on every class) and saved settings loaded back.
-What that does **not** show: that any of the five is a priest (some are not), or that a priest
-buffed on 70959 (`learnedDurations` was last written on 70532). It is ordinary play, not a probe
+marker written on 70959, so Priestly's login path ran (`PLAYER_LOGIN` runs the settings check,
+spell resolution and `ui:Init` on every class) and wrote its settings. What that does **not** show:
+that saved settings load back on 70959 - r34's `CheckLoad` rewrites `build` at every check and
+carries an earlier `loads = true` forward, and a file read is never evidence of persistence (§11;
+only a full exit and relaunch, observed in game, is) - that any of the five is a priest (some are
+not), or that a priest buffed on 70959 (`learnedDurations` was last written on 70532). It is ordinary play, not a probe
 run: `/fp pp` and the aura and persist procedures were not repeated on this build.
 
 The shared engine's buff read **has** run on 70959, in the sibling addons on the same LibGroupBuffs
