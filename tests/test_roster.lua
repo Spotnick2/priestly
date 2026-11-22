@@ -126,7 +126,9 @@ WoW.groupMembers = 40
 for i = 1, 40 do
     local nm = "Raider" .. i .. " Sur"
     WoW.raidRoster[i] = { name = nm, subgroup = math.ceil(i / 5) }
-    WoW.SetUnit("raid" .. i, { name = nm, guid = "R" .. i, class = "HUNTER" })
+    -- Mage-owned pets: hunter and warlock pets never get a row (Forever refuses
+    -- their buffs), and this test is about pet rows surviving a full raid.
+    WoW.SetUnit("raid" .. i, { name = nm, guid = "R" .. i, class = "MAGE" })
     WoW.SetUnit("raidpet" .. i, { name = "Pet" .. i, guid = "PET" .. i })
 end
 H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE", "SHADOW_SINGLE" })
@@ -149,7 +151,7 @@ for _, r in ipairs(T.rows()) do
     end
 end
 
-H.eq(activeRows, 29, "8 player groups x 3 buffs plus 5 hunter-pet buckets x Shadow Protection only")
+H.eq(activeRows, 39, "8 player groups x 3 buffs plus 5 pet buckets x 3 buffs")
 
 local missingRaiders, missingPets = 0, 0
 for i = 1, 40 do

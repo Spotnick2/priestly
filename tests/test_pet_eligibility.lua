@@ -1,4 +1,4 @@
--- Fortitude and Spirit must not ask for casts on Forever's ineligible stat-buff pets.
+-- No priest buff may ask for casts on Forever's ineligible hunter and warlock pets.
 dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 local T = H.loadAddon()
@@ -36,7 +36,7 @@ for _, raid in ipairs({ false, true }) do
                 local stats = T.GroupStat(row._members, row._def)
                 totals[id] = totals[id] + stats.nTotal
                 H.eq(stats.nMiss, #row._members, "missing count uses eligible members")
-                if id == "fort" or id == "spirit" then
+                do
                     for _, m in ipairs(row._members) do
                         H.check(not excluded[m.unit], id .. " members exclude hunter/warlock pets")
                     end
@@ -53,7 +53,7 @@ for _, raid in ipairs({ false, true }) do
         end
         H.eq(totals.fort, track and 5 or 4, "Fortitude keeps players and unverified pet types")
         H.eq(totals.spirit, track and 5 or 4, "Spirit keeps players and unverified pet types")
-        H.eq(totals.shadow, track and 7 or 4, "Shadow eligibility unchanged")
+        H.eq(totals.shadow, track and 5 or 4, "Shadow keeps players and unverified pet types")
     end
 end
 
@@ -61,7 +61,8 @@ end
 WoW.reset()
 PriestlyAccountDB = nil
 Priestly_EnsureDefaults()
-H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE" })
+H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE", "SHADOW_SINGLE" })
+Priestly_SetConfig("shadowMode", "always")
 T.RefreshSpellData()
 WoW.groupMembers = 2
 WoW.SetUnit("party1", { name = "Hunter", class = "HUNTER" })

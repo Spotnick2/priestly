@@ -3,9 +3,9 @@
 ## Unreleased
 
 ### Fixed
-- Hunter and Warlock pets no longer count as missing Divine Spirit or appear as Spirit click
-  targets. Forever does not let these pets receive it, as with Fortitude. Shadow Protection and
-  other pet types are unchanged.
+- Hunter and Warlock pets no longer count as missing Divine Spirit or Shadow Protection, or
+  appear as their click targets. Forever does not let these pets receive them, as with
+  Fortitude: they scale from their master instead. Other pet types are unchanged.
 
 ## v2.1.1 - 2026-11-18
 
