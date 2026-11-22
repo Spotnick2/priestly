@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.1.2 - 2026-11-22
 
 ### Fixed
 - Hunter and Warlock pets no longer count as missing Divine Spirit or Shadow Protection, or
@@ -8,6 +8,10 @@
   master. Other pet types are unchanged.
 - The pet option is now **Track other pets**, and its description says which pets it covers:
   Priestly never lists Hunter and Warlock pets, and lists other pets in your group.
+
+### Changed
+- Same libraries as v2.1.1: LibGroupBuffs r36 and LibGlass r13. These changes have passed offline
+  tests; their in-game check follows this release.
 
 ## v2.1.1 - 2026-11-18
 

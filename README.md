@@ -31,7 +31,8 @@ This is the **World of Warcraft: Forever** edition (client 1.60.1, Interface `16
   simply buffs whoever needs it. Nothing is wired to a spell you do not have.
 * **Per-member popover** — mouse over a row for the full list with range indicators and per-person
   click casting.
-* **Group-aware** — follows party and raid changes, subgroups, and pets.
+* **Group-aware** — follows party and raid changes, subgroups, and pets. Hunter and Warlock pets
+  are never listed: on Forever they scale from their master.
 * **Reagent tracking** — shows the candles and Light Feathers needed by spells you know.
 * **Shadow Protection when it counts** — always, only when someone in the group already has it, or
   only inside instances you pick.
