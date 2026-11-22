@@ -68,9 +68,13 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); until then a development copy says so once per new
 -- client build, and a release keeps quiet (see Priestly.reportFilters.newBuild).
 --
--- These two are INDEPENDENT. The installed client is 70959 (.build.info
--- 1.60.1.70959; GetBuildInfo dates it Nov 13 2026). MEASURED_ON_BUILD is
--- 70959 as of 2026-11-18 (#131): 70959's API dump against 70338's - nothing
+-- These two are INDEPENDENT. The installed client is 71037 (built Nov 18
+-- 2026). MEASURED_ON_BUILD is 71037 as of 2026-11-22 (#139): 71037's API dump
+-- against 70959's only grew (C_BattleNet.IsGameAccountOnSameRealm and a
+-- BNetGameAccountInfo field; nothing Priestly or its libraries call), and the
+-- owner played Priestly on 71037 for three days with no problem
+-- (docs/FOREVER-PROBE.md, "71037 against 70959"). Before that, 70959
+-- (2026-11-18, #131) was 70959's API dump against 70338's - nothing
 -- Priestly, LibGroupBuffs r34 or LibGlass r13 calls was removed or changed
 -- signature (the changes are mail, title icons, transmog, game rules and
 -- PLAYER_LEVEL_UP / PARTY_INVITE_REQUEST payloads; widget methods are
@@ -113,7 +117,7 @@ local DEFAULTS = {
 --
 -- The test pins this literally, so a build that moves on cannot pass by
 -- agreeing with itself.
-local MEASURED_ON_BUILD = "70959"
+local MEASURED_ON_BUILD = "71037"
 
 -- ─── Where settings live, and how they got there ──────────────────────────────
 --

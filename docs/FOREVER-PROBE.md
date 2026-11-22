@@ -68,6 +68,18 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 | `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | §9's duration learning guesses at refresh behaviour; this may answer it outright |
 | `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | §4's surname handling is hand-rolled string work |
 
+### 71037 against 70959: declarations, and Priestly in game (2026-11-22, #139)
+
+`forever-api-1.60.1.71037.md` (built Nov 18 2026, Interface 16001) against 70959: the documented
+surface only grew. One function, `C_BattleNet.IsGameAccountOnSameRealm`, and one field,
+`BNetGameAccountInfo.hasRealmInfo`. Events and widget methods are unchanged. Nothing Priestly,
+LibGroupBuffs r36 or LibGlass r13 calls was removed or changed.
+
+In game: the owner played Priestly on 71037 for three days (2026-11-19 to 2026-11-22) and reported
+it works. That was ordinary play, not a probe run: combat secrecy, click edges and persistence
+across a full exit were not re-run on purpose. On the owner's approval this bumps
+`MEASURED_ON_BUILD` to 71037.
+
 ### 70959 against 70338: declarations, and Priestly in game (2026-11-18, #131)
 
 `forever-api-1.60.1.70959.md` (the installed client; `GetBuildInfo` dates it Nov 13 2026) against
