@@ -10,8 +10,10 @@
   Priestly never lists Hunter and Warlock pets, and lists other pets in your group.
 
 ### Changed
-- Same libraries as v2.1.1: LibGroupBuffs r36 and LibGlass r13. These changes have passed offline
-  tests; their in-game check follows this release.
+- **Checked on game build 1.60.1.71037**, the current WoW: Forever client. Nothing Priestly relies on
+  changed in this build, so there is nothing to do after updating.
+- Same libraries as v2.1.1: LibGroupBuffs r36 and LibGlass r13. The pet change has passed offline
+  tests; its in-game check follows this release.
 
 ## v2.1.1 - 2026-11-18
 
