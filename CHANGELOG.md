@@ -1,5 +1,12 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Fixed
+- Hunter and Warlock pets no longer count as missing Divine Spirit or appear as Spirit click
+  targets. Forever does not let these pets receive it, as with Fortitude. Shadow Protection and
+  other pet types are unchanged.
+
 ## v2.1.1 - 2026-11-18
 
 ### Changed

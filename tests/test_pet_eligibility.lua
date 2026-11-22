@@ -1,4 +1,4 @@
--- Fortitude must not ask for casts on Forever's ineligible stat-buff pets.
+-- Fortitude and Spirit must not ask for casts on Forever's ineligible stat-buff pets.
 dofile("tests/wow_stubs.lua")
 local H = dofile("tests/harness.lua")
 local T = H.loadAddon()
@@ -36,9 +36,9 @@ for _, raid in ipairs({ false, true }) do
                 local stats = T.GroupStat(row._members, row._def)
                 totals[id] = totals[id] + stats.nTotal
                 H.eq(stats.nMiss, #row._members, "missing count uses eligible members")
-                if id == "fort" then
+                if id == "fort" or id == "spirit" then
                     for _, m in ipairs(row._members) do
-                        H.check(not excluded[m.unit], "Fortitude members exclude hunter/warlock pets")
+                        H.check(not excluded[m.unit], id .. " members exclude hunter/warlock pets")
                     end
                     H.check(not excluded[row:GetAttribute("unit1")], "primary target is eligible")
                     H.check(not excluded[row:GetAttribute("unit2")], "secondary target is eligible")
@@ -52,7 +52,7 @@ for _, raid in ipairs({ false, true }) do
             end
         end
         H.eq(totals.fort, track and 5 or 4, "Fortitude keeps players and unverified pet types")
-        H.eq(totals.spirit, track and 7 or 4, "Spirit eligibility unchanged")
+        H.eq(totals.spirit, track and 5 or 4, "Spirit keeps players and unverified pet types")
         H.eq(totals.shadow, track and 7 or 4, "Shadow eligibility unchanged")
     end
 end
@@ -61,7 +61,7 @@ end
 WoW.reset()
 PriestlyAccountDB = nil
 Priestly_EnsureDefaults()
-H.TeachSpells({ "FORT_SINGLE" })
+H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE" })
 T.RefreshSpellData()
 WoW.groupMembers = 2
 WoW.SetUnit("party1", { name = "Hunter", class = "HUNTER" })
@@ -70,7 +70,7 @@ T.UpdateUI()
 for _, row in ipairs(T.rows()) do
     if row._active then
         for _, m in ipairs(row._members) do
-            H.check(m.unit ~= "partypet1", "no Fortitude pet row without Prayer")
+            H.check(m.unit ~= "partypet1", "no " .. row._def.id .. " pet row without Prayer")
         end
     end
 end
