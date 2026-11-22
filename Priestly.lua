@@ -103,11 +103,14 @@ local DEFS = {
 -- Protection mode and where learned durations are stored. The UI below calls
 -- the engine through these thin locals, which look the method up at call time
 -- so a newer embedded copy of the library is the one that runs.
--- Forever deliberately rejects stat buffs on hunter and warlock pets (#106).
--- Filter the Fortitude row, including its single-target click when a Prayer is
--- known. Other priest buffs and pet types have not been verified separately.
+-- Forever deliberately rejects class buffs on hunter and warlock pets, which
+-- scale from their master instead: Fortitude (#106), Divine Spirit (owner
+-- report, 2026-11-21) and Shadow Protection (the owner expects the same; not
+-- yet tried). Filter all three rows, including the single-target click when a
+-- Prayer is known. Other pet types have not been verified separately.
+local PET_FILTERED = { fort = true, spirit = true, shadow = true }
 local function EligibleMembers(def, members)
-    if def.id ~= "fort" then return members end
+    if not PET_FILTERED[def.id] then return members end
     local out = {}
     for _, member in ipairs(members) do
         if member.class ~= "PET_HUNTER" and member.class ~= "PET_WARLOCK" then

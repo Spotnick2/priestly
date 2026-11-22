@@ -1456,9 +1456,10 @@ local function BuildPanel(panel)
 
     -- ── Pet Tracking ─────────────────────────────────────────────────────────
     MakeHeader(settingsChild, y, "Pet Tracking", PANEL_W)
-    MakeCheckbox(settingsChild, y,
-        "Track pets (Fortitude excludes Hunter and Warlock pets)", "trackPets")
-    MakeDesc(settingsChild, y, "Pets appear in a separate group at the bottom of the frame.")
+    MakeCheckbox(settingsChild, y, "Track other pets", "trackPets")
+    MakeDesc(settingsChild, y,
+        "Hunter and Warlock pets are never listed: on Forever they scale from their master. " ..
+        "Other pets in your group appear in a separate group at the bottom of the frame.")
 
     -- ── Appearance ───────────────────────────────────────────────────────────
     MakeHeader(settingsChild, y, "Appearance", PANEL_W)

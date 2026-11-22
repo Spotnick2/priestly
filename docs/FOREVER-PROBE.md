@@ -19,6 +19,14 @@ was working after updating the embedded LibGlass to r11 (LibGroupBuffs r29).
 This validates the deployed change; it does not extend the spell/pet eligibility
 measurements above. The exact client build was not supplied for this test.
 
+On 2026-11-21 the owner reported that Divine Spirit cannot be cast on hunter or warlock
+pets either, while Buffy and Priestly still listed them as missing it. As with
+Fortitude, this is an owner observation (build, rank and message not recorded), not a
+probe run. The owner expects Shadow Protection to be refused the same way (not yet
+tried in game) and notes that on Forever these pets scale from their master, which is
+why buffing them is unnecessary. Spirit and Shadow Protection now use the Fortitude
+filter. Other pet types remain unchanged.
+
 What `Tools/PriestlyProbe` actually measured on the live client, as opposed to what the
 documentation says. Existence is not a contract: a namespace being present tells you nothing about
 arity, return order, or whether the underlying system is wired up on a Vanilla-content client.

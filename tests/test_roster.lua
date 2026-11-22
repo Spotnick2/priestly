@@ -126,7 +126,10 @@ WoW.groupMembers = 40
 for i = 1, 40 do
     local nm = "Raider" .. i .. " Sur"
     WoW.raidRoster[i] = { name = nm, subgroup = math.ceil(i / 5) }
-    WoW.SetUnit("raid" .. i, { name = nm, guid = "R" .. i, class = "HUNTER" })
+    -- Priest-owned pets are synthetic: they stand for any pet that is not a
+    -- hunter's or warlock's. Those two never get a row, since Forever
+    -- refuses their buffs, and this test is about pet rows surviving a full raid.
+    WoW.SetUnit("raid" .. i, { name = nm, guid = "R" .. i, class = "PRIEST" })
     WoW.SetUnit("raidpet" .. i, { name = "Pet" .. i, guid = "PET" .. i })
 end
 H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE", "SHADOW_SINGLE" })
@@ -149,7 +152,7 @@ for _, r in ipairs(T.rows()) do
     end
 end
 
-H.eq(activeRows, 34, "8 player groups x 3 buffs plus 5 pet buckets x 2 eligible buffs")
+H.eq(activeRows, 39, "8 player groups x 3 buffs plus 5 pet buckets x 3 buffs")
 
 local missingRaiders, missingPets = 0, 0
 for i = 1, 40 do
