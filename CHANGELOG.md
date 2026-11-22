@@ -6,6 +6,8 @@
 - Hunter and Warlock pets no longer count as missing Divine Spirit or Shadow Protection, or
   appear as their click targets. Forever does not let these pets receive them, as with
   Fortitude: they scale from their master instead. Other pet types are unchanged.
+- The pet option is now **Track other pets**, and its description says which pets it covers:
+  Hunter and Warlock pets never appear, other pets (such as a Mind Control target) do.
 
 ## v2.1.1 - 2026-11-18
 

@@ -126,9 +126,10 @@ WoW.groupMembers = 40
 for i = 1, 40 do
     local nm = "Raider" .. i .. " Sur"
     WoW.raidRoster[i] = { name = nm, subgroup = math.ceil(i / 5) }
-    -- Mage-owned pets: hunter and warlock pets never get a row (Forever refuses
-    -- their buffs), and this test is about pet rows surviving a full raid.
-    WoW.SetUnit("raid" .. i, { name = nm, guid = "R" .. i, class = "MAGE" })
+    -- Priest-owned pets stand for any pet that is not a hunter's or warlock's
+    -- (a Mind Control target, say). Those two never get a row, since Forever
+    -- refuses their buffs, and this test is about pet rows surviving a full raid.
+    WoW.SetUnit("raid" .. i, { name = nm, guid = "R" .. i, class = "PRIEST" })
     WoW.SetUnit("raidpet" .. i, { name = "Pet" .. i, guid = "PET" .. i })
 end
 H.TeachSpells({ "FORT_SINGLE", "SPIRIT_SINGLE", "SHADOW_SINGLE" })
