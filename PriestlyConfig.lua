@@ -1458,9 +1458,8 @@ local function BuildPanel(panel)
     MakeHeader(settingsChild, y, "Pet Tracking", PANEL_W)
     MakeCheckbox(settingsChild, y, "Track other pets", "trackPets")
     MakeDesc(settingsChild, y,
-        "Hunter and Warlock pets never appear: on Forever they scale from their master and " ..
-        "cannot receive priest buffs. Other pets, such as a Mind Control target, appear in a " ..
-        "separate group at the bottom of the frame.")
+        "Hunter and Warlock pets are never listed: on Forever they scale from their master. " ..
+        "Other pets in your group appear in a separate group at the bottom of the frame.")
 
     -- ── Appearance ───────────────────────────────────────────────────────────
     MakeHeader(settingsChild, y, "Appearance", PANEL_W)

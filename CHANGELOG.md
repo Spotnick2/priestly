@@ -4,10 +4,10 @@
 
 ### Fixed
 - Hunter and Warlock pets no longer count as missing Divine Spirit or Shadow Protection, or
-  appear as their click targets. Forever does not let these pets receive them, as with
-  Fortitude: they scale from their master instead. Other pet types are unchanged.
+  appear as their click targets, as with Fortitude. On Forever these pets scale from their
+  master. Other pet types are unchanged.
 - The pet option is now **Track other pets**, and its description says which pets it covers:
-  Hunter and Warlock pets never appear, other pets (such as a Mind Control target) do.
+  Priestly never lists Hunter and Warlock pets, and lists other pets in your group.
 
 ## v2.1.1 - 2026-11-18
 
