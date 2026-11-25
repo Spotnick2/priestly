@@ -24,9 +24,10 @@ Priestly = Priestly or {}
 -- The oldest library this build of Priestly works against. A floor, not a
 -- feature check: behaviour changes cannot be feature-detected. r26 is where
 -- lib:New arrived, r28 where lib:Refusal says why it refused, and r34 where
--- SpellReport counts names of unknown origin apart (/priestly help). Keep this
+-- SpellReport counts names of unknown origin apart (/priestly help), and r39
+-- where the refusal memory came (RefusalEvents, #97). Keep this
 -- equal to the MINOR .pkgmeta pins; tests/test_manifest.lua checks that.
-local NEEDS_MINOR = 36
+local NEEDS_MINOR = 39
 
 -- Priestly's own record of the events this client rejected, for
 -- `/dump Priestly.eventFailures`. The library also keeps it, as

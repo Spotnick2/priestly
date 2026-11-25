@@ -508,6 +508,19 @@ local vis = Priestly.GB.Visibility({
     setPreference = function(v) Priestly_SetWindowVisible(v) end,
 })
 
+-- Refusal memory (LibGroupBuffs r39, #97). When the client refuses a buff cast
+-- out of combat with "A more powerful spell is already active" (a world buff,
+-- Camp Benefits), whether from the window, an action bar or a macro, the row's
+-- click-time target skips that member for a while. The library learns it from these events, so each one goes to it
+-- whole, from a frame of its own: the main handler passes on only two
+-- arguments. A world buff can't simply be listed as covering Fortitude: a high
+-- enough rank of Fortitude beats it, so only the client's refusal says.
+if ui.RefusalEvents then
+    local refusalFrame = CreateFrame("Frame")
+    Priestly.RegisterEvents(refusalFrame, unpack(ui:RefusalEvents()))
+    refusalFrame:SetScript("OnEvent", function(_, event, ...) ui:RefusalEvent(event, ...) end)
+end
+
 -- ─── Global hooks for PriestlyConfig.lua ────────────────────────────────────
 
 function Priestly_ScheduleRefresh()
@@ -605,7 +618,10 @@ evtFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         if AuraEventIsRelevant(arg1, arg2) then ui:ScheduleRefresh() end
 
     elseif event == "UNIT_PET" then
-        -- Pet summoned or dismissed: rebuild to add/remove pet rows
+        -- Pet summoned or dismissed: rebuild to add/remove pet rows. Prune
+        -- first, so a pet that left drops its cache and any refusal the
+        -- library holds for it (r39, #97): one back within 30 s starts clean.
+        PruneAuraCache()
         ui:ScheduleRefresh()
 
     elseif event == "GROUP_JOINED" then

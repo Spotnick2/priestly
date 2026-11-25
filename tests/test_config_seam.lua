@@ -23,7 +23,7 @@ local T, TC = H.loadAddon()
 -- MEASURED and CLIENT part today. MEASURED is 71037, the installed client:
 -- the 71037 API dump diff against 70959 and the owner's three days on it
 -- (2026-11-22, #139). CLIENT is still 70338 because that is what the
--- stub at this repository's library pin (r36) models; it moves with the pin, when a
+-- stub at this repository's library pin (r39) models; it moves with the pin, when a
 -- LibGroupBuffs release catches the stub up. Two constants for that reason.
 --
 -- BROKEN is no longer a constant the addon declares. Since LibGroupBuffs r14
