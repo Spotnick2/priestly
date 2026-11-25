@@ -112,6 +112,13 @@ Forever can hide aura data during combat. When it does, Priestly uses its last o
 shows `?` if no reliable reading is available. Window movement, closing and minimize/restore
 requests made during combat take effect after combat ends.
 
+A world buff such as Might of Stormwind or Warchief's Blessing, or Camp Benefits, can make the
+game refuse Power Word: Fortitude with "A more powerful spell is already active". When that happens
+out of combat to the rank the row casts, whether you cast it from the window, an action bar or a
+macro, the row's single-target click moves on to the next member for up to 30 seconds, or until that
+member's buffs change. You can still pick them from the popover. A refused lower rank, a refusal in
+combat and one on a pet change nothing: the click aims as before.
+
 The window's text uses the font for your game's language, so a Korean or Chinese client shows
 names and labels as text. A Korean or Chinese character name on an English client still shows as
 boxes: the client's English font has no such characters.

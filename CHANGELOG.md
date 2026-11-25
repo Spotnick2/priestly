@@ -1,6 +1,6 @@
 # Priestly Changelog
 
-## Unreleased
+## v2.1.3 - 2026-11-25
 
 ### Fixed
 - Out of combat, when the game refuses a single-target buff on a group member with "A more
@@ -17,7 +17,8 @@
 - **Checked on game build 1.60.1.71091**, the current WoW: Forever client. Nothing Priestly relies on
   changed in this build, so there is nothing to do after updating.
 - Updated the embedded LibGroupBuffs library from r36 to r39. Apart from the fix above, the
-  window looks and behaves as before.
+  window looks and behaves as before. LibGlass stays at r13. The fix was checked in game with
+  Buffy, which runs on the same LibGroupBuffs r39.
 
 ## v2.1.2 - 2026-11-22
 
