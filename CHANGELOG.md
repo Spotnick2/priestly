@@ -1,5 +1,24 @@
 # Priestly Changelog
 
+## Unreleased
+
+### Fixed
+- Out of combat, when the game refuses a single-target buff on a group member with "A more
+  powerful spell is already active" (a world buff such as Might of Stormwind or Warchief's
+  Blessing, or Camp Benefits), the row's single-target click now moves on to the next member
+  instead of trying the same one again: the left click, or the right click once you know Prayer
+  of Fortitude (which is unchanged). The refused cast can come from the window, an action bar or a
+  macro, as long as it is the rank the row casts. It tries that member again after 30 seconds, or
+  sooner if their buffs change, and you can still pick them yourself from the popover. In combat,
+  and on pets, the click aims as before. Needs LibGroupBuffs r39 (its refusal memory, LibGroupBuffs
+  #97).
+
+### Changed
+- **Checked on game build 1.60.1.71091**, the current WoW: Forever client. Nothing Priestly relies on
+  changed in this build, so there is nothing to do after updating.
+- Updated the embedded LibGroupBuffs library from r36 to r39. Apart from the fix above, the
+  window looks and behaves as before.
+
 ## v2.1.2 - 2026-11-22
 
 ### Fixed

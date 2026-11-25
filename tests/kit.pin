@@ -1,7 +1,7 @@
 # WowTestKit for these tests: the commit, and the client build to test against.
-# build: the newest build Priestly is measured on (MEASURED_ON_BUILD, 71037 with
-# #139). The shared stub's WoW.build still models 70338; this picks only the
+# build: the newest build Priestly is measured on (MEASURED_ON_BUILD, 71091 with
+# #143). The shared stub's WoW.build still models 70338; this picks only the
 # API lists the kit checks against, and the kit has no data for 70338.
-sha=a9b2ee01084b9a8e05c11a72edb59a1245e428bc
-build=71037
+sha=fde7ec307c5fe1887e94f723c98edecb55044346
+build=71091
 api=2

@@ -20,10 +20,10 @@ local T, TC = H.loadAddon()
 -- actually running. Moving the client forward has to be a two-file edit, and
 -- this is the file that says so.
 --
--- MEASURED and CLIENT part today. MEASURED is 71037, the installed client:
--- the 71037 API dump diff against 70959 and the owner's three days on it
--- (2026-11-22, #139). CLIENT is still 70338 because that is what the
--- stub at this repository's library pin (r36) models; it moves with the pin, when a
+-- MEASURED and CLIENT part today. MEASURED is 71091, the installed client:
+-- the 71091 API dump diff against 71037 (identical) and the owner's play on it
+-- (2026-11-25, #143). CLIENT is still 70338 because that is what the
+-- stub at this repository's library pin (r39) models; it moves with the pin, when a
 -- LibGroupBuffs release catches the stub up. Two constants for that reason.
 --
 -- BROKEN is no longer a constant the addon declares. Since LibGroupBuffs r14
@@ -31,7 +31,7 @@ local T, TC = H.loadAddon()
 -- build the host names, so BROKEN here is a test fixture and means only "a
 -- build older than the one running" - which is what makes a returning marker
 -- news. Nothing below depends on WHICH build it is.
-local MEASURED = "71037"   -- dump diff + the owner in game for three days, 2026-11-22 (#139)
+local MEASURED = "71091"   -- dump diff (identical) + the owner in game, 2026-11-25 (#143)
 local BROKEN = "69977"
 local CLIENT = "70338"  -- what .build.info reports; what the stub must model
 local CLIENT_DATE = "Oct  9 2026"   -- what GetBuildInfo reports on it

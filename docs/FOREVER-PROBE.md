@@ -68,6 +68,17 @@ Two new arrivals land in areas this file is about, and neither has been probed:
 | `C_UnitAuras.GetRefreshCarryOverDuration(unit, auraInstanceID [, spellID])` → `newDuration` | §9's duration learning guesses at refresh behaviour; this may answer it outright |
 | `C_NameUtil.ReplaceSurnameSeparatorWithLinkSeparator(fullName)` → `string` | §4's surname handling is hand-rolled string work |
 
+### 71091 against 71037: declarations, and Priestly in game (2026-11-25, #143)
+
+`forever-api-1.60.1.71091.md` (built Nov 20 2026, Interface 16001) against 71037: the documented
+surface is identical. Functions, events, tables, widget methods and namespace functions are all
+unchanged, so nothing Priestly, LibGroupBuffs r39 or LibGlass r13 calls moved.
+
+In game: the owner played Priestly on 71091 and reported no problem. That was ordinary play, not
+a probe run: combat secrecy, click edges and persistence across a full exit were not re-run, and
+neither was this release's refusal memory. On the owner's approval this bumps
+`MEASURED_ON_BUILD` to 71091.
+
 ### 71037 against 70959: declarations, and Priestly in game (2026-11-22, #139)
 
 `forever-api-1.60.1.71037.md` (built Nov 18 2026, Interface 16001) against 70959: the documented
