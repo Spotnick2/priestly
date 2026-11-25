@@ -68,9 +68,12 @@ local DEFAULTS = {
 -- re-measuring (AGENTS.md); until then a development copy says so once per new
 -- client build, and a release keeps quiet (see Priestly.reportFilters.newBuild).
 --
--- These two are INDEPENDENT. The installed client is 71037 (built Nov 18
--- 2026). MEASURED_ON_BUILD is 71037 as of 2026-11-22 (#139): 71037's API dump
--- against 70959's only grew (C_BattleNet.IsGameAccountOnSameRealm and a
+-- These two are INDEPENDENT. The installed client is 71091 (built Nov 20
+-- 2026). MEASURED_ON_BUILD is 71091 as of 2026-11-25 (#143): 71091's API dump
+-- documents the same surface as 71037's, and the owner played Priestly on
+-- 71091 with no problem (docs/FOREVER-PROBE.md, "71091 against 71037").
+-- Before that, 71037 (2026-11-22, #139): 71037's API dump against 70959's
+-- only grew (C_BattleNet.IsGameAccountOnSameRealm and a
 -- BNetGameAccountInfo field; nothing Priestly or its libraries call), and the
 -- owner played Priestly on 71037 for three days with no problem
 -- (docs/FOREVER-PROBE.md, "71037 against 70959"). Before that, 70959
@@ -117,7 +120,7 @@ local DEFAULTS = {
 --
 -- The test pins this literally, so a build that moves on cannot pass by
 -- agreeing with itself.
-local MEASURED_ON_BUILD = "71037"
+local MEASURED_ON_BUILD = "71091"
 
 -- ─── Where settings live, and how they got there ──────────────────────────────
 --
